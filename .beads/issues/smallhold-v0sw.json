@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-v0sw",
+  "title": "Add root page, post pages, and upgrade profile page",
+  "description": "Need: (1) root / page listing personas, (2) /@username/:id post pages for link previews, (3) upgrade /@username profile to show posts, stats, metadata fields, dark mode CSS",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:02:54.27332153Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T16:06:11.374532265Z",
+  "started_at": "2026-07-18T16:02:54.383398116Z",
+  "closed_at": "2026-07-18T16:06:11.374532265Z",
+  "close_reason": "Closed"
+}

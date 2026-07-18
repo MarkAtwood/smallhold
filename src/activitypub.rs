@@ -166,38 +166,264 @@ async fn actor(
     Ok(ap_response(doc))
 }
 
-/// GET /@{username} — minimal server-rendered HTML profile page.
+const PAGE_CSS: &str = r#"
+:root{--text:#1d1d1f;--muted:#6e6e73;--bg:#fff;--card:#f5f5f7;--border:#d2d2d7;--link:#0066cc}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+ color:var(--text);background:var(--bg);line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:1.75rem;font-weight:600;margin-bottom:.15rem}
+h2{font-size:1.1rem;font-weight:600;color:var(--muted);text-transform:uppercase;
+ letter-spacing:.05em;margin:1.5rem 0 .75rem}
+.handle{color:var(--muted);font-size:.95rem;margin-bottom:1rem}
+.bio{margin-bottom:1rem}
+.bio p{margin-bottom:.5rem}
+table{width:100%;border-collapse:collapse;margin-bottom:1rem}
+th,td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--card);color:var(--muted);font-size:.8rem;font-weight:600;
+ text-transform:uppercase;letter-spacing:.04em;width:30%}
+td{font-size:.95rem}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+hr{border:none;border-top:1px solid var(--border);margin:1.5rem 0}
+article{padding:1rem 0;border-bottom:1px solid var(--border)}
+article .content{margin-bottom:.5rem}
+article .content p{margin-bottom:.5rem}
+article time{color:var(--muted);font-size:.8rem}
+ul{list-style:none}
+li{padding:.75rem 0;border-bottom:1px solid var(--border)}
+li a{text-decoration:none;color:var(--text);display:block}
+li a:hover{color:var(--link)}
+li span{color:var(--muted);font-size:.9rem;margin-left:.5rem}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
+.mention{color:var(--link)}
+.hashtag{color:var(--link)}
+@media(prefers-color-scheme:dark){
+ :root{--text:#f5f5f7;--muted:#98989d;--bg:#1d1d1f;--card:#2c2c2e;--border:#3a3a3c;--link:#2997ff}
+}
+"#;
+
+/// GET / — root page listing personas.
+async fn index_page(
+    State(state): State<Arc<AppState>>,
+) -> Result<Html<String>, AppError> {
+    let domain = &state.config.server.domain;
+    let accounts: Vec<(String, String)> = sqlx::query_as(
+        "SELECT username, display_name FROM accounts ORDER BY created_at",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let mut personas_html = String::new();
+    for (username, display_name) in &accounts {
+        let dn = ammonia::clean(display_name);
+        personas_html.push_str(&format!(
+            r#"<li><a href="/@{username}"><strong>{dn}</strong> <span>@{username}@{domain}</span></a></li>"#,
+        ));
+    }
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{domain} — smallhold</title>
+<style>{PAGE_CSS}</style>
+</head>
+<body>
+<main>
+<h1>smallhold</h1>
+<p class="handle">ActivityPub server on {domain}</p>
+<ul>{personas_html}</ul>
+<footer class="site">Powered by smallhold</footer>
+</main>
+</body>
+</html>"#,
+    );
+    Ok(Html(html))
+}
+
+/// GET /@{username} — profile page with posts.
 async fn profile_page(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Html<String>, AppError> {
     let account = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
+    let display_name = ammonia::clean(&account.display_name);
 
-    // Escape display_name for safe HTML embedding. bio_html is already sanitized
-    // by the ingest pipeline (ammonia) so it is safe to embed directly.
-    let display_name_escaped = ammonia::clean(&account.display_name);
+    // Counts
+    let account_id: Option<(i64,)> = sqlx::query_as(
+        "SELECT id FROM accounts WHERE username = ?",
+    )
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await?;
+    let aid = account_id.map(|r| r.0).unwrap_or(0);
+
+    let (post_count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM posts WHERE account_id = ?",
+    )
+    .bind(aid)
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0,));
+
+    let (follower_count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM followers WHERE local_account_id = ?",
+    )
+    .bind(aid)
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0,));
+
+    // Profile fields
+    let fields: Vec<serde_json::Value> =
+        serde_json::from_str(&account.fields_json).unwrap_or_default();
+    let mut fields_html = String::new();
+    if !fields.is_empty() {
+        fields_html.push_str("<table class=\"fields\">");
+        for f in &fields {
+            let name = ammonia::clean(f["name"].as_str().unwrap_or(""));
+            let value = f["value"].as_str().unwrap_or("");
+            fields_html.push_str(&format!("<tr><th>{name}</th><td>{value}</td></tr>"));
+        }
+        fields_html.push_str("</table>");
+    }
+
+    // Recent posts
+    let posts: Vec<PostRow> = sqlx::query_as(
+        "SELECT id, content_html, created_at FROM posts WHERE account_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 20",
+    )
+    .bind(aid)
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let mut posts_html = String::new();
+    for post in &posts {
+        let dt = chrono::DateTime::from_timestamp_millis(post.created_at)
+            .unwrap_or_default();
+        let date = dt.format("%Y-%m-%d").to_string();
+        let iso = dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        posts_html.push_str(&format!(
+            r#"<article><div class="content">{content}</div><footer><a href="/@{username}/{id}"><time datetime="{iso}">{date}</time></a></footer></article>"#,
+            content = post.content_html,
+            id = post.id,
+        ));
+    }
+
+    let joined = chrono::DateTime::from_timestamp_millis(account.created_at)
+        .unwrap_or_default()
+        .format("%B %Y")
+        .to_string();
+
+    let bio_section = if account.bio_html.is_empty() {
+        String::new()
+    } else {
+        format!(r#"<div class="bio">{}</div>"#, account.bio_html)
+    };
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>@{username}@{domain}</title>
-  <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@{username}@{domain} — {display_name}</title>
+<meta property="og:title" content="{display_name} (@{username}@{domain})">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="https://{domain}/@{username}">
+<meta property="og:description" content="Profile on {domain}">
+<link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}">
+<style>{PAGE_CSS}</style>
 </head>
 <body>
-  <h1>{display_name}</h1>
-  <p>@{username}@{domain}</p>
-  <div>{bio_html}</div>
+<main>
+<h1>{display_name}</h1>
+<p class="handle">@{username}@{domain}</p>
+{bio_section}
+{fields_html}
+<p class="meta">{post_count} posts · {follower_count} followers · Joined {joined}</p>
+<hr>
+<h2>Posts</h2>
+{posts_html}
+</main>
 </body>
 </html>"#,
-        username = username,
-        domain = domain,
-        display_name = display_name_escaped,
-        bio_html = account.bio_html,
     );
+    Ok(Html(html))
+}
 
+/// GET /@{username}/{post_id} — individual post page.
+async fn post_page(
+    State(state): State<Arc<AppState>>,
+    Path((username, post_id)): Path<(String, String)>,
+) -> Result<Html<String>, AppError> {
+    let domain = &state.config.server.domain;
+    let pid: i64 = post_id
+        .parse()
+        .map_err(|_| AppError::not_found("Post not found"))?;
+
+    let post: PostRow = sqlx::query_as(
+        "SELECT p.id, p.content_html, p.created_at FROM posts p \
+         JOIN accounts a ON p.account_id = a.id \
+         WHERE p.id = ? AND a.username = ?",
+    )
+    .bind(pid)
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Post not found"))?;
+
+    let account = fetch_account(&state.pool, &username).await?;
+    let display_name = ammonia::clean(&account.display_name);
+
+    let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
+    let date = dt.format("%Y-%m-%d %H:%M").to_string();
+    let iso = dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+    // Strip HTML for OG description
+    let plain_text = ammonia::Builder::new()
+        .tags(std::collections::HashSet::new())
+        .clean(&post.content_html)
+        .to_string();
+    let og_desc = if plain_text.len() > 200 {
+        format!("{}...", &plain_text[..197])
+    } else {
+        plain_text
+    };
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{display_name}: "{og_desc_title}" — @{username}@{domain}</title>
+<meta property="og:title" content="{display_name} (@{username}@{domain})">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://{domain}/@{username}/{post_id}">
+<meta property="og:description" content="{og_desc}">
+<link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}/statuses/{post_id}">
+<style>{PAGE_CSS}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="content">{content}</div>
+<footer><time datetime="{iso}">{date}</time></footer>
+</article>
+<hr>
+<p><a href="/@{username}">← @{username}@{domain}</a></p>
+</main>
+</body>
+</html>"#,
+        content = post.content_html,
+        og_desc_title = og_desc.chars().take(50).collect::<String>(),
+    );
     Ok(Html(html))
 }
 
@@ -375,8 +601,10 @@ async fn featured_tags(
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/", get(index_page))
         .route("/users/{username}", get(actor))
         .route("/@{username}", get(profile_page))
+        .route("/@{username}/{post_id}", get(post_page))
         .route("/users/{username}/outbox", get(outbox))
         .route("/users/{username}/followers", get(followers_collection))
         .route("/users/{username}/following", get(following_collection))
