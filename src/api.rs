@@ -325,7 +325,10 @@ async fn create_app(
         "client_id": client_id,
         "client_secret": client_secret,
         "redirect_uri": body.redirect_uris,
+        "redirect_uris": [body.redirect_uris],
+        "scopes": body.scopes.as_deref().unwrap_or("read").split_whitespace().collect::<Vec<_>>(),
         "vapid_key": "",
+        "client_secret_expires_at": 0,
     })))
 }
 
