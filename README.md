@@ -130,11 +130,41 @@ default_language = "en"
 site_title = "My Instance"
 site_description = "A personal fediverse presence"
 custom_css_path = "custom.css"  # optional, drop a CSS file to customize
+theme_tokens_path = "tokens.json"  # optional, W3C Design Tokens for color theming
 ```
 
 ### Custom theming
 
-Drop a `custom.css` file and point `branding.custom_css_path` at it. The default styles use CSS custom properties, so overriding colors is one line:
+#### Design tokens
+
+Point `branding.theme_tokens_path` at a [W3C Design Tokens](https://tr.designtokens.org/format/) JSON file to override the default color palette. The `color` group sets light-mode values, and `color-dark` sets dark-mode values:
+
+```json
+{
+  "color": {
+    "primary":    { "$value": "#0066cc", "$type": "color" },
+    "background": { "$value": "#ffffff", "$type": "color" },
+    "surface":    { "$value": "#f5f5f7", "$type": "color" },
+    "text":       { "$value": "#1d1d1f", "$type": "color" },
+    "muted":      { "$value": "#6e6e73", "$type": "color" },
+    "border":     { "$value": "#d2d2d7", "$type": "color" }
+  },
+  "color-dark": {
+    "primary":    { "$value": "#2997ff", "$type": "color" },
+    "background": { "$value": "#1d1d1f", "$type": "color" },
+    "surface":    { "$value": "#2c2c2e", "$type": "color" },
+    "text":       { "$value": "#f5f5f7", "$type": "color" },
+    "muted":      { "$value": "#98989d", "$type": "color" },
+    "border":     { "$value": "#3a3a3c", "$type": "color" }
+  }
+}
+```
+
+Token name mapping: `primary` maps to `--link`, `background` to `--bg`, `surface` to `--card`, `text` to `--text`, `muted` to `--muted`, `border` to `--border`.
+
+#### Custom CSS
+
+Drop a `custom.css` file and point `branding.custom_css_path` at it. Custom CSS loads after theme tokens, so it can override token-generated values. The default styles use CSS custom properties:
 
 ```css
 :root { --link: #e4002b; --bg: #fafafa; }

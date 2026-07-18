@@ -213,6 +213,7 @@ default_language = "en"
 # site_title = "smallhold"
 # site_description = ""
 # custom_css_path = ""  # path to a CSS file for visual customization
+# theme_tokens_path = ""  # path to a W3C Design Tokens JSON file
 "#
     );
 

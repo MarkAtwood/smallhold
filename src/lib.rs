@@ -14,3 +14,4 @@ pub mod media;
 pub mod posting;
 pub mod server;
 pub mod streaming;
+pub mod theme;

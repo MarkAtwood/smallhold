@@ -204,19 +204,17 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 }
 "#;
 
-/// Load custom CSS from the configured path, or empty string if not set / not found.
-fn load_custom_css(config: &crate::config::Config) -> String {
-    let path = &config.branding.custom_css_path;
-    if path.is_empty() {
-        return String::new();
-    }
-    match std::fs::read_to_string(path) {
-        Ok(css) => css,
-        Err(e) => {
-            tracing::warn!(path, "failed to load custom CSS: {e}");
-            String::new()
+/// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
+fn load_extra_css(config: &crate::config::Config) -> String {
+    let mut css = crate::theme::load_theme_css(config);
+    let custom_path = &config.branding.custom_css_path;
+    if !custom_path.is_empty() {
+        match std::fs::read_to_string(custom_path) {
+            Ok(custom) => css.push_str(&custom),
+            Err(e) => tracing::warn!(path = custom_path, "failed to load custom CSS: {e}"),
         }
     }
+    css
 }
 
 /// GET / — root page listing personas.
@@ -230,7 +228,7 @@ async fn index_page(
     } else {
         ammonia::clean(&state.config.branding.site_description)
     };
-    let custom_css = load_custom_css(&state.config);
+    let custom_css = load_extra_css(&state.config);
 
     let accounts: Vec<(String, String)> = sqlx::query_as(
         "SELECT username, display_name FROM accounts ORDER BY created_at",
@@ -277,7 +275,7 @@ async fn profile_page(
     let account = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
     let display_name = ammonia::clean(&account.display_name);
-    let custom_css = load_custom_css(&state.config);
+    let custom_css = load_extra_css(&state.config);
 
     // Counts
     let account_id: Option<(i64,)> = sqlx::query_as(
@@ -406,7 +404,7 @@ async fn post_page(
 
     let account = fetch_account(&state.pool, &username).await?;
     let display_name = ammonia::clean(&account.display_name);
-    let custom_css = load_custom_css(&state.config);
+    let custom_css = load_extra_css(&state.config);
 
     let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
     let date = dt.format("%Y-%m-%d %H:%M").to_string();

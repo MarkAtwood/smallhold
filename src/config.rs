@@ -21,6 +21,8 @@ pub struct BrandingConfig {
     pub site_description: String,
     #[serde(default)]
     pub custom_css_path: String,
+    #[serde(default)]
+    pub theme_tokens_path: String,
 }
 
 impl Default for BrandingConfig {
@@ -29,6 +31,7 @@ impl Default for BrandingConfig {
             site_title: default_site_title(),
             site_description: String::new(),
             custom_css_path: String::new(),
+            theme_tokens_path: String::new(),
         }
     }
 }
