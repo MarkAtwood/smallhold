@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-abju",
+  "title": "Add Cache-Control headers for CDN support",
+  "description": "Set appropriate Cache-Control on all response types: immutable for media URLs, short TTL for public pages and discovery, no-store for API and auth endpoints.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T19:16:36.977208716Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T19:17:10.645808464Z",
+  "started_at": "2026-07-18T19:16:37.104586894Z",
+  "closed_at": "2026-07-18T19:17:10.645808464Z",
+  "close_reason": "Closed"
+}
