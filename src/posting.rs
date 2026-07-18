@@ -1045,29 +1045,33 @@ async fn create_status(
                     .await?;
 
                     // Notification for local mention (dedup via unique index)
-                    let notif_id = generate_id();
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO notifications \
-                         (id, account_id, kind, from_account_id, post_id, created_at) \
-                         VALUES (?, ?, 'mention', ?, ?, ?)",
-                    )
-                    .bind(notif_id)
-                    .bind(aid)
-                    .bind(auth.account_id)
-                    .bind(post_id)
-                    .bind(now)
-                    .execute(&state.pool)
-                    .await?;
+                    // Skip self-mentions — don't notify the author about their own post
+                    if aid != auth.account_id {
+                        let notif_id = generate_id();
+                        sqlx::query(
+                            "INSERT OR IGNORE INTO notifications \
+                             (id, account_id, kind, from_account_id, post_id, created_at) \
+                             VALUES (?, ?, 'mention', ?, ?, ?)",
+                        )
+                        .bind(notif_id)
+                        .bind(aid)
+                        .bind(auth.account_id)
+                        .bind(post_id)
+                        .bind(now)
+                        .execute(&state.pool)
+                        .await?;
 
-                    // Fire-and-forget push notification
-                    let pool = state.pool.clone();
-                    let from_user = auth.username.clone();
-                    tokio::spawn(async move {
-                        crate::push::send_push_notification(
-                            &pool, aid, "mention",
-                            "New mention", &from_user, None,
-                        ).await;
-                    });
+                        // Fire-and-forget push notification
+                        let pool = state.pool.clone();
+                        let from_user = auth.username.clone();
+                        let push_domain = domain.clone();
+                        tokio::spawn(async move {
+                            crate::push::send_push_notification(
+                                &pool, aid, "mention",
+                                "New mention", &from_user, None, &push_domain,
+                            ).await;
+                        });
+                    }
                 }
             }
             Some(mention_domain) => {
@@ -1779,10 +1783,11 @@ async fn favourite(
         let pool = state.pool.clone();
         let target = post.account_id;
         let from_user = auth.username.clone();
+        let push_domain = domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
                 &pool, target, "favourite",
-                "New favourite", &from_user, None,
+                "New favourite", &from_user, None, &push_domain,
             ).await;
         });
     }
@@ -1984,10 +1989,11 @@ async fn reblog(
             let pool = state.pool.clone();
             let target = original.account_id;
             let from_user = auth.username.clone();
+            let push_domain = domain.clone();
             tokio::spawn(async move {
                 crate::push::send_push_notification(
                     &pool, target, "reblog",
-                    "New boost", &from_user, None,
+                    "New boost", &from_user, None, &push_domain,
                 ).await;
             });
         }
@@ -2879,6 +2885,73 @@ async fn delete_scheduled_status(
 // Conversations
 // ---------------------------------------------------------------------------
 
+/// Build the accounts (participants) array for a conversation, excluding the current user.
+async fn conversation_participants(
+    pool: &SqlitePool,
+    post: &PostRow,
+    domain: &str,
+    current_account_id: i64,
+) -> Result<Vec<Value>, AppError> {
+    let mut accounts = Vec::new();
+    if post.account_id != current_account_id {
+        let author = fetch_account_row(pool, post.account_id).await?;
+        accounts.push(account_to_json(&author, domain));
+    }
+    // Add mentioned accounts (excluding current user)
+    let mention_rows: Vec<(Option<i64>, Option<i64>)> = sqlx::query_as(
+        "SELECT mentioned_account_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
+    )
+    .bind(post.id)
+    .fetch_all(pool)
+    .await?;
+    for (local_id, remote_id) in &mention_rows {
+        if let Some(aid) = local_id {
+            if *aid != current_account_id {
+                if let Ok(a) = fetch_account_row(pool, *aid).await {
+                    accounts.push(account_to_json(&a, domain));
+                }
+            }
+        } else if let Some(rid) = remote_id {
+            let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
+                "SELECT id, username, domain, display_name, bio_html \
+                 FROM remote_accounts WHERE id = ?",
+            )
+            .bind(rid)
+            .fetch_optional(pool)
+            .await?;
+            if let Some((id, username, rdomain, display_name, bio_html)) = remote {
+                accounts.push(json!({
+                    "id": id.to_string(),
+                    "username": username,
+                    "acct": format!("{username}@{rdomain}"),
+                    "display_name": display_name,
+                    "locked": false,
+                    "bot": false,
+                    "discoverable": true,
+                    "group": false,
+                    "created_at": "1970-01-01T00:00:00.000Z",
+                    "note": bio_html,
+                    "url": format!("https://{rdomain}/@{username}"),
+                    "uri": format!("https://{rdomain}/users/{username}"),
+                    "avatar": "",
+                    "avatar_static": "",
+                    "header": "",
+                    "header_static": "",
+                    "followers_count": 0,
+                    "following_count": 0,
+                    "statuses_count": 0,
+                    "last_status_at": null,
+                    "noindex": false,
+                    "emojis": [],
+                    "roles": [],
+                    "fields": []
+                }));
+            }
+        }
+    }
+    Ok(accounts)
+}
+
 async fn list_conversations(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
@@ -2918,6 +2991,9 @@ async fn list_conversations(
 
     let posts: Vec<PostRow> = query.fetch_all(&state.pool).await?;
 
+    // TODO(perf): N+1 queries for participants per conversation. The result set is
+    // already bounded by LIMIT (max 40), so this is acceptable for now. Batch-loading
+    // mentions/accounts for all post IDs would eliminate the per-post queries.
     let mut conversations = Vec::with_capacity(posts.len());
     for p in &posts {
         let status = load_status(&state.pool, p, domain, Some(auth.account_id)).await?;
@@ -2932,66 +3008,7 @@ async fn list_conversations(
         .await?;
         let unread = read_count == 0 && p.account_id != auth.account_id;
 
-        // Build accounts array: participants other than the current user.
-        // Use mention data from the status JSON plus the post author.
-        let mut accounts = Vec::new();
-        if p.account_id != auth.account_id {
-            // Post author is a participant
-            let author = fetch_account_row(&state.pool, p.account_id).await?;
-            accounts.push(account_to_json(&author, domain));
-        }
-        // Add mentioned accounts (excluding current user)
-        let mention_rows: Vec<(Option<i64>, Option<i64>)> = sqlx::query_as(
-            "SELECT mentioned_account_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
-        )
-        .bind(p.id)
-        .fetch_all(&state.pool)
-        .await?;
-        for (local_id, remote_id) in &mention_rows {
-            if let Some(aid) = local_id {
-                if *aid != auth.account_id {
-                    if let Ok(a) = fetch_account_row(&state.pool, *aid).await {
-                        accounts.push(account_to_json(&a, domain));
-                    }
-                }
-            } else if let Some(rid) = remote_id {
-                let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
-                    "SELECT id, username, domain, display_name, bio_html \
-                     FROM remote_accounts WHERE id = ?",
-                )
-                .bind(rid)
-                .fetch_optional(&state.pool)
-                .await?;
-                if let Some((id, username, rdomain, display_name, bio_html)) = remote {
-                    accounts.push(json!({
-                        "id": id.to_string(),
-                        "username": username,
-                        "acct": format!("{username}@{rdomain}"),
-                        "display_name": display_name,
-                        "locked": false,
-                        "bot": false,
-                        "discoverable": true,
-                        "group": false,
-                        "created_at": "1970-01-01T00:00:00.000Z",
-                        "note": bio_html,
-                        "url": format!("https://{rdomain}/@{username}"),
-                        "uri": format!("https://{rdomain}/users/{username}"),
-                        "avatar": "",
-                        "avatar_static": "",
-                        "header": "",
-                        "header_static": "",
-                        "followers_count": 0,
-                        "following_count": 0,
-                        "statuses_count": 0,
-                        "last_status_at": null,
-                        "noindex": false,
-                        "emojis": [],
-                        "roles": [],
-                        "fields": []
-                    }));
-                }
-            }
-        }
+        let accounts = conversation_participants(&state.pool, p, domain, auth.account_id).await?;
 
         conversations.push(json!({
             "id": p.id.to_string(),
@@ -3008,7 +3025,9 @@ async fn list_conversations(
     let url_base = format!("https://{domain}/api/v1/conversations");
     let mut response = Json(&conversations).into_response();
     if let Some(link) = pagination_link_header(&url_base, &conversations) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        if let Ok(val) = link.parse() {
+            response.headers_mut().insert("Link", val);
+        }
     }
     Ok(response)
 }
@@ -3059,63 +3078,7 @@ async fn mark_conversation_read(
 
     // Return the updated conversation object
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
-
-    let mut accounts = Vec::new();
-    if post.account_id != auth.account_id {
-        let author = fetch_account_row(&state.pool, post.account_id).await?;
-        accounts.push(account_to_json(&author, domain));
-    }
-    let mention_rows: Vec<(Option<i64>, Option<i64>)> = sqlx::query_as(
-        "SELECT mentioned_account_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
-    )
-    .bind(post_id)
-    .fetch_all(&state.pool)
-    .await?;
-    for (local_id, remote_id) in &mention_rows {
-        if let Some(aid) = local_id {
-            if *aid != auth.account_id {
-                if let Ok(a) = fetch_account_row(&state.pool, *aid).await {
-                    accounts.push(account_to_json(&a, domain));
-                }
-            }
-        } else if let Some(rid) = remote_id {
-            let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
-                "SELECT id, username, domain, display_name, bio_html \
-                 FROM remote_accounts WHERE id = ?",
-            )
-            .bind(rid)
-            .fetch_optional(&state.pool)
-            .await?;
-            if let Some((id, username, rdomain, display_name, bio_html)) = remote {
-                accounts.push(json!({
-                    "id": id.to_string(),
-                    "username": username,
-                    "acct": format!("{username}@{rdomain}"),
-                    "display_name": display_name,
-                    "locked": false,
-                    "bot": false,
-                    "discoverable": true,
-                    "group": false,
-                    "created_at": "1970-01-01T00:00:00.000Z",
-                    "note": bio_html,
-                    "url": format!("https://{rdomain}/@{username}"),
-                    "uri": format!("https://{rdomain}/users/{username}"),
-                    "avatar": "",
-                    "avatar_static": "",
-                    "header": "",
-                    "header_static": "",
-                    "followers_count": 0,
-                    "following_count": 0,
-                    "statuses_count": 0,
-                    "last_status_at": null,
-                    "noindex": false,
-                    "emojis": [],
-                    "roles": [],
-                    "fields": []
-                }));
-            }
-        }
-    }
+    let accounts = conversation_participants(&state.pool, &post, domain, auth.account_id).await?;
 
     Ok(Json(json!({
         "id": post.id.to_string(),

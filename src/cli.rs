@@ -375,10 +375,16 @@ async fn cmd_serve(config_path: &Path) -> Result<()> {
         tokio::spawn(async move {
             // Wait 7 days after startup, then every 7 days
             tokio::time::sleep(std::time::Duration::from_secs(7 * 24 * 3600)).await;
-            let client = reqwest::Client::builder()
+            let client = match reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .unwrap();
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("census client init failed: {e}");
+                    return;
+                }
+            };
             loop {
                 let url = format!("https://the-federation.info/register/{domain}");
                 match client.get(&url).send().await {

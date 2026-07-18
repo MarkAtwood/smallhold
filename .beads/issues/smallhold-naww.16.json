@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.16",
+  "title": "push.rs: encrypt_payload record_size calculation is incorrect",
+  "description": "File: src/push.rs:399-400. The record_size field in the aes128gcm header is computed as (plaintext.len() + 1 + 16) + 86, then clamped to min 4096. Per RFC 8188, record_size is the size of each plaintext record INCLUDING the 16-byte AEAD tag and the 1-byte delimiter, but NOT the header. The current formula adds 86 (the header size) to the record size value itself, which is incorrect. The push service may reject or misinterpret the payload. Should be: ciphertext.len() (which is plaintext + 1 delimiter + 16 tag).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:19.62624525Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:57.905461631Z",
+  "started_at": "2026-07-18T22:44:24.04532877Z",
+  "closed_at": "2026-07-18T22:51:57.905461631Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.16",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:19.652691341Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

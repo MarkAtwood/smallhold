@@ -63,7 +63,7 @@ static LOGIN_ATTEMPTS: LazyLock<Mutex<HashMap<String, (u32, i64)>>> =
 const MAX_LOGIN_ATTEMPTS: u32 = 5;
 const LOGIN_WINDOW_SECS: i64 = 60;
 
-fn check_login_rate_limit(ip: &str) -> bool {
+pub(crate) fn check_login_rate_limit(ip: &str) -> bool {
     let now = chrono::Utc::now().timestamp();
     let mut map = LOGIN_ATTEMPTS.lock().unwrap();
     if let Some((count, window_start)) = map.get_mut(ip) {
@@ -219,6 +219,21 @@ async fn fetch_account_row_by_username(
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| AppError::not_found("Account not found"))
+}
+
+async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<Value, AppError> {
+    let row = sqlx::query_as::<_, AccountRow>(
+        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM accounts ORDER BY created_at LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await?;
+    match row {
+        Some(r) => {
+            let (f, fo, s) = fetch_account_counts(pool, r.id).await;
+            Ok(account_to_json_with_counts(&r, domain, f, fo, s))
+        }
+        None => Ok(json!(null)),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -849,21 +864,10 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
             .fetch_one(&state.pool)
             .await?;
 
+    // ponytail: one DB query per instance call; VAPID key is immutable, could be cached in AppState
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
-    // Load first persona as contact account
-    let contact_account: Value = match sqlx::query_as::<_, AccountRow>(
-        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM accounts ORDER BY created_at LIMIT 1",
-    )
-    .fetch_optional(&state.pool)
-    .await?
-    {
-        Some(row) => {
-            let (followers, following, statuses) = fetch_account_counts(&state.pool, row.id).await;
-            account_to_json_with_counts(&row, domain, followers, following, statuses)
-        }
-        None => json!(null),
-    };
+    let contact_account = load_contact_account(&state.pool, domain).await?;
 
     Ok(Json(json!({
         "uri": domain,
@@ -912,21 +916,12 @@ async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
         .fetch_one(&state.pool)
         .await?;
 
+    // ponytail: one DB query per instance call; VAPID key is immutable, could be cached in AppState
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
     let contact_v2: Value = {
-        let row = sqlx::query_as::<_, AccountRow>(
-            "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM accounts ORDER BY created_at LIMIT 1",
-        )
-        .fetch_optional(&state.pool)
-        .await?;
-        match row {
-            Some(r) => {
-                let (f, fo, s) = fetch_account_counts(&state.pool, r.id).await;
-                json!({ "email": "", "account": account_to_json_with_counts(&r, domain, f, fo, s) })
-            }
-            None => json!({ "email": "", "account": null }),
-        }
+        let account = load_contact_account(&state.pool, domain).await?;
+        json!({ "email": "", "account": account })
     };
 
     Ok(Json(json!({

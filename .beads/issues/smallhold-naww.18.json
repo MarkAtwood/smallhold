@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.18",
+  "title": "push.rs/inbox.rs: fire-and-forget spawns lack error tracing context",
+  "description": "Files: src/inbox.rs:632-639, 909-917, 970-978, 1234-1243, 1288-1297; src/posting.rs:1058-1067, 1774-1784, 1979-1989. All push notification spawns clone pool and a single string, then call send_push_notification in a detached task. If the task panics (e.g. due to the unwrap in encrypt_payload's Aes128Gcm::new_from_slice), there is no JoinHandle to observe it. Consider using tokio::spawn with a .instrument(tracing::Span) or at minimum catch_unwind inside the task.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:28.507545878Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.798123136Z",
+  "started_at": "2026-07-18T22:44:24.732705314Z",
+  "closed_at": "2026-07-18T22:51:58.798123136Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.18",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:28.535362503Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

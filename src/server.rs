@@ -39,6 +39,7 @@ async fn security_headers(
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    // ponytail: path cloned because request is consumed by next.run(). ~50 bytes per request.
     let path = request.uri().path().to_string();
     let mut response = next.run(request).await;
     let headers = response.headers_mut();

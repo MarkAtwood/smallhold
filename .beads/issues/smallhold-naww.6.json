@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-naww.6",
+  "title": "webauthn.rs: in-memory passkey token store lost on restart",
+  "description": "File: src/webauthn.rs:23-24. PASSKEY_TOKENS is a static Mutex\u003cHashMap\u003e holding one-time passkey auth tokens. If the server restarts between auth_complete (token issued) and authorize_submit (token consumed), the token is lost and the user's passkey auth silently fails. The 2-minute TTL makes this unlikely but not impossible. Consider storing tokens in the DB alongside webauthn_challenges, which already uses this pattern.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:39:55.956948874Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:40:47.891424058Z",
+  "closed_at": "2026-07-18T22:40:47.891424058Z",
+  "close_reason": "Duplicate of smallhold-naww.7",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.6",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:39:55.986318355Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

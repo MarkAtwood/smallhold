@@ -632,10 +632,11 @@ async fn handle_follow(
         // Fire-and-forget push notification
         let pool = state.pool.clone();
         let actor = remote.actor_uri.clone();
+        let push_domain = domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
                 &pool, account_id, "follow",
-                "New follower", &actor, None,
+                "New follower", &actor, None, &push_domain,
             ).await;
         });
 
@@ -913,10 +914,11 @@ async fn handle_create(
                 // Fire-and-forget push notification
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
+                let push_domain = domain.clone();
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
                         &pool, local_account_id, "mention",
-                        "New mention", &actor, None,
+                        "New mention", &actor, None, &push_domain,
                     ).await;
                 });
             }
@@ -974,10 +976,11 @@ async fn handle_create(
                     // Fire-and-forget push notification
                     let pool = state.pool.clone();
                     let actor = remote.actor_uri.clone();
+                    let push_domain = domain.clone();
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool, local_account_id, "mention",
-                            "New mention", &actor, None,
+                            "New mention", &actor, None, &push_domain,
                         ).await;
                     });
                 }
@@ -1237,10 +1240,11 @@ async fn handle_like(
         // Fire-and-forget push notification
         let pool = state.pool.clone();
         let actor = remote.actor_uri.clone();
+        let push_domain = state.config.server.domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
                 &pool, account_id, "favourite",
-                "New favourite", &actor, None,
+                "New favourite", &actor, None, &push_domain,
             ).await;
         });
 
@@ -1291,10 +1295,11 @@ async fn handle_announce(
         // Fire-and-forget push notification
         let pool = state.pool.clone();
         let actor = remote.actor_uri.clone();
+        let push_domain = state.config.server.domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
                 &pool, account_id, "reblog",
-                "New boost", &actor, None,
+                "New boost", &actor, None, &push_domain,
             ).await;
         });
 

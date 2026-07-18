@@ -1,4 +1,4 @@
-use crate::api::{hex_encode, now_millis};
+use crate::api::{check_login_rate_limit, hex_encode, now_millis};
 use crate::error::AppError;
 use crate::server::AppState;
 use axum::extract::State;
@@ -24,6 +24,10 @@ static ADMIN_USER_ID: LazyLock<Uuid> =
     LazyLock::new(|| Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
 
 // One-time passkey auth tokens: token_hash -> expiry_ms
+// ponytail: In-memory store acceptable — tokens have 2-minute TTL and are
+// consumed immediately by the authorize form submit. Server restart during
+// the narrow window between auth_complete and form submit means the user
+// retries (not a security issue, just UX friction).
 static PASSKEY_TOKENS: LazyLock<Mutex<HashMap<String, i64>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -132,8 +136,19 @@ async fn consume_challenge<T: serde::de::DeserializeOwned>(
 
 async fn register_begin(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
+    // Rate limit by client IP
+    let ip = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown");
+    if !check_login_rate_limit(ip) {
+        return Err(AppError::rate_limited());
+    }
+
     // Require admin password auth
     let password = extract_password_from_body(&body)?;
     verify_admin_auth(&state, &password).await?;
@@ -406,7 +421,9 @@ async fn auth_complete(
         // Match by credential ID in the JSON. Since credential_json contains the
         // full Passkey struct, we identify by parsing each row.
         // ponytail: O(n) scan is fine for single-digit passkey count
-        let _ = update_credential_bycred_id(&state.pool, &cred_id_bytes, &cred_json).await;
+        if let Err(e) = update_credential_bycred_id(&state.pool, &cred_id_bytes, &cred_json).await {
+            tracing::warn!("failed to update webauthn credential counter: {e}");
+        }
     }
 
     // Generate a one-time passkey token

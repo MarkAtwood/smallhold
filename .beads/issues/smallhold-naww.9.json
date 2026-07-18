@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.9",
+  "title": "webauthn.rs: silently discards credential update errors",
+  "description": "File: src/webauthn.rs:409. In auth_complete(), the result of update_credential_bycred_id is discarded with 'let _ ='. If the DB update fails, the credential counter is not persisted, which weakens replay attack protection. The signature counter will appear to go backward on the next auth attempt, potentially causing webauthn-rs to reject the credential. Should at minimum log the error.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:03.528006631Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.267300639Z",
+  "started_at": "2026-07-18T22:44:24.329649011Z",
+  "closed_at": "2026-07-18T22:51:58.267300639Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.9",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:03.558577336Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

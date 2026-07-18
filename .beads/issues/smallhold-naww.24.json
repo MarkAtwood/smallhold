@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.24",
+  "title": "posting.rs: self-mention generates spurious notification and push",
+  "description": "File: src/posting.rs:1037-1070. When a user mentions themselves in a post (e.g., @alice posts 'Hello @alice'), the code creates both a DB notification and a push notification to the same user. The favourite and reblog paths correctly guard with 'post.account_id \\!= auth.account_id' before notifying, but the local mention path at line 1037 has no such guard. Should add 'if aid \\!= auth.account_id' before inserting the notification and spawning the push.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:41:34.102655214Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:57.708103282Z",
+  "started_at": "2026-07-18T22:44:23.877144381Z",
+  "closed_at": "2026-07-18T22:51:57.708103282Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.24",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:41:34.134179397Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

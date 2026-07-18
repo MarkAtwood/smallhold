@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-naww.12",
+  "title": "posting.rs: N+1 query in list_conversations",
+  "description": "File: src/posting.rs (list_conversations). For each conversation post, the code issues: 1) load_status (itself does multiple queries), 2) a COUNT query for read markers, 3) fetch_account_row for the author, 4) a query for mention_rows, 5) individual queries for each mentioned remote account. For a page of 20 conversations, this could be 100+ DB round trips. Should batch-load participants and read markers.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:10.61308264Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:40:47.699128301Z",
+  "closed_at": "2026-07-18T22:40:47.699128301Z",
+  "close_reason": "Duplicate of smallhold-naww.1",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.12",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:10.638822142Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

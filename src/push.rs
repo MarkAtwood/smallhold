@@ -18,8 +18,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::Sha256;
 use sqlx::SqlitePool;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -232,8 +232,9 @@ pub async fn send_push_notification(
     title: &str,
     body: &str,
     _icon: Option<&str>,
+    domain: &str,
 ) {
-    let result = send_push_inner(pool, account_id, notification_type, title, body).await;
+    let result = send_push_inner(pool, account_id, notification_type, title, body, domain).await;
     if let Err(e) = result {
         tracing::debug!(account_id, notification_type, error = %e, "push notification failed");
     }
@@ -245,6 +246,7 @@ async fn send_push_inner(
     notification_type: &str,
     title: &str,
     body: &str,
+    domain: &str,
 ) -> anyhow::Result<()> {
     let row: Option<SubscriptionRow> = sqlx::query_as(
         "SELECT id, account_id, endpoint, key_p256dh, key_auth, \
@@ -290,11 +292,16 @@ async fn send_push_inner(
     // Build VAPID JWT
     let endpoint_url: url::Url = sub.endpoint.parse()?;
     let audience = format!("{}://{}", endpoint_url.scheme(), endpoint_url.host_str().unwrap_or(""));
-    let jwt = build_vapid_jwt(&vapid_pem, &audience)?;
+    let jwt = build_vapid_jwt(&vapid_pem, &audience, domain)?;
 
     // Send HTTP POST
-    let client = reqwest::Client::new();
-    let response = client
+    static PUSH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("failed to build push HTTP client")
+    });
+    let response = PUSH_CLIENT
         .post(&sub.endpoint)
         .header("Content-Type", "application/octet-stream")
         .header("Content-Encoding", "aes128gcm")
@@ -396,8 +403,8 @@ fn encrypt_payload(client_pub_b64: &str, client_auth_b64: &str, plaintext: &[u8]
 
     // Build aes128gcm header:
     // salt (16) || record_size (4, big-endian) || keyid_len (1) || keyid (server pub, 65 bytes)
-    let record_size: u32 = (plaintext.len() + 1 + 16) as u32 + 86; // generous record size
-    let record_size = record_size.max(4096); // minimum record size
+    // Per RFC 8188, record_size is the size of each plaintext record + 17 (16-byte tag + 1-byte padding delimiter)
+    let record_size: u32 = (plaintext.len() as u32 + 17).max(4096);
 
     let mut output = Vec::with_capacity(86 + ciphertext.len());
     output.extend_from_slice(&salt);
@@ -413,7 +420,7 @@ fn encrypt_payload(client_pub_b64: &str, client_auth_b64: &str, plaintext: &[u8]
 // VAPID JWT (ES256)
 // ---------------------------------------------------------------------------
 
-fn build_vapid_jwt(private_key_pem: &str, audience: &str) -> anyhow::Result<String> {
+fn build_vapid_jwt(private_key_pem: &str, audience: &str, domain: &str) -> anyhow::Result<String> {
     let signing_key = SigningKey::from_pkcs8_pem(private_key_pem)
         .map_err(|e| anyhow::anyhow!("Failed to parse VAPID key: {e}"))?;
 
@@ -429,7 +436,7 @@ fn build_vapid_jwt(private_key_pem: &str, audience: &str) -> anyhow::Result<Stri
     let claims = json!({
         "aud": audience,
         "exp": now + 86400,
-        "sub": "mailto:admin@localhost",
+        "sub": format!("mailto:admin@{}", domain),
     });
     let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
 

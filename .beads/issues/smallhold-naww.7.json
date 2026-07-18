@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.7",
+  "title": "PASSKEY_TOKENS in-memory HashMap lost on restart",
+  "description": "File: src/webauthn.rs:PASSKEY_TOKENS. The one-time passkey tokens are stored in a static HashMap. If the server restarts between the WebAuthn ceremony completion and the OAuth form submit (within 2 minutes), the token is lost and login fails silently. This is probably fine for a single-instance server with a 2-minute TTL, but the failure mode is non-obvious — add a comment noting this tradeoff.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:39:59.972166165Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.614548673Z",
+  "started_at": "2026-07-18T22:44:24.59424066Z",
+  "closed_at": "2026-07-18T22:51:58.614548673Z",
+  "close_reason": "Closed",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.7",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:39:59.999449647Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

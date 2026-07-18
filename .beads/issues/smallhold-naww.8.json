@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.8",
+  "title": "push.rs: VAPID JWT sub claim hardcodes localhost",
+  "description": "File: src/push.rs:229 (build_vapid_jwt). The VAPID JWT uses a hardcoded 'sub': 'mailto:admin@localhost' claim. RFC 8292 requires the sub claim to be either a mailto: or https: URL that the push service can use to contact the application server operator. Using 'localhost' will cause some push services (e.g., Mozilla autopush) to reject the JWT. Should use the configured domain or an admin email from config.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:00.186660139Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:57.777535285Z",
+  "started_at": "2026-07-18T22:44:23.938270174Z",
+  "closed_at": "2026-07-18T22:51:57.777535285Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.8",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:00.215038084Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

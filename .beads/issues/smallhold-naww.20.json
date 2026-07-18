@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.20",
+  "title": "webauthn.rs: register endpoint has no rate limiting",
+  "description": "File: src/webauthn.rs (register_begin, register_complete, auth_begin, auth_complete). The /admin/webauthn/register/begin endpoint accepts admin password in plaintext without rate limiting. An attacker can brute-force the admin password via this endpoint. The /oauth/authorize endpoint has rate limiting (the diff shows it checks at line 584), but the webauthn registration endpoints bypass it entirely.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:31.812293878Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:57.970652063Z",
+  "started_at": "2026-07-18T22:44:24.097578204Z",
+  "closed_at": "2026-07-18T22:51:57.970652063Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.20",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:31.84063027Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

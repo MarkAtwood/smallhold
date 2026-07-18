@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.15",
+  "title": "Security headers middleware clones the URI path string on every request",
+  "description": "File: src/server.rs:security_headers. 'let path = request.uri().path().to_string()' allocates a String for every request just to do starts_with checks. Use request.uri().path() directly (returns \u0026str) — it lives long enough since it's borrowed before next.run() is called, but after next.run() it's dropped. Actually the borrow checker won't allow this since request is moved into next.run(). The clone is correct but consider extracting the matched cache-control value before calling next.run() to avoid the allocation being in the hot path for no reason.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:40:17.594672615Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.734841448Z",
+  "started_at": "2026-07-18T22:44:24.684479739Z",
+  "closed_at": "2026-07-18T22:51:58.734841448Z",
+  "close_reason": "Closed",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.15",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:40:17.620321974Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

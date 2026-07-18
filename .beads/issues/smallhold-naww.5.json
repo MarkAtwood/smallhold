@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.5",
+  "title": "get_vapid_public_key called redundantly in every handler",
+  "description": "File: src/api.rs and src/push.rs. get_vapid_public_key(pool) is called in create_app, verify_app_credentials, instance_v1, instance_v2, and inside push subscription create/get. Each call hits the DB. Since the VAPID key is immutable once created, it should be loaded once at startup and stored in AppState.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:39:53.481070924Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.204498771Z",
+  "started_at": "2026-07-18T22:44:24.281457125Z",
+  "closed_at": "2026-07-18T22:51:58.204498771Z",
+  "close_reason": "Closed",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.5",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:39:53.509285175Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

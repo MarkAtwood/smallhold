@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-naww.4",
+  "title": "cli.rs: .unwrap() in spawned task (census)",
+  "description": "File: src/cli.rs:381. In cmd_serve(), the periodic census spawn calls .unwrap() on the reqwest::Client::builder().build() result. This panic path runs inside a tokio task. If the TLS backend fails to initialize (e.g., missing system certs), the entire tokio runtime will propagate the panic as an unrecoverable error. Should use .expect() with context or handle the error gracefully.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:39:51.681430059Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:51:58.140788107Z",
+  "started_at": "2026-07-18T22:44:24.233572276Z",
+  "closed_at": "2026-07-18T22:51:58.140788107Z",
+  "close_reason": "Closed",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.4",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:39:51.709299111Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

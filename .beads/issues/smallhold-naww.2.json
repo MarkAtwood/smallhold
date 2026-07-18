@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-naww.2",
+  "title": "push.rs: reqwest Client created per request",
+  "description": "File: src/push.rs:296. send_push_inner() creates a new reqwest::Client on every push notification delivery. reqwest::Client is designed to be reused (maintains a connection pool internally). Creating one per call bypasses connection reuse and is wasteful. Should be passed in or stored as a LazyLock/once_cell static.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T22:39:47.897217403Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T22:40:47.637405797Z",
+  "closed_at": "2026-07-18T22:40:47.637405797Z",
+  "close_reason": "Duplicate of smallhold-naww.10",
+  "labels": [
+    "rust-idiom",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-naww.2",
+      "depends_on_id": "smallhold-naww",
+      "type": "parent-child",
+      "created_at": "2026-07-18T22:39:47.925229512Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
