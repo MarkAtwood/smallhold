@@ -851,6 +851,20 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
 
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
+    // Load first persona as contact account
+    let contact_account: Value = match sqlx::query_as::<_, AccountRow>(
+        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM accounts ORDER BY created_at LIMIT 1",
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    {
+        Some(row) => {
+            let (followers, following, statuses) = fetch_account_counts(&state.pool, row.id).await;
+            account_to_json_with_counts(&row, domain, followers, following, statuses)
+        }
+        None => json!(null),
+    };
+
     Ok(Json(json!({
         "uri": domain,
         "title": "smallhold",
@@ -881,7 +895,7 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
             },
             "polls": { "max_options": 0 },
         },
-        "contact_account": null,
+        "contact_account": contact_account,
         "rules": [],
         "vapid_key": vapid_key,
     })))
@@ -899,6 +913,21 @@ async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
         .await?;
 
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
+
+    let contact_v2: Value = {
+        let row = sqlx::query_as::<_, AccountRow>(
+            "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM accounts ORDER BY created_at LIMIT 1",
+        )
+        .fetch_optional(&state.pool)
+        .await?;
+        match row {
+            Some(r) => {
+                let (f, fo, s) = fetch_account_counts(&state.pool, r.id).await;
+                json!({ "email": "", "account": account_to_json_with_counts(&r, domain, f, fo, s) })
+            }
+            None => json!({ "email": "", "account": null }),
+        }
+    };
 
     Ok(Json(json!({
         "domain": domain,
@@ -948,10 +977,7 @@ async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
             "approval_required": false,
             "message": null,
         },
-        "contact": {
-            "email": "",
-            "account": null,
-        },
+        "contact": contact_v2,
         "rules": [],
     })))
 }
