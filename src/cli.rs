@@ -322,6 +322,30 @@ async fn cmd_serve(config_path: &Path) -> Result<()> {
     // Start delivery worker
     tokio::spawn(crate::delivery::run_delivery_worker(pool, config.clone()));
 
+    // Periodic census registration (the-federation.info)
+    {
+        let domain = config.server.domain.clone();
+        tokio::spawn(async move {
+            // Wait 7 days after startup, then every 7 days
+            tokio::time::sleep(std::time::Duration::from_secs(7 * 24 * 3600)).await;
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap();
+            loop {
+                let url = format!("https://the-federation.info/register/{domain}");
+                match client.get(&url).send().await {
+                    Ok(resp) => tracing::info!(
+                        status = %resp.status(),
+                        "census registration ping to the-federation.info"
+                    ),
+                    Err(e) => tracing::debug!("census ping failed (non-fatal): {e}"),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(7 * 24 * 3600)).await;
+            }
+        });
+    }
+
     let app = crate::server::create_router(state);
     let listener = tokio::net::TcpListener::bind(&config.server.listen).await?;
     tracing::info!("Listening on {}", config.server.listen);

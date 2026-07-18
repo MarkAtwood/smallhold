@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-vl3x",
+  "title": "Periodic self-registration with the-federation.info",
+  "description": "7 days after first startup and roughly every 7 days after, GET https://the-federation.info/register/{domain} to ensure the instance is listed in the fediverse census. Best-effort, fire-and-forget, log result at info level.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T21:47:56.653501248Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T21:49:14.939219926Z",
+  "started_at": "2026-07-18T21:47:56.763035084Z",
+  "closed_at": "2026-07-18T21:49:14.939219926Z",
+  "close_reason": "Closed"
+}
