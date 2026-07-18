@@ -67,6 +67,9 @@ pub enum Commands {
     /// Import data from another server
     #[command(subcommand)]
     Import(ImportCommands),
+
+    /// Register with fediverse census services
+    Census,
 }
 
 #[derive(Subcommand)]
@@ -196,8 +199,52 @@ impl Cli {
             Commands::Queue(cmd) => cmd_queue(cmd, &self.config).await,
             Commands::Search(cmd) => cmd_search(cmd, &self.config).await,
             Commands::Import(cmd) => cmd_import(cmd, &self.config).await,
+            Commands::Census => cmd_census(&self.config).await,
         }
     }
+}
+
+async fn cmd_census(config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let domain = &config.server.domain;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+
+    eprintln!("Registering {domain} with fediverse census services...");
+    eprintln!();
+
+    // the-federation.info — instant registration
+    let url = format!("https://the-federation.info/register/{domain}");
+    match client.get(&url).send().await {
+        Ok(resp) => eprintln!("  the-federation.info: {} {}", resp.status(), if resp.status().is_success() { "OK" } else { "FAILED" }),
+        Err(e) => eprintln!("  the-federation.info: FAILED ({e})"),
+    }
+
+    // FediDB — just ping, their crawler does the rest
+    let url = format!("https://fedidb.org/software/smallhold");
+    match client.get(&url).send().await {
+        Ok(resp) => eprintln!("  fedidb.org: {} (crawler will pick up NodeInfo)", resp.status()),
+        Err(e) => eprintln!("  fedidb.org: FAILED ({e})"),
+    }
+
+    // Fediverse Observer — ping the instance page
+    let url = format!("https://fediverse.observer/api/v1/instance/{domain}");
+    match client.get(&url).send().await {
+        Ok(resp) => eprintln!("  fediverse.observer: {} (crawler will discover via peers)", resp.status()),
+        Err(e) => eprintln!("  fediverse.observer: FAILED ({e})"),
+    }
+
+    eprintln!();
+    eprintln!("Census services discover instances automatically once you federate.");
+    eprintln!("This command nudges them. Full indexing may take 24-48 hours.");
+    eprintln!();
+    eprintln!("Verify at:");
+    eprintln!("  https://the-federation.info/{domain}");
+    eprintln!("  https://fedidb.org/network?s={domain}");
+    eprintln!("  https://fediverse.observer/{domain}");
+
+    Ok(())
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
