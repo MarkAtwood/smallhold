@@ -424,7 +424,9 @@ async fn verify_and_fetch_actor(
     let sig_params = parse_signature_header(sig_header_val)?;
 
     if !sig_params.headers_list.iter().any(|h| h == "digest") {
-        return Err(AppError::unauthorized("Signature must include digest header"));
+        return Err(AppError::unauthorized(
+            "Signature must include digest header",
+        ));
     }
 
     if !sig_params.headers_list.iter().any(|h| h == "date") {

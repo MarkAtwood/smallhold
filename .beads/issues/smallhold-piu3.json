@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-piu3",
+  "title": "OAuth session management: list and revoke active sessions",
+  "description": "Add CLI commands to list and revoke active OAuth sessions. Add API endpoint GET /api/v1/apps/verify_credentials to show current session. CLI: smallhold token list (already exists but needs session details), smallhold token revoke-all.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T20:01:17.516549748Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T20:12:33.266276637Z",
+  "started_at": "2026-07-18T20:01:17.676741662Z",
+  "closed_at": "2026-07-18T20:12:33.266276637Z",
+  "close_reason": "Closed"
+}

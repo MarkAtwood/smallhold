@@ -214,18 +214,33 @@ fn strip_html_tags(html: &str) -> String {
 // ---------------------------------------------------------------------------
 
 static SANITIZER_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    ["p", "br", "a", "span", "em", "strong", "del", "blockquote", "code", "pre", "ul", "ol", "li"]
-        .into_iter()
-        .collect()
+    [
+        "p",
+        "br",
+        "a",
+        "span",
+        "em",
+        "strong",
+        "del",
+        "blockquote",
+        "code",
+        "pre",
+        "ul",
+        "ol",
+        "li",
+    ]
+    .into_iter()
+    .collect()
 });
 
-static SANITIZER_TAG_ATTRS: LazyLock<std::collections::HashMap<&'static str, HashSet<&'static str>>> =
-    LazyLock::new(|| {
-        let mut m = std::collections::HashMap::new();
-        m.insert("a", ["href", "class"].into_iter().collect());
-        m.insert("span", ["class"].into_iter().collect());
-        m
-    });
+static SANITIZER_TAG_ATTRS: LazyLock<
+    std::collections::HashMap<&'static str, HashSet<&'static str>>,
+> = LazyLock::new(|| {
+    let mut m = std::collections::HashMap::new();
+    m.insert("a", ["href", "class"].into_iter().collect());
+    m.insert("span", ["class"].into_iter().collect());
+    m
+});
 
 /// Build a restrictive ammonia sanitizer for Mastodon-compatible HTML.
 fn html_sanitizer() -> ammonia::Builder<'static> {
@@ -435,7 +450,8 @@ pub struct PostRow {
     edited_at: Option<i64>,
 }
 
-pub const POST_COLUMNS: &str = "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
+pub const POST_COLUMNS: &str =
+    "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
 
 /// Build the Mastodon Status JSON for a local post.
@@ -526,10 +542,7 @@ fn deserialize_optional_number<'de, D: serde::Deserializer<'de>>(
     let opt: Option<String> = Option::deserialize(deserializer)?;
     match opt {
         None => Ok(None),
-        Some(s) => s
-            .parse::<i64>()
-            .map(Some)
-            .map_err(serde::de::Error::custom),
+        Some(s) => s.parse::<i64>().map(Some).map_err(serde::de::Error::custom),
     }
 }
 
@@ -939,8 +952,8 @@ async fn create_status(
 
         if scheduled_ms > now + five_min_ms {
             let sched_id = generate_id();
-            let params_json = serde_json::to_string(&body)
-                .map_err(|e| AppError::internal(e.to_string()))?;
+            let params_json =
+                serde_json::to_string(&body).map_err(|e| AppError::internal(e.to_string()))?;
 
             sqlx::query(
                 "INSERT INTO scheduled_statuses \
@@ -956,7 +969,12 @@ async fn create_status(
             .await?;
 
             let scheduled_json = scheduled_status_to_json(
-                sched_id, scheduled_ms, &body, &visibility, sensitive, &language,
+                sched_id,
+                scheduled_ms,
+                &body,
+                &visibility,
+                sensitive,
+                &language,
             );
             return Ok((StatusCode::OK, Json(scheduled_json)).into_response());
         }
@@ -2593,22 +2611,22 @@ fn scheduled_status_to_json(
 
 fn scheduled_row_to_json(id: i64, scheduled_at_ms: i64, params_json: &str) -> Value {
     let params: Value = serde_json::from_str(params_json).unwrap_or(json!({}));
-    let visibility = params.get("visibility")
+    let visibility = params
+        .get("visibility")
         .and_then(|v| v.as_str())
         .unwrap_or("public");
-    let sensitive = params.get("sensitive")
+    let sensitive = params
+        .get("sensitive")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let spoiler_text = params.get("spoiler_text")
+    let spoiler_text = params
+        .get("spoiler_text")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let text = params.get("status")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let media_ids = params.get("media_ids")
-        .cloned()
-        .unwrap_or(json!([]));
-    let language = params.get("language")
+    let text = params.get("status").and_then(|v| v.as_str()).unwrap_or("");
+    let media_ids = params.get("media_ids").cloned().unwrap_or(json!([]));
+    let language = params
+        .get("language")
         .and_then(|v| v.as_str())
         .unwrap_or("en");
 
@@ -2771,10 +2789,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/statuses/{id}/pin", post(pin_status))
         .route("/api/v1/statuses/{id}/unpin", post(unpin_status))
         // Scheduled statuses
-        .route(
-            "/api/v1/scheduled_statuses",
-            get(list_scheduled_statuses),
-        )
+        .route("/api/v1/scheduled_statuses", get(list_scheduled_statuses))
         .route(
             "/api/v1/scheduled_statuses/{id}",
             get(get_scheduled_status)

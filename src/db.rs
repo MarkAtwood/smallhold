@@ -336,6 +336,18 @@ CREATE TABLE IF NOT EXISTS scheduled_statuses (
     created_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_statuses(scheduled_at);
+
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id              INTEGER PRIMARY KEY,
+    credential_json TEXT NOT NULL,
+    created_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS webauthn_challenges (
+    challenge_id    TEXT PRIMARY KEY,
+    state_json      TEXT NOT NULL,
+    created_at      INTEGER NOT NULL
+);
 "#;
 
 #[cfg(test)]

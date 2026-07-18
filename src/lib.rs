@@ -18,3 +18,4 @@ pub mod search;
 pub mod server;
 pub mod streaming;
 pub mod theme;
+pub mod webauthn;

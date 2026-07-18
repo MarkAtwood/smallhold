@@ -332,10 +332,7 @@ async fn schedule_retry(
 // -- Scheduled posts --
 
 /// Check for and create any scheduled posts that are now due.
-async fn process_scheduled_posts(
-    pool: &SqlitePool,
-    config: &Config,
-) -> anyhow::Result<()> {
+async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::Result<()> {
     let now_ms = chrono::Utc::now().timestamp_millis();
     let domain = &config.server.domain;
 
@@ -375,20 +372,20 @@ async fn create_scheduled_post(
 ) -> anyhow::Result<()> {
     let params: serde_json::Value = serde_json::from_str(params_json)?;
 
-    let text = params.get("status")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let visibility = params.get("visibility")
+    let text = params.get("status").and_then(|v| v.as_str()).unwrap_or("");
+    let visibility = params
+        .get("visibility")
         .and_then(|v| v.as_str())
         .unwrap_or("public");
-    let sensitive = params.get("sensitive")
+    let sensitive = params
+        .get("sensitive")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let spoiler_text = params.get("spoiler_text")
+    let spoiler_text = params
+        .get("spoiler_text")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let language = params.get("language")
-        .and_then(|v| v.as_str());
+    let language = params.get("language").and_then(|v| v.as_str());
 
     let account: (String,) = sqlx::query_as("SELECT username FROM accounts WHERE id = ?")
         .bind(account_id)
@@ -503,36 +500,44 @@ async fn create_scheduled_post(
 
     // Query media attachments for the AP Note
     #[allow(clippy::type_complexity)]
-    let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
-        sqlx::query_as(
-            "SELECT file_path, mime_type, width, height, blurhash, description \
+    let ap_media: Vec<(
+        String,
+        String,
+        Option<i32>,
+        Option<i32>,
+        Option<String>,
+        String,
+    )> = sqlx::query_as(
+        "SELECT file_path, mime_type, width, height, blurhash, description \
              FROM media WHERE post_id = ? ORDER BY id",
-        )
-        .bind(post_id)
-        .fetch_all(pool)
-        .await
-        .unwrap_or_default();
+    )
+    .bind(post_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
 
     let ap_attachments: Vec<serde_json::Value> = ap_media
         .iter()
-        .map(|(file_path, mime_type, width, height, blurhash, description)| {
-            let mut doc = serde_json::json!({
-                "type": "Document",
-                "mediaType": mime_type,
-                "url": format!("https://{domain}/media/{file_path}"),
-                "name": description,
-            });
-            if let Some(bh) = blurhash {
-                doc["blurhash"] = serde_json::json!(bh);
-            }
-            if let Some(w) = width {
-                doc["width"] = serde_json::json!(w);
-            }
-            if let Some(h) = height {
-                doc["height"] = serde_json::json!(h);
-            }
-            doc
-        })
+        .map(
+            |(file_path, mime_type, width, height, blurhash, description)| {
+                let mut doc = serde_json::json!({
+                    "type": "Document",
+                    "mediaType": mime_type,
+                    "url": format!("https://{domain}/media/{file_path}"),
+                    "name": description,
+                });
+                if let Some(bh) = blurhash {
+                    doc["blurhash"] = serde_json::json!(bh);
+                }
+                if let Some(w) = width {
+                    doc["width"] = serde_json::json!(w);
+                }
+                if let Some(h) = height {
+                    doc["height"] = serde_json::json!(h);
+                }
+                doc
+            },
+        )
         .collect();
 
     // Enqueue federation Create{Note}
@@ -551,10 +556,7 @@ async fn create_scheduled_post(
             vec![serde_json::json!(&followers_url)],
             vec![serde_json::json!(public)],
         ),
-        "private" => (
-            vec![serde_json::json!(&followers_url)],
-            vec![],
-        ),
+        "private" => (vec![serde_json::json!(&followers_url)], vec![]),
         _ => (
             vec![serde_json::json!(public)],
             vec![serde_json::json!(&followers_url)],

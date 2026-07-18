@@ -75,6 +75,7 @@ async fn authenticate(
         account_id,
         username,
         scopes,
+        token_hash,
     })
 }
 

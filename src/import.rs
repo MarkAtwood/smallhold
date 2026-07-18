@@ -137,9 +137,7 @@ async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) ->
     {
         let fields: Vec<serde_json::Value> = attachments
             .iter()
-            .filter(|a| {
-                a.get("type").and_then(|t| t.as_str()) == Some("PropertyValue")
-            })
+            .filter(|a| a.get("type").and_then(|t| t.as_str()) == Some("PropertyValue"))
             .map(|a| {
                 serde_json::json!({
                     "name": a.get("name").and_then(|v| v.as_str()).unwrap_or(""),
@@ -332,13 +330,12 @@ async fn import_outbox(
                 if tag_type == "Mention" {
                     if let Some(href) = tag.get("href").and_then(|v| v.as_str()) {
                         // Try to find this account in our DB by actor URI
-                        let remote: Option<(i64,)> = sqlx::query_as(
-                            "SELECT id FROM remote_accounts WHERE actor_uri = ?",
-                        )
-                        .bind(href)
-                        .fetch_optional(&mut *tx)
-                        .await
-                        .unwrap_or(None);
+                        let remote: Option<(i64,)> =
+                            sqlx::query_as("SELECT id FROM remote_accounts WHERE actor_uri = ?")
+                                .bind(href)
+                                .fetch_optional(&mut *tx)
+                                .await
+                                .unwrap_or(None);
 
                         if let Some((remote_id,)) = remote {
                             let _ = sqlx::query(
@@ -375,10 +372,7 @@ async fn import_outbox(
                 if let Some(src) = source_path {
                     if src.exists() {
                         let media_id = crate::id::generate_id();
-                        let ext = src
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .unwrap_or("bin");
+                        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("bin");
                         let dest_filename = format!("{media_id}.{ext}");
                         let dest_path = media_dir.join(&dest_filename);
 
@@ -429,10 +423,7 @@ fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u16) -> (i64, u1
     (id, seq)
 }
 
-fn determine_visibility(
-    activity: &serde_json::Value,
-    object: &serde_json::Value,
-) -> String {
+fn determine_visibility(activity: &serde_json::Value, object: &serde_json::Value) -> String {
     let public_uri = "https://www.w3.org/ns/activitystreams#Public";
 
     let to = collect_addressing(activity, object, "to");

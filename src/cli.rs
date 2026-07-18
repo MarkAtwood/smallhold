@@ -107,6 +107,8 @@ pub enum AdminCommands {
     SetPassword,
     /// Enable TOTP
     EnableTotp,
+    /// Register a passkey (opens browser registration page)
+    RegisterPasskey,
 }
 
 #[derive(Subcommand)]
@@ -121,6 +123,14 @@ pub enum TokenCommands {
     List,
     /// Revoke a token
     Revoke { token_id: String },
+    /// Revoke all active tokens
+    RevokeAll {
+        /// Only revoke tokens for this persona
+        #[arg(long)]
+        username: Option<String>,
+    },
+    /// Show active sessions grouped by persona
+    Sessions,
 }
 
 #[derive(Subcommand)]
@@ -199,6 +209,27 @@ fn generate_secret_key() -> String {
     let mut bytes = [0u8; 64];
     rand::thread_rng().fill_bytes(&mut bytes);
     hex_encode(&bytes)
+}
+
+fn format_millis_human(ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms)
+        .unwrap_or_default()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string()
+}
+
+fn format_millis_relative(ms: i64) -> String {
+    let now = chrono::Utc::now().timestamp_millis();
+    let delta_secs = (now - ms) / 1000;
+    if delta_secs < 60 {
+        format!("{delta_secs}s ago")
+    } else if delta_secs < 3600 {
+        format!("{}m ago", delta_secs / 60)
+    } else if delta_secs < 86400 {
+        format!("{}h ago", delta_secs / 3600)
+    } else {
+        format!("{}d ago", delta_secs / 86400)
+    }
 }
 
 async fn cmd_init(config_path: &Path) -> Result<()> {
@@ -449,6 +480,13 @@ async fn cmd_admin(cmd: AdminCommands, config_path: &Path) -> Result<()> {
         AdminCommands::EnableTotp => {
             eprintln!("TOTP setup — not yet implemented");
         }
+        AdminCommands::RegisterPasskey => {
+            eprintln!("Start the server (`smallhold serve`) and visit:");
+            eprintln!("  https://{}/admin/webauthn/register", config.server.domain);
+            eprintln!();
+            eprintln!("The registration page requires your admin password and a");
+            eprintln!("browser that supports WebAuthn/passkeys.");
+        }
     }
     Ok(())
 }
@@ -526,8 +564,13 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("This token will not be shown again.");
         }
         TokenCommands::List => {
-            let rows: Vec<(i64, String, String, i64)> = sqlx::query_as(
-                "SELECT t.id, a.username, t.scopes, t.created_at FROM oauth_tokens t JOIN accounts a ON t.account_id = a.id WHERE t.revoked_at IS NULL ORDER BY t.created_at",
+            let rows: Vec<(i64, String, String, i64, Option<i64>, String)> = sqlx::query_as(
+                "SELECT t.id, a.username, t.scopes, t.created_at, t.last_used_at, oa.name \
+                 FROM oauth_tokens t \
+                 JOIN accounts a ON t.account_id = a.id \
+                 JOIN oauth_apps oa ON t.app_id = oa.id \
+                 WHERE t.revoked_at IS NULL \
+                 ORDER BY t.created_at",
             )
             .fetch_all(&pool)
             .await?;
@@ -535,8 +578,15 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             if rows.is_empty() {
                 eprintln!("No active tokens.");
             } else {
-                for (id, username, scopes, _created_at) in rows {
-                    eprintln!("  {id} — @{username} [{scopes}]");
+                for (id, username, scopes, created_at, last_used_at, app_name) in &rows {
+                    let created = format_millis_human(*created_at);
+                    let used = match last_used_at {
+                        Some(ms) => format_millis_human(*ms),
+                        None => "never".to_string(),
+                    };
+                    eprintln!(
+                        "  {id} — @{username} [{scopes}] — {app_name} — created {created} — last used {used}"
+                    );
                 }
             }
         }
@@ -558,6 +608,75 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 eprintln!("Token not found or already revoked.");
             } else {
                 eprintln!("Token revoked.");
+            }
+        }
+        TokenCommands::RevokeAll { username } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+
+            let result = if let Some(ref uname) = username {
+                let account: Option<(i64,)> =
+                    sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                        .bind(uname)
+                        .fetch_optional(&pool)
+                        .await?;
+                let (account_id,) =
+                    account.ok_or_else(|| anyhow::anyhow!("Persona @{uname} not found"))?;
+
+                sqlx::query(
+                    "UPDATE oauth_tokens SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL",
+                )
+                .bind(now)
+                .bind(account_id)
+                .execute(&pool)
+                .await?
+            } else {
+                sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE revoked_at IS NULL")
+                    .bind(now)
+                    .execute(&pool)
+                    .await?
+            };
+
+            let scope = username
+                .as_deref()
+                .map(|u| format!(" for @{u}"))
+                .unwrap_or_default();
+            eprintln!("Revoked {} token(s){scope}.", result.rows_affected());
+        }
+        TokenCommands::Sessions => {
+            let accounts: Vec<(i64, String)> =
+                sqlx::query_as("SELECT id, username FROM accounts ORDER BY username")
+                    .fetch_all(&pool)
+                    .await?;
+
+            for (account_id, username) in &accounts {
+                eprintln!("Sessions for @{username}:");
+
+                let rows: Vec<(i64, String, String, Option<i64>)> = sqlx::query_as(
+                    "SELECT t.id, oa.name, t.scopes, t.last_used_at \
+                     FROM oauth_tokens t \
+                     JOIN oauth_apps oa ON t.app_id = oa.id \
+                     WHERE t.account_id = ? AND t.revoked_at IS NULL \
+                     ORDER BY t.last_used_at DESC NULLS LAST",
+                )
+                .bind(account_id)
+                .fetch_all(&pool)
+                .await?;
+
+                if rows.is_empty() {
+                    eprintln!("  (none)");
+                } else {
+                    for (id, app_name, scopes, last_used_at) in &rows {
+                        let used = match last_used_at {
+                            Some(ms) => format_millis_relative(*ms),
+                            None => "never".to_string(),
+                        };
+                        eprintln!("  ID {id} — {app_name} [{scopes}] — last used {used}");
+                    }
+                }
+                eprintln!();
             }
         }
     }
@@ -725,8 +844,7 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
     match cmd {
         ImportCommands::Mastodon { username, archive } => {
             let stats =
-                crate::import::import_mastodon_archive(&pool, &config, &username, &archive)
-                    .await?;
+                crate::import::import_mastodon_archive(&pool, &config, &username, &archive).await?;
             eprintln!("Import complete:");
             eprintln!(
                 "  Posts: {} imported, {} skipped",
@@ -738,7 +856,10 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
                 stats.follows_found
             );
             if stats.blocks_found > 0 {
-                eprintln!("  Blocks: {} found (not yet implemented)", stats.blocks_found);
+                eprintln!(
+                    "  Blocks: {} found (not yet implemented)",
+                    stats.blocks_found
+                );
             }
             if stats.mutes_found > 0 {
                 eprintln!("  Mutes: {} found (not yet implemented)", stats.mutes_found);

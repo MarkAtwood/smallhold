@@ -39,6 +39,8 @@ tantivy = "0.22"
 tar = "0.4"
 tempfile = "3"
 url = "2"
+webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+webauthn-rs-proto = "0.5"
 
 [dev-dependencies]
 axum-test = "16"

@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-2oo1",
+  "title": "WebAuthn/passkey support for admin login",
+  "description": "Add passkey authentication as an alternative to password login on the OAuth authorize page. Includes credential registration, authentication, DB schema, and CLI support.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T20:02:57.372476687Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T20:10:39.938053673Z",
+  "closed_at": "2026-07-18T20:10:39.938053673Z",
+  "close_reason": "Closed"
+}

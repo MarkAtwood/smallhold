@@ -27,6 +27,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::feeds::routes())
         .merge(crate::posting::routes())
         .merge(crate::streaming::routes())
+        .merge(crate::webauthn::routes())
         .route("/health", get(health))
         .layer(axum::middleware::from_fn(security_headers))
         .layer(cors)
@@ -45,20 +46,28 @@ async fn security_headers(
     headers.insert("Referrer-Policy", "same-origin".parse().unwrap());
 
     // Cache-Control by path category
-    if path.starts_with("/api/") || path.starts_with("/oauth") || path.starts_with("/inbox")
+    if path.starts_with("/api/")
+        || path.starts_with("/oauth")
+        || path.starts_with("/inbox")
         || path == "/health"
     {
         // API, auth, inbox, health: never cache
         headers.insert("Cache-Control", "no-store".parse().unwrap());
     } else if path.starts_with("/.well-known/") || path.starts_with("/nodeinfo") {
         // Discovery: short cache, revalidate
-        headers.insert("Cache-Control", "public, max-age=300, must-revalidate".parse().unwrap());
+        headers.insert(
+            "Cache-Control",
+            "public, max-age=300, must-revalidate".parse().unwrap(),
+        );
     } else if path.starts_with("/users/") && path.contains("/feed.") {
         // RSS/Atom feeds: short cache
         headers.insert("Cache-Control", "public, max-age=300".parse().unwrap());
     } else if path.starts_with("/users/") {
         // Actor docs, outbox, collections: short cache
-        headers.insert("Cache-Control", "public, max-age=60, must-revalidate".parse().unwrap());
+        headers.insert(
+            "Cache-Control",
+            "public, max-age=60, must-revalidate".parse().unwrap(),
+        );
     } else if path.starts_with("/@") {
         // Profile and post pages: short cache
         headers.insert("Cache-Control", "public, max-age=60".parse().unwrap());

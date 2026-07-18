@@ -1,0 +1,23 @@
+{
+  "id": "smallhold-2oo1.5",
+  "title": "Wire up webauthn routes and module",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T20:03:03.669436957Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T20:10:39.910031125Z",
+  "closed_at": "2026-07-18T20:10:39.910031125Z",
+  "close_reason": "Closed",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-2oo1.5",
+      "depends_on_id": "smallhold-2oo1",
+      "type": "parent-child",
+      "created_at": "2026-07-18T20:03:03.683600489Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

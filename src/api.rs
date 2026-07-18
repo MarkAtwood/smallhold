@@ -229,6 +229,7 @@ pub struct AuthenticatedAccount {
     pub account_id: i64,
     pub username: String,
     pub scopes: String,
+    pub token_hash: String,
 }
 
 impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
@@ -276,6 +277,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
             account_id,
             username,
             scopes,
+            token_hash,
         })
     }
 }
@@ -308,9 +310,11 @@ async fn create_app(
         .await
         .map_err(|_| AppError::bad_request("request body too large"))?;
     let body: CreateAppRequest = if content_type.contains("application/json") {
-        serde_json::from_slice(&bytes).map_err(|e| AppError::bad_request(format!("invalid JSON: {e}")))?
+        serde_json::from_slice(&bytes)
+            .map_err(|e| AppError::bad_request(format!("invalid JSON: {e}")))?
     } else {
-        serde_urlencoded::from_bytes(&bytes).map_err(|e| AppError::bad_request(format!("invalid form data: {e}")))?
+        serde_urlencoded::from_bytes(&bytes)
+            .map_err(|e| AppError::bad_request(format!("invalid form data: {e}")))?
     };
     let id = generate_id();
     let client_id = random_hex(16); // 32 hex chars
@@ -390,6 +394,121 @@ async fn authorize_form(
         ));
     }
 
+    let has_passkeys = crate::webauthn::passkeys_registered(&state.pool).await;
+
+    let passkey_section = if has_passkeys {
+        r#"
+    <div style="margin: 1.5em 0; padding: 1em 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc;">
+      <button type="button" id="passkey-btn" style="background: #4a90d9; color: white; border: none; border-radius: 4px; font-size: 1em;">
+        Sign in with Passkey
+      </button>
+      <div id="passkey-status" style="margin-top: 0.5em; font-size: 0.9em; color: #666;"></div>
+    </div>
+    <p style="text-align: center; color: #999; margin: 0.5em 0;">or use password</p>"#
+    } else {
+        ""
+    };
+
+    let passkey_js = if has_passkeys {
+        r##"
+  <script>
+    document.getElementById('passkey-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('passkey-status');
+      statusEl.textContent = 'Starting passkey authentication...';
+
+      try {
+        // Step 1: Get challenge from server
+        const beginResp = await fetch('/oauth/authorize/webauthn/begin', {
+          method: 'POST',
+        });
+        if (!beginResp.ok) {
+          const err = await beginResp.json();
+          statusEl.textContent = 'Error: ' + (err.error || 'Unknown error');
+          return;
+        }
+        const beginData = await beginResp.json();
+
+        // Step 2: Use browser WebAuthn API
+        const publicKey = beginData.publicKey;
+        publicKey.challenge = base64urlToBuffer(publicKey.challenge);
+        if (publicKey.allowCredentials) {
+          publicKey.allowCredentials = publicKey.allowCredentials.map(c => ({
+            ...c,
+            id: base64urlToBuffer(c.id),
+          }));
+        }
+
+        const assertion = await navigator.credentials.get({ publicKey });
+
+        // Step 3: Send assertion to server
+        const authData = {
+          challenge_id: beginData.challenge_id,
+          credential: {
+            id: assertion.id,
+            rawId: bufferToBase64url(assertion.rawId),
+            type: assertion.type,
+            response: {
+              authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+              clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+              signature: bufferToBase64url(assertion.response.signature),
+              userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null,
+            },
+          },
+        };
+
+        const completeResp = await fetch('/oauth/authorize/webauthn/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(authData),
+        });
+        if (!completeResp.ok) {
+          const err = await completeResp.json();
+          statusEl.textContent = 'Authentication failed: ' + (err.error || 'Unknown error');
+          return;
+        }
+        const result = await completeResp.json();
+
+        // Step 4: Submit the form with the passkey token
+        const form = document.getElementById('authorize-form');
+        document.getElementById('password').removeAttribute('required');
+        document.getElementById('password').value = '';
+
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'passkey_token';
+        tokenInput.value = result.passkey_token;
+        form.appendChild(tokenInput);
+        form.submit();
+
+      } catch (e) {
+        if (e.name === 'NotAllowedError') {
+          statusEl.textContent = 'Authentication was cancelled or timed out.';
+        } else {
+          statusEl.textContent = 'Error: ' + e.message;
+        }
+      }
+    });
+
+    function base64urlToBuffer(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+      const binary = atob(b64 + pad);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes.buffer;
+    }
+
+    function bufferToBase64url(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+  </script>"##
+    } else {
+        ""
+    };
+
     let html = format!(
         r#"<!DOCTYPE html>
 <html>
@@ -397,7 +516,7 @@ async fn authorize_form(
   <meta charset="utf-8">
   <title>Authorize - smallhold</title>
   <style>
-    body {{ font-family: sans-serif; max-width: 400px; margin: 4em auto; }}
+    body {{ font-family: sans-serif; max-width: 400px; margin: 4em auto; padding: 0 1em; }}
     label {{ display: block; margin: 1em 0 0.3em; }}
     input, select, button {{ width: 100%; padding: 0.5em; box-sizing: border-box; }}
     button {{ margin-top: 1.5em; cursor: pointer; }}
@@ -406,19 +525,21 @@ async fn authorize_form(
 <body>
   <h1>Authorize</h1>
   <p>An application is requesting access to your account.</p>
-  <form method="post" action="/oauth/authorize">
+  <form method="post" action="/oauth/authorize" id="authorize-form">
     <input type="hidden" name="response_type" value="{response_type}">
     <input type="hidden" name="client_id" value="{client_id}">
     <input type="hidden" name="redirect_uri" value="{redirect_uri}">
     <input type="hidden" name="scope" value="{scope}">
+    {passkey_section}
     <label for="password">Admin Password</label>
-    <input type="password" id="password" name="password" required>
+    <input type="password" id="password" name="password">
     <label for="account_id">Persona</label>
     <select id="account_id" name="account_id">
       {options}
     </select>
     <button type="submit">Authorize</button>
   </form>
+  {passkey_js}
 </body>
 </html>"#
     );
@@ -433,7 +554,10 @@ async fn authorize_form(
 #[derive(Deserialize)]
 #[allow(dead_code)] // Fields are part of the OAuth protocol shape
 struct AuthorizeForm {
-    password: String,
+    #[serde(default)]
+    password: Option<String>,
+    #[serde(default)]
+    passkey_token: Option<String>,
     account_id: i64,
     client_id: String,
     redirect_uri: String,
@@ -458,16 +582,28 @@ async fn authorize_submit(
         return Err(AppError::rate_limited());
     }
 
-    // Verify admin password
-    let admin_row: Option<(String,)> =
-        sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
-            .fetch_optional(&state.pool)
-            .await?;
+    // Authenticate via passkey token or admin password
+    let passkey_ok = form
+        .passkey_token
+        .as_deref()
+        .filter(|t| !t.is_empty())
+        .map(crate::webauthn::verify_passkey_token)
+        .unwrap_or(false);
 
-    let (password_hash,) =
-        admin_row.ok_or_else(|| AppError::forbidden("Admin password not set"))?;
-
-    verify_password(&form.password, &password_hash)?;
+    if !passkey_ok {
+        let password = form
+            .password
+            .as_deref()
+            .filter(|p| !p.is_empty())
+            .ok_or_else(|| AppError::bad_request("Password or passkey required"))?;
+        let admin_row: Option<(String,)> =
+            sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
+                .fetch_optional(&state.pool)
+                .await?;
+        let (password_hash,) =
+            admin_row.ok_or_else(|| AppError::forbidden("Admin password not set"))?;
+        verify_password(password, &password_hash)?;
+    }
 
     // Verify account exists
     let account_exists: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE id = ?")
@@ -1796,6 +1932,87 @@ async fn list_filters_v1(
 }
 
 // ---------------------------------------------------------------------------
+// OAuth sessions
+// ---------------------------------------------------------------------------
+
+/// GET /api/v1/oauth/sessions
+async fn list_sessions(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let rows: Vec<(i64, String, String, i64, Option<i64>)> = sqlx::query_as(
+        "SELECT t.id, oa.name, t.scopes, t.created_at, t.last_used_at \
+         FROM oauth_tokens t \
+         JOIN oauth_apps oa ON t.app_id = oa.id \
+         WHERE t.account_id = ? AND t.revoked_at IS NULL \
+         ORDER BY t.created_at",
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let sessions: Vec<Value> = rows
+        .iter()
+        .map(|(id, app_name, scopes, created_at, last_used_at)| {
+            json!({
+                "id": id.to_string(),
+                "app_name": app_name,
+                "scopes": scopes,
+                "created_at": millis_to_iso(*created_at),
+                "last_used_at": last_used_at.map(millis_to_iso),
+            })
+        })
+        .collect();
+
+    Ok(Json(json!(sessions)))
+}
+
+/// DELETE /api/v1/oauth/sessions/:id
+async fn revoke_session(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let token_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Session not found"))?;
+
+    let now = now_millis();
+    let result = sqlx::query(
+        "UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL",
+    )
+    .bind(now)
+    .bind(token_id)
+    .bind(auth.account_id)
+    .execute(&state.pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("Session not found"));
+    }
+
+    Ok(StatusCode::OK)
+}
+
+/// DELETE /api/v1/oauth/sessions — revoke all sessions except the current one
+async fn revoke_all_sessions(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let now = now_millis();
+    let result = sqlx::query(
+        "UPDATE oauth_tokens SET revoked_at = ? WHERE account_id = ? AND token_hash != ? AND revoked_at IS NULL",
+    )
+    .bind(now)
+    .bind(auth.account_id)
+    .bind(&auth.token_hash)
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(json!({ "revoked": result.rows_affected() })))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -1809,6 +2026,12 @@ pub fn routes() -> Router<Arc<AppState>> {
         )
         .route("/oauth/token", post(token))
         .route("/oauth/revoke", post(revoke))
+        // OAuth sessions
+        .route(
+            "/api/v1/oauth/sessions",
+            get(list_sessions).delete(revoke_all_sessions),
+        )
+        .route("/api/v1/oauth/sessions/{id}", delete(revoke_session))
         // Instance
         .route("/api/v1/instance", get(instance_v1))
         .route("/api/v2/instance", get(instance_v2))
