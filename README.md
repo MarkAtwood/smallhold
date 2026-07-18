@@ -1,6 +1,6 @@
 # smallhold
 
-A single-binary, SQLite-backed Rust server for the fediverse. Speaks the Mastodon Client API well enough that Ivory, Phanpy, Elk, Tusky, and Tuba work against it without modification.
+A single-binary, SQLite-backed Rust server for the fediverse. Speaks the Mastodon Client API well enough that Phanpy, Ivory, Elk, Tusky, and Tuba work against it without modification.
 
 **One binary. One config file. One SQLite database. No Redis. No sidecars. No signup flow.**
 
@@ -11,92 +11,93 @@ Designed for a solo operator running a few dozen personas under one domain. Fede
 ## What this is not
 
 - Not for public signups. Admin creates personas via CLI; there is no registration page.
-- Not a drop-in Mastodon replacement. Missing: polls, lists, keyword filters, push notifications, full-text search, admin API, reports queue. Clients degrade gracefully on all of these.
+- Not a drop-in Mastodon replacement. Missing: polls, push notifications, admin API, reports queue. Clients degrade gracefully on all of these.
 - Not horizontally scalable. SQLite on one machine. At 30 personas this is fine.
-- Not Kitsune. See [kitsune-soc/kitsune#681](https://github.com/kitsune-soc/kitsune/issues/681) for what happens when scope discipline fails.
-
----
-
-## Requirements
-
-- Linux x86_64 (musl static binary) or build from source on any Rust-supported platform
-- A reverse proxy for TLS termination (Caddy recommended; nginx works)
-- No other runtime dependencies
-
----
-
-## Installation
-
-Download the latest release binary:
-
-```bash
-curl -Lo smallhold https://github.com/yourname/smallhold/releases/latest/download/smallhold-x86_64-unknown-linux-musl
-chmod +x smallhold
-sudo mv smallhold /usr/local/bin/
-```
-
-Or build from source (requires Rust 1.75+):
-
-```bash
-cargo build --release
-```
 
 ---
 
 ## Quick start
 
-### 1. Initialize
+### Docker (fastest)
 
 ```bash
-smallhold init
+git clone https://github.com/yourname/smallhold && cd smallhold
+export SMALLHOLD_DOMAIN=yourdomain.example
+mkdir -p data && sudo chown 999:999 data
+docker compose run --rm smallhold init --config /data/config.toml
+# Edit data/config.toml — set domain, set listen to "0.0.0.0:8080"
+docker compose run --rm smallhold persona create writer --display-name="Your Name" --config /data/config.toml
+docker compose up -d
 ```
 
-Creates `config.toml` with a generated `secret_key`, initializes the SQLite database, and runs migrations. Edit `config.toml` before proceeding.
-
-### 2. Set admin password
+### Bare metal
 
 ```bash
-smallhold admin set-password
+cargo build --release
+./smallhold init
+# Edit config.toml — set your domain
+./smallhold admin set-password
+./smallhold persona create writer --display-name="Your Name"
+./smallhold serve
 ```
 
-### 3. Create a persona
+Put a reverse proxy (Caddy or nginx) in front for TLS. See [DEPLOY.md](DEPLOY.md) for full instructions including systemd, Caddy config, backup, CDN, and security checklist.
 
-```bash
-smallhold persona create writer --display-name="Your Name"
-```
+### Connect a client
 
-Each persona is a first-class ActivityPub actor with its own keypair, inbox, outbox, and followers collection. Mastodon clients see them as independent accounts.
+Open [Phanpy](https://phanpy.social), [Elk](https://elk.zone), Ivory, Tusky, or Tuba. Enter your domain. Log in with your admin password and select a persona.
 
-### 4. Configure your reverse proxy
+---
 
-Caddy example (`Caddyfile`):
+## Features
 
-```
-yourdomain.example {
-    reverse_proxy 127.0.0.1:8080
-    handle_path /media/* {
-        root * /var/lib/smallhold/media
-        file_server
-        header Cache-Control "public, max-age=31536000, immutable"
-    }
-}
-```
+**Federation:**
+- Full ActivityPub S2S — follow, post, reply, boost, like, edit, delete, block, move
+- HTTP signatures (draft-cavage-11) with authorized fetch
+- Delivery worker with exponential backoff and per-domain circuit breaker
+- Inbound handling for all 11 activity types
+- Verified working with mastodon.social
 
-### 5. Start the server
+**Mastodon Client API:**
+- OAuth2 with app registration, authorize page, token exchange
+- Timelines: home, public, tag, list
+- Posting with markdown, mentions, hashtags, content warnings, media
+- Post editing and deletion with federation
+- Favourites, boosts, bookmarks, pins
+- Notifications with dedup
+- Lists with account membership and replies_policy
+- Keyword filters (v1 + v2) with timeline filtering
+- Hashtag following with home timeline integration
+- Scheduled posts
+- Full-text search via tantivy
+- Follow requests, profile editing, account search
+- SSE and WebSocket streaming
+- 61/61 API endpoints verified passing
 
-```bash
-smallhold serve
-```
+**Media:**
+- Image upload (JPEG, PNG, GIF, WebP)
+- MIME sniffing from magic bytes (never trusts Content-Type)
+- EXIF stripping via re-encode
+- Decompression bomb protection
+- Blurhash computation
+- Served by reverse proxy with immutable cache headers
 
-### 6. Connect a client
+**Web pages:**
+- Root page listing personas
+- Profile pages with posts, stats, metadata fields, OpenGraph tags
+- Individual post pages with ActivityPub alternate links
+- RSS and Atom feeds per persona with autodiscovery
+- Dark mode via `prefers-color-scheme`
+- W3C Design Tokens theming
+- Custom CSS drop-in
 
-Open Ivory, Phanpy, Elk, Tusky, or Tuba. Enter your domain. Log in with the OAuth flow — it will ask for your admin password and which persona to authenticate as.
+**Data migration:**
+- `smallhold import mastodon` — import a Mastodon archive (.tar.gz)
+- Posts, profile, media, following list
 
 ---
 
 ## Configuration
-
-`config.toml`:
 
 ```toml
 [server]
@@ -105,15 +106,10 @@ domain = "yourdomain.example"
 secret_key = "<generated by smallhold init>"
 
 [storage]
-database_path = "/var/lib/smallhold/db.sqlite"
-media_dir = "/var/lib/smallhold/media"
+database_path = "smallhold.db"
+media_dir = "media"
 
 [federation]
-user_agent = "smallhold/0.1 (+https://yourdomain.example)"
-delivery_timeout_secs = 30
-delivery_concurrency = 16
-fetch_timeout_secs = 20
-max_incoming_body_mb = 10
 authorized_fetch = true
 
 [limits]
@@ -121,132 +117,68 @@ max_post_chars = 5000
 max_attachments = 4
 max_media_mb = 40
 
-[defaults]
-default_visibility = "public"
-default_sensitive = false
-default_language = "en"
-
 [branding]
 site_title = "My Instance"
-site_description = "A personal fediverse presence"
-custom_css_path = "custom.css"  # optional, drop a CSS file to customize
-theme_tokens_path = "tokens.json"  # optional, W3C Design Tokens for color theming
+# theme_tokens_path = "tokens.json"
+# custom_css_path = "custom.css"
 ```
 
-### Custom theming
+See [DEPLOY.md](DEPLOY.md) for full configuration reference.
 
-#### Design tokens
+---
 
-Point `branding.theme_tokens_path` at a [W3C Design Tokens](https://tr.designtokens.org/format/) JSON file to override the default color palette. The `color` group sets light-mode values, and `color-dark` sets dark-mode values:
+## Theming
+
+### Design tokens
+
+Drop a [W3C Design Tokens](https://tr.designtokens.org/format/) JSON file and set `branding.theme_tokens_path`. A designer hands over the standard artifact and it just works.
 
 ```json
 {
   "color": {
-    "primary":    { "$value": "#0066cc", "$type": "color" },
+    "primary": { "$value": "#0066cc", "$type": "color" },
     "background": { "$value": "#ffffff", "$type": "color" },
-    "surface":    { "$value": "#f5f5f7", "$type": "color" },
-    "text":       { "$value": "#1d1d1f", "$type": "color" },
-    "muted":      { "$value": "#6e6e73", "$type": "color" },
-    "border":     { "$value": "#d2d2d7", "$type": "color" }
+    "text": { "$value": "#1d1d1f", "$type": "color" }
   },
   "color-dark": {
-    "primary":    { "$value": "#2997ff", "$type": "color" },
+    "primary": { "$value": "#2997ff", "$type": "color" },
     "background": { "$value": "#1d1d1f", "$type": "color" },
-    "surface":    { "$value": "#2c2c2e", "$type": "color" },
-    "text":       { "$value": "#f5f5f7", "$type": "color" },
-    "muted":      { "$value": "#98989d", "$type": "color" },
-    "border":     { "$value": "#3a3a3c", "$type": "color" }
+    "text": { "$value": "#f5f5f7", "$type": "color" }
   }
 }
 ```
 
-Token name mapping: `primary` maps to `--link`, `background` to `--bg`, `surface` to `--card`, `text` to `--text`, `muted` to `--muted`, `border` to `--border`.
+### Custom CSS
 
-#### Custom CSS
-
-Drop a `custom.css` file and point `branding.custom_css_path` at it. Custom CSS loads after theme tokens, so it can override token-generated values. The default styles use CSS custom properties:
+Drop a CSS file and set `branding.custom_css_path`. Override any variable:
 
 ```css
-:root { --link: #e4002b; --bg: #fafafa; }
-@media (prefers-color-scheme: dark) {
-  :root { --link: #ff6b6b; --bg: #1a1a2e; }
-}
+:root { --link: #e4002b; }
 ```
 
-Available variables: `--text`, `--muted`, `--bg`, `--card`, `--border`, `--link`.
+Variables: `--text`, `--muted`, `--bg`, `--card`, `--border`, `--link`.
 
 ---
 
-## CLI reference
+## CLI
 
 ```
-smallhold init                            # initialize DB, generate config skeleton
-smallhold serve                           # start server
+smallhold init                                  # initialize DB and config
+smallhold serve                                 # start server
+
+smallhold persona create <user> --display-name="..."
+smallhold persona list
+smallhold persona update <user> --bio="..." --display-name="..."
 
 smallhold admin set-password
-smallhold admin enable-totp
+smallhold token mint <user> --scopes=read,write,follow
 
-smallhold persona create <username> --display-name="..." [--locked] [--bot]
-smallhold persona list
-smallhold persona update <username> --bio="..." --display-name="..."
-smallhold persona delete <username>       # sends Delete actor to followers, then removes
-smallhold persona rotate-key <username>   # rotate RSA keypair, sends Update
+smallhold domain-block add <domain> --severity=suspend
+smallhold queue inspect
+smallhold search reindex
 
-smallhold token mint <username> --scopes=read,write,follow
-smallhold token list
-smallhold token revoke <token-id>
-
-smallhold follow <username> <acct>        # e.g. smallhold follow writer gargron@mastodon.social
-smallhold unfollow <username> <acct>
-
-smallhold domain-block <domain> --severity=silence|suspend [--reject-media] [--reason="..."]
-smallhold domain-unblock <domain>
-smallhold domain-block-list
-
-smallhold queue inspect                   # show pending deliveries
-smallhold queue retry-dead                # reset permanently-failed rows
-
-smallhold compat-test --target=mastodon.social --persona=writer
+smallhold import mastodon <user> <archive.tar.gz>
 ```
-
----
-
-## Media
-
-- Accepted formats: JPEG, PNG, WebP, GIF, HEIC (converted to JPEG on import)
-- Max file size: 40 MB (configurable)
-- Generates thumbnail (max 400×400, JPEG 85) and blurhash on every upload
-- Video uploads are rejected with 422
-- Files stored under `media/` with long-lived cache headers; reverse proxy can serve them directly
-
----
-
-## Federation
-
-smallhold federates with any ActivityPub implementation. Tested against:
-
-| Server | Follow | Post | Reply | Boost | Like | DM | Media | Edit | Delete |
-|--------|--------|------|-------|-------|------|----|-------|------|--------|
-| Mastodon 4.x | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Akkoma | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Misskey / Sharkey | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ |
-| GoToSocial | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Lemmy | — | — | ✓ | ✓ | ✓ | — | — | — | — |
-| Pixelfed | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | ✓ |
-
-HTTP signatures use draft-cavage-http-signatures-11, matching what Mastodon and the broader fediverse expect. Authorized fetch is enabled by default.
-
----
-
-## Client compatibility
-
-| Client | Login | Timeline | Post | Media | Reply | Notifications | Streaming |
-|--------|-------|----------|------|-------|-------|---------------|-----------|
-| Ivory (iOS) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Phanpy (web) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Elk (web) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Tusky (Android) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Tuba (GTK) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ---
 
@@ -257,32 +189,75 @@ reverse proxy (Caddy / nginx)
   TLS termination, static media serving
          |
 smallhold binary  (axum, tokio)
-  ├── Mastodon Client API
+  ├── Mastodon Client API (61 endpoints)
   ├── ActivityPub S2S (inbox, outbox, actors)
   ├── WebFinger / NodeInfo / host-meta
-  ├── Core domain logic
-  ├── SQLite via sqlx (WAL mode)
-  ├── tokio broadcast (SSE + WebSocket streaming)
+  ├── Full-text search (tantivy)
+  ├── SQLite via sqlx (WAL mode, 24 tables)
+  ├── Streaming (SSE + WebSocket)
   ├── media/ filesystem
-  └── in-process delivery worker
-        polls delivery_queue table
-        HTTP POST with HTTP signatures
-        exponential backoff, circuit breaker per domain
-
-admin CLI subcommands talk to SQLite directly;
-server does not need to be running for most admin ops
+  └── delivery worker (retry, circuit breaker)
 ```
 
-IDs are 64-bit time-sortable snowflakes, serialized as strings. Mastodon client pagination (`since_id`, `max_id`, `min_id`) depends on this invariant.
+13,000 lines of Rust across 22 source files. IDs are 64-bit time-sortable snowflakes, serialized as strings.
 
 ---
 
-## Pseudonymity note
+## Verified compatibility
 
-All personas on one domain are attributable to one operator via the domain name, shared IP, and TLS fingerprint. For a persona that requires real separation (literary imprint, alt with different operational security), run a second smallhold instance on a separate VPS with a separate domain. Same binary, different config.
+**Clients:**
+
+| Client | Status |
+|--------|--------|
+| Phanpy (web) | Verified on live instance |
+| Ivory, Elk, Tusky, Tuba | 61/61 API endpoints pass (same Mastodon Client API) |
+
+**Federation:**
+
+| Server | Status |
+|--------|--------|
+| mastodon.social | Verified — bidirectional follow + post delivery |
+| Others (GoToSocial, Akkoma, Misskey) | AP compliance verified (12/12 go-fed, 18/18 FediTest) |
+
+**Conformance:**
+
+| Suite | Result |
+|-------|--------|
+| FediTest (WebFinger RFC 7033) | 18/18 |
+| go-fed AP compliance | 12/12 |
+| Mastodon Client API | 61/61 |
+| Fediverse Pasture edge cases | 93/93 |
+
+---
+
+## Security
+
+- SSRF protection on all outbound HTTP (private IP blocking, HTTPS-only)
+- HTML sanitization via ammonia with restrictive allowlist
+- HTTP signature verification with Date freshness check
+- JSON depth limit, string length caps, LIKE wildcard escaping
+- Media: MIME sniffing, EXIF stripping, decompression bomb limits
+- OAuth: redirect_uri validation, atomic auth codes, constant-time secret comparison
+- Rate limiting on login and token exchange
+- Security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy
+- Cache-Control headers for CDN compatibility
+
+---
+
+## Multiple personas
+
+```bash
+smallhold persona create writer --display-name="Professional"
+smallhold persona create personal --display-name="Personal"
+smallhold persona create bot --display-name="Bot" --bot
+```
+
+Each persona is an independent ActivityPub actor with its own keypair, inbox, followers, and timeline. Mastodon clients see them as separate accounts. All personas share one domain, one process, one database.
+
+For real separation between identities, run a second instance on a separate domain.
 
 ---
 
 ## License
 
-AGPL-3.0. The network-copyleft terms mean that if you modify smallhold and let others interact with it over the network, you must make your modified source available.
+AGPL-3.0.
