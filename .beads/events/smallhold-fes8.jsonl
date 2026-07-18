@@ -1,1 +1,2 @@
 {"id":"019f7695-6e11-7d3d-9006-d1f8c6f21a4d","issue_id":"smallhold-fes8","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T18:55:32.369880971Z"}
+{"id":"019f769f-405b-72e9-a0bc-888850ee9b4b","issue_id":"smallhold-fes8","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"FediTest: 17/18 WebFinger tests passed (1 failure: JRD content-type subtype check). System tests require 2 nodes.","created_at":"2026-07-18T19:06:16.027191627Z"}

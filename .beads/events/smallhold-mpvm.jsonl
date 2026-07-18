@@ -1,1 +1,2 @@
 {"id":"019f7695-6e11-7c8b-861d-4ae3305fde26","issue_id":"smallhold-mpvm","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T18:55:32.369825316Z"}
+{"id":"019f769f-4126-76ee-b127-a25182e1ec79","issue_id":"smallhold-mpvm","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Pasture vectors: 93/93 tests PASS — inbox never 500'd on any edge case (50 pasture vectors + 43 custom edge cases including 100KB content, 49-level nesting, null fields)","created_at":"2026-07-18T19:06:16.230455008Z"}

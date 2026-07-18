@@ -1,1 +1,2 @@
 {"id":"019f7695-6e11-7dd0-bcec-d44f337e1250","issue_id":"smallhold-2dpo","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T18:55:32.369906529Z"}
+{"id":"019f769f-4160-7ec6-9ce9-11145fd08469","issue_id":"smallhold-2dpo","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Academy: activitypub.academy reachable, our instance resolves remote users successfully, all federation self-tests pass (WebFinger, actor doc, outbox, NodeInfo, host-meta)","created_at":"2026-07-18T19:06:16.288968965Z"}

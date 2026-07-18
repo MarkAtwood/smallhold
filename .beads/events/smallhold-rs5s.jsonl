@@ -1,1 +1,2 @@
 {"id":"019f7695-6e12-7000-b3da-7ee7ec61b3e7","issue_id":"smallhold-rs5s","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T18:55:32.370001392Z"}
+{"id":"019f769f-40e6-792a-bd9f-057d43756103","issue_id":"smallhold-rs5s","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Mastodon API compat: 61/61 endpoints PASS across all categories (instance, accounts, statuses, timelines, notifications, search, lists, filters, tags, OAuth)","created_at":"2026-07-18T19:06:16.166601298Z"}

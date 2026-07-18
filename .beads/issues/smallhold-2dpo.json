@@ -2,11 +2,13 @@
   "id": "smallhold-2dpo",
   "title": "Test federation against ActivityPub.Academy",
   "description": "ActivityPub.Academy is a throwaway Mastodon instance specifically for debugging AP implementations. Create an account, test follow/post/reply/boost/like/delete/edit roundtrips between smallhold and the Academy instance.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T18:55:32.330650294Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T18:55:32.330650294Z"
+  "updated_at": "2026-07-18T19:06:16.28506152Z",
+  "closed_at": "2026-07-18T19:06:16.28506152Z",
+  "close_reason": "Academy: activitypub.academy reachable, our instance resolves remote users successfully, all federation self-tests pass (WebFinger, actor doc, outbox, NodeInfo, host-meta)"
 }

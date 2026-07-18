@@ -1,1 +1,2 @@
 {"id":"019f7695-6e11-7cb1-a8ad-7501ff6a7c65","issue_id":"smallhold-6lj6","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T18:55:32.369833052Z"}
+{"id":"019f769f-40a1-7aa8-9fc9-b659f942bf56","issue_id":"smallhold-6lj6","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"go-fed AP compliance: 12/12 tests PASS (WebFinger, actor doc, content negotiation, outbox, collections, inbox auth, NodeInfo, host-meta, featured, publicKey)","created_at":"2026-07-18T19:06:16.097699245Z"}
