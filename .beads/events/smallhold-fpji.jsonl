@@ -1,1 +1,2 @@
 {"id":"019f773a-13da-7aff-a7b9-56b48fdced24","issue_id":"smallhold-fpji","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T21:55:22.714721112Z"}
+{"id":"019f775c-931c-7a63-8b61-07313f9892cb","issue_id":"smallhold-fpji","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Skipped — low value for single-operator instance, clients degrade gracefully","created_at":"2026-07-18T22:33:03.51668215Z"}
