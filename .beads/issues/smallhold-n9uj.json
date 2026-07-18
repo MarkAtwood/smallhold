@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-n9uj",
+  "title": "No rate limiting on POST /oauth/token endpoint",
+  "description": "src/api.rs — Login endpoint has rate limiting but token exchange endpoint does not. Allows brute-force of authorization codes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:25:23.388642825Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:25:23.388642825Z",
+  "labels": [
+    "codereview"
+  ]
+}

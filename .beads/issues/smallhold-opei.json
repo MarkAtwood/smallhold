@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-opei",
+  "title": "ServerConfig derives Debug, leaks secret_key",
+  "description": "src/config.rs:43 — ServerConfig derives Debug and holds secret_key: String. Logging the config would leak the secret. Fix: manual Debug impl that redacts secret_key.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:25:23.192085442Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:25:23.192085442Z",
+  "labels": [
+    "codereview"
+  ]
+}

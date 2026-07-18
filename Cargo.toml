@@ -15,6 +15,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 base64 = "0.22"
 blurhash = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+flate2 = "1"
 clap = { version = "4", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
@@ -34,11 +35,12 @@ tower-http = { version = "0.6", features = ["cors", "limit"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tantivy = "0.22"
+tar = "0.4"
+tempfile = "3"
 url = "2"
 
 [dev-dependencies]
 axum-test = "16"
-tempfile = "3"
 
 [profile.release]
 lto = true

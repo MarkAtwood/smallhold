@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-hfvq",
+  "title": "gen_id uses Relaxed ordering but test claims monotonic",
+  "description": "src/id.rs:13,30 — generate_id() uses Ordering::Relaxed for both load and CAS, not guaranteeing cross-thread monotonicity. Test name ids_are_monotonic is misleading.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:25:23.438264937Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:25:23.438264937Z",
+  "labels": [
+    "codereview"
+  ]
+}

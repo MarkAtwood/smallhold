@@ -63,6 +63,10 @@ pub enum Commands {
     /// Manage search index
     #[command(subcommand)]
     Search(SearchCommands),
+
+    /// Import data from another server
+    #[command(subcommand)]
+    Import(ImportCommands),
 }
 
 #[derive(Subcommand)]
@@ -151,6 +155,17 @@ pub enum SearchCommands {
     Reindex,
 }
 
+#[derive(Subcommand)]
+pub enum ImportCommands {
+    /// Import a Mastodon archive (.tar.gz)
+    Mastodon {
+        /// Local persona to import into
+        username: String,
+        /// Path to the Mastodon archive file
+        archive: PathBuf,
+    },
+}
+
 impl Cli {
     pub async fn run(self) -> Result<()> {
         match self.command {
@@ -170,6 +185,7 @@ impl Cli {
             Commands::DomainBlock(cmd) => cmd_domain_block(cmd, &self.config).await,
             Commands::Queue(cmd) => cmd_queue(cmd, &self.config).await,
             Commands::Search(cmd) => cmd_search(cmd, &self.config).await,
+            Commands::Import(cmd) => cmd_import(cmd, &self.config).await,
         }
     }
 }
@@ -697,6 +713,39 @@ async fn cmd_search(cmd: SearchCommands, config_path: &Path) -> Result<()> {
                 .context("Failed to open search index")?;
             let count = search.reindex_all(&pool).await?;
             eprintln!("Reindexed {count} posts");
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    match cmd {
+        ImportCommands::Mastodon { username, archive } => {
+            let stats =
+                crate::import::import_mastodon_archive(&pool, &config, &username, &archive)
+                    .await?;
+            eprintln!("Import complete:");
+            eprintln!(
+                "  Posts: {} imported, {} skipped",
+                stats.posts_imported, stats.posts_skipped
+            );
+            eprintln!("  Media: {} files", stats.media_imported);
+            eprintln!(
+                "  Follows: {} found (resolve with `smallhold follow` commands)",
+                stats.follows_found
+            );
+            if stats.blocks_found > 0 {
+                eprintln!("  Blocks: {} found (not yet implemented)", stats.blocks_found);
+            }
+            if stats.mutes_found > 0 {
+                eprintln!("  Mutes: {} found (not yet implemented)", stats.mutes_found);
+            }
+            if stats.profile_updated {
+                eprintln!("  Profile: updated");
+            }
         }
     }
     Ok(())

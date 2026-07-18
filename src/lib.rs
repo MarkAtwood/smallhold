@@ -9,6 +9,7 @@ pub mod error;
 pub mod federation;
 pub mod feeds;
 pub mod id;
+pub mod import;
 pub mod inbox;
 pub mod interactions;
 pub mod media;

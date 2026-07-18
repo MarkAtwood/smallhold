@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-bfd1",
+  "title": "CLI: smallhold import-mastodon for data migration",
+  "description": "Import a Mastodon archive (.tar.gz from Settings \u003e Export) into smallhold. Handles outbox.json (posts), following CSV, blocks CSV, mutes CSV, and media files. Also supports triggering Move activity for follower migration.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:22:02.408673077Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:27:43.063165539Z",
+  "started_at": "2026-07-18T18:22:02.528687645Z",
+  "closed_at": "2026-07-18T18:27:43.063165539Z",
+  "close_reason": "Closed"
+}

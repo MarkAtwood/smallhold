@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-92vp",
+  "title": "Unbounded response body reads before size check",
+  "description": "In federation.rs, fetch_actor() (line ~196) and resolve_webfinger() (line ~235) call resp.bytes().await to read the entire response body into memory, then check if body_bytes.len() \u003e 1_048_576. A malicious server can force OOM by sending a multi-GB response. Fix: use reqwest's body streaming with a size-limited reader, or set Content-Length limits on the reqwest client, or read in chunks and abort once the limit is exceeded.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:23:42.342796685Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:23:42.342796685Z",
+  "labels": [
+    "codereview"
+  ]
+}

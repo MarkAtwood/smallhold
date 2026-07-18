@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-av7h",
+  "title": "Multiple types missing Debug derive",
+  "description": "PostRow (posting.rs:436), DeliveryRow (delivery.rs:14), SignatureParams (inbox.rs:172), CircuitState (delivery.rs:41), RemoteAccountRow (inbox.rs:62) all lack Debug.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:25:23.489851182Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:25:23.489851182Z",
+  "labels": [
+    "codereview"
+  ]
+}

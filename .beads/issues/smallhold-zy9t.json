@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-zy9t",
+  "title": "render_content uses naive string replace, corrupts HTML on duplicates",
+  "description": "src/posting.rs:276-304 — Naive html.replace() for mentions and hashtags causes double-replacement corruption when same pattern appears multiple times.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:25:23.343382543Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:25:23.343382543Z",
+  "labels": [
+    "codereview"
+  ]
+}

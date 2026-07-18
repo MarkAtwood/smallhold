@@ -1,0 +1,15 @@
+{
+  "id": "smallhold-upho",
+  "title": "Inbox signature verification does not require date in signed headers",
+  "description": "In inbox.rs verify_and_fetch_actor(), the Date header freshness check (lines 399-413) only fires if the header happens to be present, but there is no requirement that 'date' appears in the Signature's headers= parameter. A remote server can send a signature covering only (request-target) and host, with no date header at all, enabling indefinite replay attacks. Fix: after parsing sig_params, reject if \\!sig_params.headers_list.contains('date'). Also reject requests that have no Date header at all.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:24:11.529187064Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:24:11.529187064Z",
+  "labels": [
+    "codereview"
+  ]
+}
