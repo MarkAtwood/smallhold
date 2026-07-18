@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-mpvm",
+  "title": "Test with Fediverse Pasture test vectors",
+  "description": "Fediverse Pasture Inputs (codeberg.org/funfedidev/fediverse-pasture-inputs) provides test vectors for interop — Notes from Misskey, Pleroma, GoToSocial, etc. that exercise edge cases. Feed each vector into our inbox handler and verify correct parsing/storage.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:55:32.30591281Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:55:32.30591281Z"
+}

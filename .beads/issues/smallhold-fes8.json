@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-fes8",
+  "title": "Run FediTest conformance suite against smallhold",
+  "description": "FediTest (https://feditest.org, github.com/fediverse-devnet/feditest) is the most comprehensive AP conformance suite. NLnet-funded, actively maintained. Sets up a constellation of nodes and runs interop tests. Clone feditest-tests-fediverse repo, configure smallhold as a node, run the test suite, fix failures.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T18:55:32.296892792Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T18:55:32.296892792Z"
+}
