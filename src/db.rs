@@ -281,6 +281,13 @@ CREATE TABLE IF NOT EXISTS post_tags (
     UNIQUE (post_id, tag)
 );
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag);
+
+CREATE TABLE IF NOT EXISTS pinned_posts (
+    account_id INTEGER NOT NULL REFERENCES accounts(id),
+    post_id    INTEGER NOT NULL REFERENCES posts(id),
+    pinned_at  INTEGER NOT NULL,
+    UNIQUE (account_id, post_id)
+);
 "#;
 
 #[cfg(test)]

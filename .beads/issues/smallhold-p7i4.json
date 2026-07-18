@@ -1,29 +1,26 @@
 {
-  "acceptance_criteria": "Only followed accounts' posts appear; paginated correctly; local+remote posts correctly ordered; boosts appear as wrappers; query runs < 100ms on test dataset",
-  "compaction_level": 0,
+  "id": "smallhold-p7i4",
+  "title": "Home timeline: SQL join over follows, paginated, local+remote posts",
+  "description": "Compute home timeline on read via SQL — no fanout cache. UNION of: posts from local accounts followed by the authed user + remote_posts from remote accounts followed by the authed user. Sort by ID descending. Support max_id, since_id, min_id, limit params. Each row serialized as full Status object.\n\nAgent workflow: Spawn a research subagent to plan the SQL query (with correct UNION and ordering across two tables with heterogeneous schemas). Spawn a testing subagent to write timeline correctness tests with known test data.\n\nTest discipline:\n- Insert 3 posts from followed accounts + 2 from unfollowed → only 3 appear\n- Posts from unfollowed accounts don't appear even if public\n- Paginate: fetch 2 at a time through 10 posts → receive all 10 in correct order\n- Mixed local+remote posts → correct chronological ordering by snowflake ID\n- Boost in timeline: appears as boost wrapper with reblog field set\n\nDefensive programming:\n- Query timeout: if home timeline query takes \u003e 2s, log warning (indicative of missing index)\n- Empty timeline: return [] with no Link header\n- min_id vs since_id semantics differ: min_id returns posts after that ID (newest first within constraint); since_id returns posts after that ID sorted oldest first — test both",
+  "acceptance_criteria": "Only followed accounts' posts appear; paginated correctly; local+remote posts correctly ordered; boosts appear as wrappers; query runs \u003c 100ms on test dataset",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:42:57Z",
   "created_by": "Mark Atwood",
-  "description": "Compute home timeline on read via SQL — no fanout cache. UNION of: posts from local accounts followed by the authed user + remote_posts from remote accounts followed by the authed user. Sort by ID descending. Support max_id, since_id, min_id, limit params. Each row serialized as full Status object.\n\nAgent workflow: Spawn a research subagent to plan the SQL query (with correct UNION and ordering across two tables with heterogeneous schemas). Spawn a testing subagent to write timeline correctness tests with known test data.\n\nTest discipline:\n- Insert 3 posts from followed accounts + 2 from unfollowed → only 3 appear\n- Posts from unfollowed accounts don't appear even if public\n- Paginate: fetch 2 at a time through 10 posts → receive all 10 in correct order\n- Mixed local+remote posts → correct chronological ordering by snowflake ID\n- Boost in timeline: appears as boost wrapper with reblog field set\n\nDefensive programming:\n- Query timeout: if home timeline query takes > 2s, log warning (indicative of missing index)\n- Empty timeline: return [] with no Link header\n- min_id vs since_id semantics differ: min_id returns posts after that ID (newest first within constraint); since_id returns posts after that ID sorted oldest first — test both",
-  "ephemeral": false,
-  "id": "smallhold-p7i4",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.726859649Z",
+  "closed_at": "2026-07-18T16:39:23.726859649Z",
+  "close_reason": "Home timeline already in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Home timeline: SQL join over follows, paginated, local+remote posts",
-  "updated_at": "2026-04-23T00:42:57Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-93z",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:43:02Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-93z",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

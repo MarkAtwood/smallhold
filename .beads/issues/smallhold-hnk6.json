@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-hnk6",
+  "title": "Public timeline: local=true/false, only_media filter",
+  "description": "Public timeline shows public posts. local=true: only local accounts' public posts. local=false (default): all public posts including cached remote_posts. only_media=true: only posts with media attachments. Excludes boosts (boost wrappers in public timeline are noisy). Excludes replies.\n\nTest discipline:\n- Insert local public post + remote public post → both appear in federated timeline\n- local=true → only local post\n- only_media=true → only posts with media_attachments\n- Reply (in_reply_to_id set) → excluded from public timeline\n- Boost wrapper (boost_of_id set) → excluded\n\nDefensive programming:\n- Only include posts with visibility='public' — never include private or direct in public timeline",
   "acceptance_criteria": "local=true filters to local accounts; federated includes remote; replies and boosts excluded; only_media filter works",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:43:13Z",
   "created_by": "Mark Atwood",
-  "description": "Public timeline shows public posts. local=true: only local accounts' public posts. local=false (default): all public posts including cached remote_posts. only_media=true: only posts with media attachments. Excludes boosts (boost wrappers in public timeline are noisy). Excludes replies.\n\nTest discipline:\n- Insert local public post + remote public post → both appear in federated timeline\n- local=true → only local post\n- only_media=true → only posts with media_attachments\n- Reply (in_reply_to_id set) → excluded from public timeline\n- Boost wrapper (boost_of_id set) → excluded\n\nDefensive programming:\n- Only include posts with visibility='public' — never include private or direct in public timeline",
-  "ephemeral": false,
-  "id": "smallhold-hnk6",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.670432978Z",
+  "closed_at": "2026-07-18T16:39:23.670432978Z",
+  "close_reason": "Public timeline already in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Public timeline: local=true/false, only_media filter",
-  "updated_at": "2026-04-23T00:43:13Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-93z",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:43:18Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-93z",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

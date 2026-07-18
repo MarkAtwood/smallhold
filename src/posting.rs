@@ -1,6 +1,6 @@
 use crate::api::{account_to_json, fetch_account_row, hex_encode, millis_to_iso, now_millis,
                   AuthenticatedAccount};
-use crate::delivery::enqueue_to_followers;
+use crate::delivery::{enqueue_delivery, enqueue_to_followers};
 use crate::error::AppError;
 use crate::id::generate_id;
 use crate::server::AppState;
@@ -525,7 +525,16 @@ async fn load_status(
         reblogged,
         false, // muted
         bookmarked,
-        false, // pinned
+        {
+            let pinned: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM pinned_posts WHERE account_id = ? AND post_id = ?",
+            )
+            .bind(post.account_id)
+            .bind(post.id)
+            .fetch_one(pool)
+            .await?;
+            pinned.0 > 0
+        },
     ))
 }
 
@@ -1041,6 +1050,7 @@ async fn delete_status(
 
     // Delete related rows then the post
     for table in &[
+        "DELETE FROM pinned_posts WHERE post_id = ?",
         "DELETE FROM post_tags WHERE post_id = ?",
         "DELETE FROM mentions WHERE post_id = ?",
         "DELETE FROM favourites WHERE post_id = ?",
@@ -1069,6 +1079,205 @@ async fn delete_status(
     });
 
     Ok((StatusCode::OK, Json(status)).into_response())
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/v1/statuses/:id
+// ---------------------------------------------------------------------------
+
+async fn edit_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<CreateStatusRequest>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Status not found"))?;
+    let domain = &state.config.server.domain;
+    let now = now_millis();
+
+    let post = sqlx::query_as::<_, PostRow>(&format!(
+        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
+    ))
+    .bind(post_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Status not found"))?;
+
+    if post.account_id != auth.account_id {
+        return Err(AppError::forbidden("You do not own this status"));
+    }
+
+    let text = body.status.as_deref().unwrap_or("").to_string();
+    if text.is_empty() {
+        return Err(AppError::unprocessable(
+            "Validation failed: status text is required",
+        ));
+    }
+    if text.len() > state.config.limits.max_post_chars {
+        return Err(AppError::unprocessable(format!(
+            "Validation failed: status text must be at most {} characters",
+            state.config.limits.max_post_chars
+        )));
+    }
+
+    let sensitive = body
+        .sensitive
+        .unwrap_or(state.config.defaults.default_sensitive);
+    let spoiler_text = body.spoiler_text.as_deref().unwrap_or("").to_string();
+    let language = body
+        .language
+        .clone()
+        .or_else(|| Some(state.config.defaults.default_language.clone()));
+
+    let rendered = render_content(&text, domain);
+
+    // Update the post row
+    sqlx::query(
+        "UPDATE posts SET content = ?, content_html = ?, spoiler_text = ?, \
+         sensitive = ?, language = ?, edited_at = ? WHERE id = ?",
+    )
+    .bind(&text)
+    .bind(&rendered.html)
+    .bind(&spoiler_text)
+    .bind(sensitive)
+    .bind(&language)
+    .bind(now)
+    .bind(post_id)
+    .execute(&state.pool)
+    .await?;
+
+    // Delete old mentions and tags, re-insert new ones
+    sqlx::query("DELETE FROM mentions WHERE post_id = ?")
+        .bind(post_id)
+        .execute(&state.pool)
+        .await?;
+    sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
+        .bind(post_id)
+        .execute(&state.pool)
+        .await?;
+
+    for m in &rendered.mentions {
+        match &m.domain {
+            None => {
+                let local: Option<(i64,)> =
+                    sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                        .bind(&m.username)
+                        .fetch_optional(&state.pool)
+                        .await?;
+                if let Some((aid,)) = local {
+                    sqlx::query(
+                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_account_id) \
+                         VALUES (?, ?)",
+                    )
+                    .bind(post_id)
+                    .bind(aid)
+                    .execute(&state.pool)
+                    .await?;
+                }
+            }
+            Some(mention_domain) => {
+                let remote: Option<(i64,)> = sqlx::query_as(
+                    "SELECT id FROM remote_accounts WHERE username = ? AND domain = ?",
+                )
+                .bind(&m.username)
+                .bind(mention_domain)
+                .fetch_optional(&state.pool)
+                .await?;
+                if let Some((rid,)) = remote {
+                    sqlx::query(
+                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) \
+                         VALUES (?, ?)",
+                    )
+                    .bind(post_id)
+                    .bind(rid)
+                    .execute(&state.pool)
+                    .await?;
+                }
+            }
+        }
+    }
+
+    for tag in &rendered.tags {
+        sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
+            .bind(post_id)
+            .bind(tag)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    // Enqueue outbound Update{Note} for federation
+    {
+        let actor = format!("https://{domain}/users/{}", auth.username);
+        let note_id = format!("{actor}/statuses/{post_id}");
+        let followers_url = format!("{actor}/followers");
+        let published = millis_to_iso(post.created_at);
+        let updated = millis_to_iso(now);
+        let public = "https://www.w3.org/ns/activitystreams#Public";
+
+        let (to, cc) = match post.visibility.as_str() {
+            "public" => (vec![json!(public)], vec![json!(&followers_url)]),
+            "unlisted" => (vec![json!(&followers_url)], vec![json!(public)]),
+            "private" => (vec![json!(&followers_url)], vec![]),
+            _ => (vec![json!(public)], vec![json!(&followers_url)]),
+        };
+
+        let activity = json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": format!("{note_id}#updates/{now}"),
+            "type": "Update",
+            "actor": &actor,
+            "published": &updated,
+            "to": &to,
+            "cc": &cc,
+            "object": {
+                "id": &note_id,
+                "type": "Note",
+                "attributedTo": &actor,
+                "content": &rendered.html,
+                "url": format!("https://{domain}/@{}/{post_id}", auth.username),
+                "to": &to,
+                "cc": &cc,
+                "published": &published,
+                "updated": &updated,
+                "sensitive": sensitive,
+                "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) }
+            }
+        });
+
+        if let Err(e) =
+            enqueue_to_followers(&state.pool, auth.account_id, &activity).await
+        {
+            tracing::error!("Failed to enqueue Update activity: {e}");
+        }
+    }
+
+    // Re-fetch the updated post and build response
+    let updated_post = sqlx::query_as::<_, PostRow>(&format!(
+        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
+    ))
+    .bind(post_id)
+    .fetch_one(&state.pool)
+    .await?;
+
+    let status =
+        load_status(&state.pool, &updated_post, domain, Some(auth.account_id)).await?;
+
+    // Publish streaming status.update event
+    let status_json_str = serde_json::to_string(&status).unwrap_or_default();
+    publish(StreamEvent {
+        event_type: "status.update".into(),
+        payload: status_json_str.clone(),
+        channel: "public".into(),
+    });
+    publish(StreamEvent {
+        event_type: "status.update".into(),
+        payload: status_json_str,
+        channel: format!("user:{}", auth.account_id),
+    });
+
+    Ok(Json(status))
 }
 
 // ---------------------------------------------------------------------------
@@ -1218,6 +1427,61 @@ async fn favourite(
         .await?;
     }
 
+    // Enqueue outbound Like activity
+    {
+        let post_author = fetch_account_row(&state.pool, post.account_id).await?;
+        let actor = format!("https://{domain}/users/{}", auth.username);
+        let object_uri = format!(
+            "https://{domain}/users/{}/statuses/{post_id}",
+            post_author.username
+        );
+        let like_id = format!("https://{domain}/activities/like-{post_id}");
+
+        let activity = json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": &like_id,
+            "type": "Like",
+            "actor": &actor,
+            "object": &object_uri
+        });
+
+        // Look up the post's AP ID — if it points to a remote server, deliver
+        // the Like to that server's inbox. Local posts have local AP IDs so
+        // this is a no-op for local-to-local interactions.
+        let ap_id: Option<(String,)> =
+            sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+                .bind(post_id)
+                .fetch_optional(&state.pool)
+                .await?;
+        let local_prefix = format!("https://{domain}/");
+        if let Some((ref post_ap_id,)) = ap_id {
+            if !post_ap_id.starts_with(&local_prefix) {
+                // Remote post — extract the actor URI and find their inbox
+                let actor_uri = post_ap_id
+                    .rfind("/statuses/")
+                    .map(|i| &post_ap_id[..i]);
+                if let Some(actor) = actor_uri {
+                    let inbox: Option<(String,)> = sqlx::query_as(
+                        "SELECT COALESCE(shared_inbox_url, inbox_url) \
+                         FROM remote_accounts WHERE actor_uri = ?",
+                    )
+                    .bind(actor)
+                    .fetch_optional(&state.pool)
+                    .await?;
+                    if let Some((inbox_url,)) = inbox {
+                        if let Err(e) = enqueue_delivery(
+                            &state.pool, &inbox_url, auth.account_id, &activity,
+                        )
+                        .await
+                        {
+                            tracing::error!("Failed to enqueue Like activity: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let status =
         load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
@@ -1246,6 +1510,62 @@ async fn unfavourite(
         .bind(post_id)
         .execute(&state.pool)
         .await?;
+
+    // Enqueue outbound Undo{Like} activity
+    {
+        let post_author = fetch_account_row(&state.pool, post.account_id).await?;
+        let actor = format!("https://{domain}/users/{}", auth.username);
+        let object_uri = format!(
+            "https://{domain}/users/{}/statuses/{post_id}",
+            post_author.username
+        );
+        let like_id = format!("https://{domain}/activities/like-{post_id}");
+
+        let activity = json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": format!("{like_id}#undo"),
+            "type": "Undo",
+            "actor": &actor,
+            "object": {
+                "id": &like_id,
+                "type": "Like",
+                "actor": &actor,
+                "object": &object_uri
+            }
+        });
+
+        let ap_id: Option<(String,)> =
+            sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+                .bind(post_id)
+                .fetch_optional(&state.pool)
+                .await?;
+        let local_prefix = format!("https://{domain}/");
+        if let Some((ref post_ap_id,)) = ap_id {
+            if !post_ap_id.starts_with(&local_prefix) {
+                let actor_uri = post_ap_id
+                    .rfind("/statuses/")
+                    .map(|i| &post_ap_id[..i]);
+                if let Some(remote_actor) = actor_uri {
+                    let inbox: Option<(String,)> = sqlx::query_as(
+                        "SELECT COALESCE(shared_inbox_url, inbox_url) \
+                         FROM remote_accounts WHERE actor_uri = ?",
+                    )
+                    .bind(remote_actor)
+                    .fetch_optional(&state.pool)
+                    .await?;
+                    if let Some((inbox_url,)) = inbox {
+                        if let Err(e) = enqueue_delivery(
+                            &state.pool, &inbox_url, auth.account_id, &activity,
+                        )
+                        .await
+                        {
+                            tracing::error!("Failed to enqueue Undo Like activity: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let status =
         load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
@@ -1317,6 +1637,67 @@ async fn reblog(
             .await?;
         }
 
+        // Enqueue outbound Announce activity
+        {
+            let post_author = fetch_account_row(&state.pool, original.account_id).await?;
+            let actor = format!("https://{domain}/users/{}", auth.username);
+            let object_uri = format!(
+                "https://{domain}/users/{}/statuses/{post_id}",
+                post_author.username
+            );
+            let announce_id = format!("https://{domain}/activities/announce-{new_id}");
+
+            let activity = json!({
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": &announce_id,
+                "type": "Announce",
+                "actor": &actor,
+                "object": &object_uri,
+                "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                "cc": [format!("https://{domain}/users/{}/followers", auth.username)]
+            });
+
+            // Deliver to followers
+            if let Err(e) =
+                enqueue_to_followers(&state.pool, auth.account_id, &activity).await
+            {
+                tracing::error!("Failed to enqueue Announce activity to followers: {e}");
+            }
+
+            // Also deliver to the post author's inbox if remote
+            let ap_id_row: Option<(String,)> =
+                sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+                    .bind(post_id)
+                    .fetch_optional(&state.pool)
+                    .await?;
+            let local_prefix = format!("https://{domain}/");
+            if let Some((ref post_ap_id,)) = ap_id_row {
+                if !post_ap_id.starts_with(&local_prefix) {
+                    let actor_uri = post_ap_id
+                        .rfind("/statuses/")
+                        .map(|i| &post_ap_id[..i]);
+                    if let Some(remote_actor) = actor_uri {
+                        let inbox: Option<(String,)> = sqlx::query_as(
+                            "SELECT COALESCE(shared_inbox_url, inbox_url) \
+                             FROM remote_accounts WHERE actor_uri = ?",
+                        )
+                        .bind(remote_actor)
+                        .fetch_optional(&state.pool)
+                        .await?;
+                        if let Some((inbox_url,)) = inbox {
+                            if let Err(e) = enqueue_delivery(
+                                &state.pool, &inbox_url, auth.account_id, &activity,
+                            )
+                            .await
+                            {
+                                tracing::error!("Failed to enqueue Announce to author: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         new_id
     };
 
@@ -1351,6 +1732,87 @@ async fn unreblog(
     .await?;
 
     if let Some((boost_id,)) = boost {
+        // Enqueue outbound Undo{Announce} before deleting
+        {
+            let original = sqlx::query_as::<_, PostRow>(&format!(
+                "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
+            ))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+            if let Some(ref orig) = original {
+                let post_author = fetch_account_row(&state.pool, orig.account_id).await?;
+                let actor = format!("https://{domain}/users/{}", auth.username);
+                let object_uri = format!(
+                    "https://{domain}/users/{}/statuses/{post_id}",
+                    post_author.username
+                );
+                let announce_id =
+                    format!("https://{domain}/activities/announce-{boost_id}");
+
+                let activity = json!({
+                    "@context": "https://www.w3.org/ns/activitystreams",
+                    "id": format!("{announce_id}#undo"),
+                    "type": "Undo",
+                    "actor": &actor,
+                    "object": {
+                        "id": &announce_id,
+                        "type": "Announce",
+                        "actor": &actor,
+                        "object": &object_uri
+                    }
+                });
+
+                // Deliver Undo to followers
+                if let Err(e) =
+                    enqueue_to_followers(&state.pool, auth.account_id, &activity).await
+                {
+                    tracing::error!("Failed to enqueue Undo Announce to followers: {e}");
+                }
+
+                // Also deliver to the post author's inbox if remote
+                let local_prefix = format!("https://{domain}/");
+                if let Some(ref post_ap_id) = sqlx::query_as::<_, (String,)>(
+                    "SELECT ap_id FROM posts WHERE id = ?",
+                )
+                .bind(post_id)
+                .fetch_optional(&state.pool)
+                .await?
+                {
+                    if !post_ap_id.0.starts_with(&local_prefix) {
+                        let actor_uri = post_ap_id
+                            .0
+                            .rfind("/statuses/")
+                            .map(|i| &post_ap_id.0[..i]);
+                        if let Some(remote_actor) = actor_uri {
+                            let inbox: Option<(String,)> = sqlx::query_as(
+                                "SELECT COALESCE(shared_inbox_url, inbox_url) \
+                                 FROM remote_accounts WHERE actor_uri = ?",
+                            )
+                            .bind(remote_actor)
+                            .fetch_optional(&state.pool)
+                            .await?;
+                            if let Some((inbox_url,)) = inbox {
+                                if let Err(e) = enqueue_delivery(
+                                    &state.pool,
+                                    &inbox_url,
+                                    auth.account_id,
+                                    &activity,
+                                )
+                                .await
+                                {
+                                    tracing::error!(
+                                        "Failed to enqueue Undo Announce to author: {e}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         sqlx::query("DELETE FROM posts WHERE id = ?")
             .bind(boost_id)
             .execute(&state.pool)
@@ -1752,6 +2214,80 @@ async fn dismiss_notification(
     Ok(Json(json!({})))
 }
 
+
+// ---------------------------------------------------------------------------
+// Pin / Unpin
+// ---------------------------------------------------------------------------
+
+async fn pin_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Status not found"))?;
+    let domain = &state.config.server.domain;
+    let now = now_millis();
+
+    let post = sqlx::query_as::<_, PostRow>(&format!(
+        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
+    ))
+    .bind(post_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Status not found"))?;
+
+    if post.account_id != auth.account_id {
+        return Err(AppError::forbidden("You do not own this status"));
+    }
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO pinned_posts (account_id, post_id, pinned_at) VALUES (?, ?, ?)",
+    )
+    .bind(auth.account_id)
+    .bind(post_id)
+    .bind(now)
+    .execute(&state.pool)
+    .await?;
+
+    let status =
+        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    Ok(Json(status))
+}
+
+async fn unpin_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Status not found"))?;
+    let domain = &state.config.server.domain;
+
+    let post = sqlx::query_as::<_, PostRow>(&format!(
+        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
+    ))
+    .bind(post_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Status not found"))?;
+
+    if post.account_id != auth.account_id {
+        return Err(AppError::forbidden("You do not own this status"));
+    }
+
+    sqlx::query("DELETE FROM pinned_posts WHERE account_id = ? AND post_id = ?")
+        .bind(auth.account_id)
+        .bind(post_id)
+        .execute(&state.pool)
+        .await?;
+
+    let status =
+        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    Ok(Json(status))
+}
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -1762,7 +2298,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/statuses", post(create_status))
         .route(
             "/api/v1/statuses/{id}",
-            get(get_status).delete(delete_status),
+            get(get_status).delete(delete_status).put(edit_status),
         )
         .route("/api/v1/statuses/{id}/context", get(status_context))
         // Interactions
@@ -1772,6 +2308,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/statuses/{id}/unreblog", post(unreblog))
         .route("/api/v1/statuses/{id}/bookmark", post(bookmark))
         .route("/api/v1/statuses/{id}/unbookmark", post(unbookmark))
+        .route("/api/v1/statuses/{id}/pin", post(pin_status))
+        .route("/api/v1/statuses/{id}/unpin", post(unpin_status))
         // Timelines
         .route("/api/v1/timelines/home", get(timeline_home))
         .route("/api/v1/timelines/public", get(timeline_public))

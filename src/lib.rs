@@ -6,6 +6,7 @@ pub mod db;
 pub mod delivery;
 pub mod discovery;
 pub mod error;
+pub mod feeds;
 pub mod federation;
 pub mod id;
 pub mod inbox;

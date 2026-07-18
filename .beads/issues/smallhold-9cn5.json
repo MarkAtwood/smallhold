@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-9cn5",
+  "title": "PUT /api/v1/statuses/:id for post editing",
+  "description": "Allow editing posts. Update content, re-render HTML, update edited_at timestamp, send outbound Update{Note} to followers",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:39:49.046824785Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T16:46:51.135379003Z",
+  "started_at": "2026-07-18T16:39:58.386391838Z",
+  "closed_at": "2026-07-18T16:46:51.135379003Z",
+  "close_reason": "Closed"
+}

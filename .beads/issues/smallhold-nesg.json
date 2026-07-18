@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-nesg",
+  "title": "RSS/Atom feeds per persona",
+  "description": "GET /users/:username/feed.rss and feed.atom, link from actor doc and WebFinger",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:39:49.123108628Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T16:46:51.170917159Z",
+  "started_at": "2026-07-18T16:39:58.467274237Z",
+  "closed_at": "2026-07-18T16:46:51.170917159Z",
+  "close_reason": "Closed"
+}

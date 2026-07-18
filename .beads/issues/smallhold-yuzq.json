@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-yuzq",
+  "title": "POST /follow and /unfollow: outbound Follow, handle pending state",
+  "description": "POST /api/v1/accounts/:id/follow: enqueue Follow{object: remote_actor_uri} activity to their inbox. Do NOT create follows row yet — wait for inbound Accept (handled in Phase 2). Return a Relationship object with requested=true. When Accept arrives (Phase 2 handler), create follows row. POST /api/v1/accounts/:id/unfollow: remove follows row (or follow_requests), enqueue Undo{Follow}.\n\nTest discipline:\n- Follow remote account → Follow activity enqueued, relationship.requested=true\n- Follow already-following → idempotent, return current relationship\n- Unfollow → follows row removed, Undo{Follow} enqueued\n- Relationship object: fetch mastodon.social /api/v1/accounts/relationships oracle\n\nDefensive programming:\n- Prevent self-follow: account cannot follow itself\n- Pending follow state: if follow enqueued but Accept not yet received, relationship.requested=true, relationship.following=false",
   "acceptance_criteria": "Follow enqueues activity and sets requested=true; Accept creates follows row; unfollow removes and enqueues Undo; self-follow rejected",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:37:40Z",
   "created_by": "Mark Atwood",
-  "description": "POST /api/v1/accounts/:id/follow: enqueue Follow{object: remote_actor_uri} activity to their inbox. Do NOT create follows row yet — wait for inbound Accept (handled in Phase 2). Return a Relationship object with requested=true. When Accept arrives (Phase 2 handler), create follows row. POST /api/v1/accounts/:id/unfollow: remove follows row (or follow_requests), enqueue Undo{Follow}.\n\nTest discipline:\n- Follow remote account → Follow activity enqueued, relationship.requested=true\n- Follow already-following → idempotent, return current relationship\n- Unfollow → follows row removed, Undo{Follow} enqueued\n- Relationship object: fetch mastodon.social /api/v1/accounts/relationships oracle\n\nDefensive programming:\n- Prevent self-follow: account cannot follow itself\n- Pending follow state: if follow enqueued but Accept not yet received, relationship.requested=true, relationship.following=false",
-  "ephemeral": false,
-  "id": "smallhold-yuzq",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.838672665Z",
+  "closed_at": "2026-07-18T16:39:23.838672665Z",
+  "close_reason": "Follow/unfollow with outbound already in interactions.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "POST /follow and /unfollow: outbound Follow, handle pending state",
-  "updated_at": "2026-04-23T00:37:40Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-95u",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:37:45Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-95u",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

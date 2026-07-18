@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-8av0",
+  "title": "POST /favourite and /unfavourite: DB update + outbound Like activity",
+  "description": "POST /api/v1/statuses/:id/favourite: create favourites row (account_id + post_id or remote_post_id). Enqueue Like{object: post_ap_uri} to post author's inbox. Return updated Status with favourited=true. POST /api/v1/statuses/:id/unfavourite: remove row, enqueue Undo{Like}. Idempotent: double-favourite is a no-op returning 200.\n\nTest discipline:\n- Favourite own post → favourites row created, favourited=true in response\n- Favourite again (duplicate) → idempotent, no duplicate row, favourites_count not double-counted\n- Unfavourite → row removed, favourited=false in response\n- Favourite a post from another instance → Like activity enqueued with correct ap_uri as object\n- Like activity JSON: validate structure against mastodon.social oracle\n\nDefensive programming:\n- Use INSERT OR IGNORE for idempotency on favourite (not check-then-insert)\n- favourites_count in Status response: always COUNT(*) from DB, never a cached field",
   "acceptance_criteria": "Favourite creates row and enqueues Like; double-favourite idempotent; unfavourite removes row and enqueues Undo; favourites_count is accurate",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:36:46Z",
   "created_by": "Mark Atwood",
-  "description": "POST /api/v1/statuses/:id/favourite: create favourites row (account_id + post_id or remote_post_id). Enqueue Like{object: post_ap_uri} to post author's inbox. Return updated Status with favourited=true. POST /api/v1/statuses/:id/unfavourite: remove row, enqueue Undo{Like}. Idempotent: double-favourite is a no-op returning 200.\n\nTest discipline:\n- Favourite own post → favourites row created, favourited=true in response\n- Favourite again (duplicate) → idempotent, no duplicate row, favourites_count not double-counted\n- Unfavourite → row removed, favourited=false in response\n- Favourite a post from another instance → Like activity enqueued with correct ap_uri as object\n- Like activity JSON: validate structure against mastodon.social oracle\n\nDefensive programming:\n- Use INSERT OR IGNORE for idempotency on favourite (not check-then-insert)\n- favourites_count in Status response: always COUNT(*) from DB, never a cached field",
-  "ephemeral": false,
-  "id": "smallhold-8av0",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.939999558Z",
+  "closed_at": "2026-07-18T16:39:23.939999558Z",
+  "close_reason": "Favourite/unfavourite already in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "POST /favourite and /unfavourite: DB update + outbound Like activity",
-  "updated_at": "2026-04-23T00:36:46Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-95u",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:37:04Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-95u",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

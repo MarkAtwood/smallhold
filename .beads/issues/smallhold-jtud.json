@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-jtud",
+  "title": "Notifications timeline: all kinds, filter by type, pagination",
+  "description": "Return paginated notifications for the authed account. Kinds: mention, favourite, reblog, follow, follow_request. Each includes the from account (full Account object) and optionally the related post (full Status object for mention/favourite/reblog). Params: max_id, since_id, min_id, limit, types[], exclude_types[].\n\nAgent workflow: Spawn a research subagent to fetch /api/v1/notifications from mastodon.social and catalog the Notification object structure for each kind.\n\nTest discipline:\n- Create a mention → notification of kind=mention appears with correct post\n- Create a favourite → notification of kind=favourite appears\n- Filter types=['mention'] → only mention notifications returned\n- exclude_types=['follow'] → follows excluded\n- Notification.id is quoted string\n- Each notification's account field is a full Account object\n\nDefensive programming:\n- Notification deduplication: if same actor performs same action twice, don't create duplicate notifications\n- Mark read: GET should NOT automatically mark notifications as read (require explicit mark-all-read call)",
   "acceptance_criteria": "All notification kinds returned; types filter works; Notification.id is quoted string; account field is full Account object; pagination works",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:43:51Z",
   "created_by": "Mark Atwood",
-  "description": "Return paginated notifications for the authed account. Kinds: mention, favourite, reblog, follow, follow_request. Each includes the from account (full Account object) and optionally the related post (full Status object for mention/favourite/reblog). Params: max_id, since_id, min_id, limit, types[], exclude_types[].\n\nAgent workflow: Spawn a research subagent to fetch /api/v1/notifications from mastodon.social and catalog the Notification object structure for each kind.\n\nTest discipline:\n- Create a mention → notification of kind=mention appears with correct post\n- Create a favourite → notification of kind=favourite appears\n- Filter types=['mention'] → only mention notifications returned\n- exclude_types=['follow'] → follows excluded\n- Notification.id is quoted string\n- Each notification's account field is a full Account object\n\nDefensive programming:\n- Notification deduplication: if same actor performs same action twice, don't create duplicate notifications\n- Mark read: GET should NOT automatically mark notifications as read (require explicit mark-all-read call)",
-  "ephemeral": false,
-  "id": "smallhold-jtud",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.569666297Z",
+  "closed_at": "2026-07-18T16:39:23.569666297Z",
+  "close_reason": "Notifications already in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Notifications timeline: all kinds, filter by type, pagination",
-  "updated_at": "2026-04-23T00:43:51Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ek0",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:43:57Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ek0",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

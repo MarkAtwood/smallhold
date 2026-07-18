@@ -16,6 +16,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::inbox::routes())
         .merge(crate::interactions::routes())
         .merge(crate::media::routes())
+        .merge(crate::feeds::routes())
         .merge(crate::posting::routes())
         .merge(crate::streaming::routes())
         .route("/health", get(health))

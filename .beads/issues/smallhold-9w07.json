@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-9w07",
+  "title": "Thread context: ancestors oldest-first, descendants oldest-first, no infinite loop",
+  "description": "Reconstruct a thread. ancestors: walk in_reply_to chain upward from the requested post to the root, then REVERSE for oldest-first order. descendants: find all posts with in_reply_to pointing to this post or its descendants (BFS or DFS), sort oldest-first. Handle mix of posts and remote_posts tables. Enforce depth limit to prevent pathological threads.\n\nTHIS IS HISTORICALLY BUGGY. Test extensively.\n\nAgent workflow: Spawn a research subagent to test /api/v1/statuses/:id/context against mastodon.social for a 5+ level nested thread and document the exact ordering as oracle. Spawn a testing subagent to construct adversarial test cases (circular references, very deep threads, mixed local+remote).\n\nTest discipline:\n- 3-level thread A→B→C: context for B has ancestors=[A], descendants=[C]\n- Context for A: ancestors=[], descendants=[B, C]\n- Context for C: ancestors=[A, B], descendants=[]\n- Mixed local+remote thread: ancestors includes remote posts\n- Circular reference (shouldn't happen but protect): depth limit breaks loop\n- 50-level deep thread: depth limit triggers at some reasonable depth\n\nDefensive programming:\n- Depth limit: stop ancestor walk at depth 40 (prevents infinite loop from circular refs)\n- descendants: BFS with visited set to prevent revisiting nodes\n- ancestors ordering: collect as list while walking up, then reverse — don't sort by ID (IDs across local+remote may not be in the same namespace)",
   "acceptance_criteria": "Ancestors are oldest-first (root first); descendants are oldest-first; circular references don't infinite-loop; 50-deep thread handled within limit; matches mastodon.social oracle",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:43:34Z",
   "created_by": "Mark Atwood",
-  "description": "Reconstruct a thread. ancestors: walk in_reply_to chain upward from the requested post to the root, then REVERSE for oldest-first order. descendants: find all posts with in_reply_to pointing to this post or its descendants (BFS or DFS), sort oldest-first. Handle mix of posts and remote_posts tables. Enforce depth limit to prevent pathological threads.\n\nTHIS IS HISTORICALLY BUGGY. Test extensively.\n\nAgent workflow: Spawn a research subagent to test /api/v1/statuses/:id/context against mastodon.social for a 5+ level nested thread and document the exact ordering as oracle. Spawn a testing subagent to construct adversarial test cases (circular references, very deep threads, mixed local+remote).\n\nTest discipline:\n- 3-level thread A→B→C: context for B has ancestors=[A], descendants=[C]\n- Context for A: ancestors=[], descendants=[B, C]\n- Context for C: ancestors=[A, B], descendants=[]\n- Mixed local+remote thread: ancestors includes remote posts\n- Circular reference (shouldn't happen but protect): depth limit breaks loop\n- 50-level deep thread: depth limit triggers at some reasonable depth\n\nDefensive programming:\n- Depth limit: stop ancestor walk at depth 40 (prevents infinite loop from circular refs)\n- descendants: BFS with visited set to prevent revisiting nodes\n- ancestors ordering: collect as list while walking up, then reverse — don't sort by ID (IDs across local+remote may not be in the same namespace)",
-  "ephemeral": false,
-  "id": "smallhold-9w07",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T16:39:23.617094687Z",
+  "closed_at": "2026-07-18T16:39:23.617094687Z",
+  "close_reason": "Thread context already in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Thread context: ancestors oldest-first, descendants oldest-first, no infinite loop",
-  "updated_at": "2026-04-23T00:43:34Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-93z",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:43:39Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-93z",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

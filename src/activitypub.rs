@@ -361,6 +361,8 @@ async fn profile_page(
 <meta property="og:url" content="https://{domain}/@{username}">
 <meta property="og:description" content="Profile on {domain}">
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}">
+<link rel="alternate" type="application/rss+xml" title="RSS" href="https://{domain}/users/{username}/feed.rss">
+<link rel="alternate" type="application/atom+xml" title="Atom" href="https://{domain}/users/{username}/feed.atom">
 <style>{PAGE_CSS}</style>
 <style>{custom_css}</style>
 </head>
@@ -591,7 +593,7 @@ async fn following_collection(
     })))
 }
 
-/// GET /users/{username}/collections/featured — empty OrderedCollection stub.
+/// GET /users/{username}/collections/featured — pinned posts as an OrderedCollection.
 async fn featured(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
@@ -599,12 +601,50 @@ async fn featured(
     let _ = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
 
+    let account_row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await?;
+    let (account_id,) =
+        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+
+    let actor_uri = format!("https://{domain}/users/{username}");
+
+    let posts: Vec<PostRow> = sqlx::query_as(
+        "SELECT p.id, p.content_html, p.created_at \
+         FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
+         WHERE pp.account_id = ? \
+         ORDER BY pp.pinned_at DESC",
+    )
+    .bind(account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let items: Vec<Value> = posts
+        .iter()
+        .map(|p| {
+            let published = crate::api::millis_to_iso(p.created_at);
+            let status_uri = format!("{actor_uri}/statuses/{}", p.id);
+            json!({
+                "id": &status_uri,
+                "type": "Note",
+                "content": p.content_html,
+                "attributedTo": &actor_uri,
+                "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                "cc": [format!("{actor_uri}/followers")],
+                "published": &published,
+                "url": format!("https://{domain}/@{username}/{}", p.id)
+            })
+        })
+        .collect();
+
     Ok(ap_response(json!({
         "@context": "https://www.w3.org/ns/activitystreams",
         "id": format!("https://{domain}/users/{username}/collections/featured"),
         "type": "OrderedCollection",
-        "totalItems": 0,
-        "orderedItems": []
+        "totalItems": items.len(),
+        "orderedItems": items
     })))
 }
 

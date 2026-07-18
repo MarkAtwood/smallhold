@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-g6wq",
+  "title": "Outbound Like and Announce activities on favourite/reblog",
+  "description": "When a user favourites or reblogs a post, enqueue outbound Like or Announce activity to the post author's inbox",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:39:49.004256698Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T16:46:51.112118336Z",
+  "started_at": "2026-07-18T16:39:58.341116006Z",
+  "closed_at": "2026-07-18T16:46:51.112118336Z",
+  "close_reason": "Closed"
+}

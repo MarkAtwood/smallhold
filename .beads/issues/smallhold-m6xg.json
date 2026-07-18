@@ -1,34 +1,32 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-m6xg",
+  "title": "Content warnings (spoiler_text) on posts",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:16:56Z",
   "created_by": "Mark Atwood",
-  "ephemeral": false,
-  "id": "smallhold-m6xg",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T16:39:23.455935066Z",
+  "closed_at": "2026-07-18T16:39:23.455935066Z",
+  "close_reason": "Content warnings already working",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Content warnings (spoiler_text) on posts",
-  "updated_at": "2026-04-23T04:16:56Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-0dn1",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:17:21Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-0dn1",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-8ud4",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:17:22Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-8ud4",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }
