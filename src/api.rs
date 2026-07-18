@@ -296,8 +296,22 @@ struct CreateAppRequest {
 
 async fn create_app(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<CreateAppRequest>,
+    request: axum::extract::Request,
 ) -> Result<Json<Value>, AppError> {
+    let (parts, req_body) = request.into_parts();
+    let content_type = parts
+        .headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let bytes = axum::body::to_bytes(req_body, 64 * 1024)
+        .await
+        .map_err(|_| AppError::bad_request("request body too large"))?;
+    let body: CreateAppRequest = if content_type.contains("application/json") {
+        serde_json::from_slice(&bytes).map_err(|e| AppError::bad_request(format!("invalid JSON: {e}")))?
+    } else {
+        serde_urlencoded::from_bytes(&bytes).map_err(|e| AppError::bad_request(format!("invalid form data: {e}")))?
+    };
     let id = generate_id();
     let client_id = random_hex(16); // 32 hex chars
     let client_secret = random_hex(32); // 64 hex chars
