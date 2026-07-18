@@ -14,11 +14,33 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Content rendering
 // ---------------------------------------------------------------------------
+
+/// Build a restrictive ammonia sanitizer for Mastodon-compatible HTML.
+fn html_sanitizer() -> ammonia::Builder<'static> {
+    let mut builder = ammonia::Builder::new();
+
+    let allowed_tags: HashSet<&str> =
+        ["p", "br", "a", "span", "em", "strong", "del", "blockquote", "code", "pre", "ul", "ol", "li"]
+            .into_iter()
+            .collect();
+    builder.tags(allowed_tags);
+
+    let mut tag_attrs = std::collections::HashMap::new();
+    tag_attrs.insert("a", ["href", "class"].into_iter().collect::<HashSet<&str>>());
+    tag_attrs.insert("span", ["class"].into_iter().collect::<HashSet<&str>>());
+    builder.tag_attributes(tag_attrs);
+
+    // ammonia manages rel on <a> separately via link_rel
+    builder.link_rel(Some("nofollow noopener noreferrer"));
+
+    builder
+}
 
 pub struct RenderedContent {
     pub html: String,
@@ -37,7 +59,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
     let mut raw_html = String::new();
     pulldown_cmark::html::push_html(&mut raw_html, parser);
 
-    let clean_html = ammonia::clean(&raw_html);
+    let clean_html = html_sanitizer().clean(&raw_html).to_string();
 
     let mentions = parse_mentions(input);
     let tags = parse_hashtags(input);
@@ -54,7 +76,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
             None => format!("https://{domain}/@{}", m.username),
         };
         let link = format!(
-            r#"<a href="{href}" class="u-url mention">@<span>{user}</span></a>"#,
+            r#"<span class="h-card"><a href="{href}" class="u-url mention">@<span>{user}</span></a></span>"#,
             href = href,
             user = m.username,
         );
@@ -72,6 +94,9 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
         );
         html = html.replace(&pattern, &link);
     }
+
+    // Auto-link bare URLs not already inside <a> tags
+    html = autolink_bare_urls(&html);
 
     let normalized_tags: Vec<String> = tags
         .into_iter()
@@ -92,97 +117,103 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
 }
 
 /// Find `@user@domain` and `@user` patterns in text.
+/// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_mentions(text: &str) -> Vec<ParsedMention> {
-    let mut mentions = Vec::new();
-    let mut seen = std::collections::HashSet::new();
+    let re = regex::Regex::new(
+        r"(?:^|[\s>])@([a-zA-Z0-9_-]+)(?:@([a-zA-Z0-9.-]+))?"
+    ).unwrap();
 
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '@' && (i == 0 || !chars[i - 1].is_alphanumeric()) {
-            let start = i + 1;
-            let mut end = start;
-            while end < chars.len()
-                && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == '-')
-            {
-                end += 1;
-            }
-            if end > start {
-                let username: String = chars[start..end].iter().collect();
-                if end < chars.len() && chars[end] == '@' {
-                    let domain_start = end + 1;
-                    let mut domain_end = domain_start;
-                    while domain_end < chars.len()
-                        && (chars[domain_end].is_alphanumeric()
-                            || chars[domain_end] == '.'
-                            || chars[domain_end] == '-')
-                    {
-                        domain_end += 1;
-                    }
-                    if domain_end > domain_start {
-                        let domain_str: String =
-                            chars[domain_start..domain_end].iter().collect();
-                        let key = format!(
-                            "{}@{}",
-                            username.to_lowercase(),
-                            domain_str.to_lowercase()
-                        );
-                        if seen.insert(key) {
-                            mentions.push(ParsedMention {
-                                username: username.clone(),
-                                domain: Some(domain_str),
-                            });
-                        }
-                        i = domain_end;
-                        continue;
-                    }
-                }
-                let key = username.to_lowercase();
-                if seen.insert(key) {
-                    mentions.push(ParsedMention {
-                        username,
-                        domain: None,
-                    });
-                }
-                i = end;
-                continue;
-            }
+    let mut mentions = Vec::new();
+    let mut seen = HashSet::new();
+
+    for caps in re.captures_iter(text) {
+        let username = caps[1].to_string();
+        let domain = caps.get(2).map(|d| d.as_str().to_string());
+
+        let key = match &domain {
+            Some(d) => format!("{}@{}", username.to_lowercase(), d.to_lowercase()),
+            None => username.to_lowercase(),
+        };
+        if seen.insert(key) {
+            mentions.push(ParsedMention { username, domain });
         }
-        i += 1;
     }
     mentions
 }
 
 /// Find `#word` patterns in text.
+/// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_hashtags(text: &str) -> Vec<String> {
-    let mut tags = Vec::new();
-    let mut seen = std::collections::HashSet::new();
+    let re = regex::Regex::new(r"(?:^|[\s>])#([a-zA-Z0-9_]+)").unwrap();
 
-    let chars: Vec<char> = text.chars().collect();
+    let mut tags = Vec::new();
+    let mut seen = HashSet::new();
+
+    for caps in re.captures_iter(text) {
+        let tag = caps[1].to_string();
+        // Require at least one letter — pure numbers like #5 are not hashtags
+        if tag.chars().any(|c| c.is_alphabetic()) {
+            let lower = tag.to_lowercase();
+            if seen.insert(lower) {
+                tags.push(tag);
+            }
+        }
+    }
+    tags
+}
+
+/// Wrap bare `http://` and `https://` URLs that aren't already inside `<a>` tags.
+fn autolink_bare_urls(html: &str) -> String {
+    // Match URLs that are NOT preceded by href=" or src=" or >
+    // Strategy: split on existing <a>...</a> segments, only linkify in non-anchor text.
+    let mut result = String::with_capacity(html.len());
+    let url_re = regex::Regex::new(r#"https?://[^\s<>")\]]+"#).unwrap();
+
+    let mut last = 0;
+    // Track whether we're inside an <a> tag
+    let bytes = html.as_bytes();
+    let len = bytes.len();
     let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '#' && (i == 0 || !chars[i - 1].is_alphanumeric()) {
-            let start = i + 1;
-            let mut end = start;
-            while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-                end += 1;
+
+    while i < len {
+        if i + 2 < len && bytes[i] == b'<' && bytes[i + 1] == b'a' && (bytes[i + 2] == b' ' || bytes[i + 2] == b'>') {
+            // We hit an <a> tag — copy everything up to here, linkifying it
+            let segment = &html[last..i];
+            result.push_str(&linkify_segment(segment, &url_re));
+
+            // Find closing </a>
+            if let Some(close_pos) = html[i..].find("</a>") {
+                let end = i + close_pos + 4;
+                result.push_str(&html[i..end]);
+                i = end;
+                last = end;
+            } else {
+                // Malformed — just copy the rest
+                result.push_str(&html[i..]);
+                return result;
             }
-            if end > start {
-                let tag: String = chars[start..end].iter().collect();
-                // Require at least one letter — pure numbers like #5 are not hashtags
-                if tag.chars().any(|c| c.is_alphabetic()) {
-                    let lower = tag.to_lowercase();
-                    if seen.insert(lower) {
-                        tags.push(tag);
-                    }
-                }
-            }
-            i = end;
         } else {
             i += 1;
         }
     }
-    tags
+
+    // Linkify remaining text after last anchor
+    if last < len {
+        let segment = &html[last..];
+        result.push_str(&linkify_segment(segment, &url_re));
+    }
+
+    result
+}
+
+fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
+    url_re.replace_all(segment, |caps: &regex::Captures| {
+        let url = &caps[0];
+        format!(
+            r#"<a href="{url}" rel="nofollow noopener noreferrer" target="_blank">{url}</a>"#,
+            url = url,
+        )
+    }).into_owned()
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +353,7 @@ fn tag_values_for_post(tags: &[String], domain: &str) -> Vec<Value> {
     tags.iter()
         .map(|tag| {
             json!({
-                "name": tag,
+                "name": format!("#{tag}"),
                 "url": format!("https://{domain}/tags/{tag}")
             })
         })
@@ -860,6 +891,39 @@ async fn create_status(
             ))
         });
 
+        // Query media attachments for the AP Note
+        #[allow(clippy::type_complexity)]
+        let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
+            sqlx::query_as(
+                "SELECT file_path, mime_type, width, height, blurhash, description \
+                 FROM media WHERE post_id = ? ORDER BY id",
+            )
+            .bind(post_id)
+            .fetch_all(&state.pool)
+            .await?;
+
+        let ap_attachments: Vec<Value> = ap_media
+            .iter()
+            .map(|(file_path, mime_type, width, height, blurhash, description)| {
+                let mut doc = json!({
+                    "type": "Document",
+                    "mediaType": mime_type,
+                    "url": format!("https://{domain}/media/{file_path}"),
+                    "name": description
+                });
+                if let Some(bh) = blurhash {
+                    doc["blurhash"] = json!(bh);
+                }
+                if let Some(w) = width {
+                    doc["width"] = json!(w);
+                }
+                if let Some(h) = height {
+                    doc["height"] = json!(h);
+                }
+                doc
+            })
+            .collect();
+
         let activity = json!({
             "@context": "https://www.w3.org/ns/activitystreams",
             "id": format!("{note_id}/activity"),
@@ -881,7 +945,7 @@ async fn create_status(
                 "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) },
                 "inReplyTo": in_reply_to_ap,
                 "tag": &mention_tags,
-                "attachment": []
+                "attachment": &ap_attachments
             }
         });
 

@@ -11,8 +11,34 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-const ALLOWED_MIMES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_DESCRIPTION_CHARS: usize = 1500;
+const MAX_DIMENSION: u32 = 4096;
+
+/// Sniff MIME type from magic bytes. Returns None if unrecognized.
+fn sniff_mime(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(b"\x89PNG") {
+        Some("image/png")
+    } else if data.starts_with(b"\xff\xd8\xff") {
+        Some("image/jpeg")
+    } else if data.starts_with(b"GIF8") {
+        Some("image/gif")
+    } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
+/// Map MIME type to image::ImageFormat for re-encoding.
+fn image_format_for_mime(mime: &str) -> Option<image::ImageFormat> {
+    match mime {
+        "image/jpeg" => Some(image::ImageFormat::Jpeg),
+        "image/png" => Some(image::ImageFormat::Png),
+        "image/gif" => Some(image::ImageFormat::Gif),
+        "image/webp" => Some(image::ImageFormat::WebP),
+        _ => None,
+    }
+}
 
 fn ext_for_mime(mime: &str) -> Option<&'static str> {
     match mime {
@@ -22,10 +48,6 @@ fn ext_for_mime(mime: &str) -> Option<&'static str> {
         "image/webp" => Some("webp"),
         _ => None,
     }
-}
-
-fn is_video_mime(mime: &str) -> bool {
-    mime.starts_with("video/")
 }
 
 #[derive(sqlx::FromRow)]
@@ -111,21 +133,6 @@ async fn process_upload(
         let name = field.name().unwrap_or_default().to_string();
         match name.as_str() {
             "file" => {
-                let content_type = field
-                    .content_type()
-                    .unwrap_or("application/octet-stream")
-                    .to_string();
-
-                if is_video_mime(&content_type) {
-                    return Err(AppError::unprocessable("Video uploads are not supported"));
-                }
-
-                if !ALLOWED_MIMES.contains(&content_type.as_str()) {
-                    return Err(AppError::unprocessable(format!(
-                        "Unsupported media type: {content_type}"
-                    )));
-                }
-
                 let data = field
                     .bytes()
                     .await
@@ -138,7 +145,14 @@ async fn process_upload(
                     )));
                 }
 
-                file_mime = Some(content_type);
+                // Sniff MIME from magic bytes — don't trust the Content-Type header
+                let sniffed = sniff_mime(&data).ok_or_else(|| {
+                    AppError::unprocessable(
+                        "Unsupported media type: could not identify image format from file contents",
+                    )
+                })?;
+
+                file_mime = Some(sniffed.to_string());
                 file_data = Some(data.to_vec());
             }
             "description" => {
@@ -173,18 +187,42 @@ async fn process_upload(
         .join(prefix)
         .join(format!("{id}.{ext}"));
 
-    tokio::fs::write(&abs_path, &data)
-        .await
-        .map_err(|e| AppError::internal(format!("Failed to write media file: {e}")))?;
+    // Decode image with decompression bomb limits, strip EXIF by re-encoding,
+    // and resize if dimensions exceed MAX_DIMENSION.
+    let fmt = image_format_for_mime(&mime)
+        .ok_or_else(|| AppError::unprocessable("Unsupported image format for processing"))?;
 
-    // Decode image for dimensions and blurhash
-    let (width, height, blurhash) = tokio::task::spawn_blocking({
+    let (width, height, blurhash, clean_data) = tokio::task::spawn_blocking({
         let data = data.clone();
-        move || -> Result<(u32, u32, String), AppError> {
-            let img = image::load_from_memory(&data)
+        move || -> Result<(u32, u32, String, Vec<u8>), AppError> {
+            let mut reader =
+                image::ImageReader::new(std::io::Cursor::new(&data)).with_guessed_format()
+                    .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
+            let mut limits = image::Limits::default();
+            limits.max_alloc = Some(64 * 1024 * 1024); // 64MB decoded max
+            reader.limits(limits);
+            let mut img = reader
+                .decode()
                 .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
 
             let (w, h) = img.dimensions();
+
+            // Resize if either dimension exceeds MAX_DIMENSION
+            if w > MAX_DIMENSION || h > MAX_DIMENSION {
+                img = img.resize(
+                    MAX_DIMENSION,
+                    MAX_DIMENSION,
+                    image::imageops::FilterType::Lanczos3,
+                );
+            }
+
+            let (w, h) = img.dimensions();
+
+            // Re-encode to strip EXIF metadata (GPS, camera info, embedded scripts)
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, fmt)
+                .map_err(|e| AppError::internal(format!("Image re-encoding failed: {e}")))?;
+            let clean = buf.into_inner();
 
             let thumb = image::imageops::resize(
                 &img.to_rgba8(),
@@ -196,15 +234,20 @@ async fn process_upload(
             let hash = blurhash::encode(4, 3, 32, 32, thumb.as_raw())
                 .map_err(|e| AppError::internal(format!("Blurhash encoding failed: {e}")))?;
 
-            Ok((w, h, hash))
+            Ok((w, h, hash, clean))
         }
     })
     .await
     .map_err(|e| AppError::internal(format!("Image processing task failed: {e}")))?
     ?;
 
+    // Write the re-encoded (EXIF-stripped) image to disk
+    tokio::fs::write(&abs_path, &clean_data)
+        .await
+        .map_err(|e| AppError::internal(format!("Failed to write media file: {e}")))?;
+
     let now = now_millis();
-    let file_size = data.len() as i64;
+    let file_size = clean_data.len() as i64;
 
     sqlx::query(
         "INSERT INTO media (id, account_id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
