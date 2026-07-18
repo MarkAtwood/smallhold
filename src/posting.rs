@@ -563,7 +563,7 @@ fn tag_values_for_post(tags: &[String], domain: &str) -> Vec<Value> {
     tags.iter()
         .map(|tag| {
             json!({
-                "name": format!("#{tag}"),
+                "name": tag,
                 "url": format!("https://{domain}/tags/{tag}")
             })
         })

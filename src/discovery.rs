@@ -45,9 +45,12 @@ async fn webfinger(
         .get("resource")
         .ok_or_else(|| AppError::bad_request("missing resource parameter"))?;
 
-    let acct = resource
-        .strip_prefix("acct:")
-        .ok_or_else(|| AppError::bad_request("resource must be an acct: URI"))?;
+    // RFC 7033 Section 4.5: server MUST accept any URI scheme.
+    // For non-acct: schemes, return 404 (resource not found), not 400.
+    let acct = match resource.strip_prefix("acct:") {
+        Some(a) => a,
+        None => return Err(AppError::not_found("resource not found")),
+    };
 
     let (username, domain) = acct
         .split_once('@')
