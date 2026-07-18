@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-m2o7",
+  "title": "Delivery worker: tokio task, HTTP sig, exponential backoff, dead-letter",
+  "description": "In-process tokio task that polls delivery_queue every N seconds (default 5s, configurable). Fetches up to batch_size rows where next_attempt_at \u003c= now AND delivered_at IS NULL AND dead_at IS NULL. For each: sign the activity with the sender's private key (POST signature: (request-target), host, date, digest), POST to target_inbox, handle result:\n- 2xx → set delivered_at=now\n- 410 Gone → set dead_at=now immediately\n- 4xx (non-410) → set dead_at after 1 retry\n- 5xx or network error → schedule retry per backoff: 1m, 5m, 30m, 2h, 8h, 24h (max 6 attempts, then dead_at)\n\nAgent workflow: Spawn a research subagent to study how activitypub-federation handles delivery signatures. Spawn a parallel subagent to implement the circuit breaker. Spawn a testing subagent to write delivery tests with a mock HTTP server.\n\nTest discipline:\n- Test with mock server returning 200 → delivered_at set, attempts=1\n- Test with mock server returning 500 twice then 200 → retries, then delivered\n- Test with mock server returning 410 → dead_at set immediately, no retry\n- Test retry schedule: after first failure, next_attempt_at is approx 1min in future\n- Test max retries: 7 failures → dead_at set on 7th\n- HTTP signature on POST: verify using a mock server that checks the signature format\n\nDefensive programming:\n- Panic in the delivery task must not crash the server — wrap worker loop in catch_unwind or restart on panic\n- Deliver concurrently up to delivery_concurrency limit (semaphore)\n- Never log the activity body at INFO level — log only target inbox + activity type",
+  "acceptance_criteria": "2xx → delivered; 410 → immediately dead; 5xx → retries on schedule; after 6 retries → dead_at; HTTP signature present; worker panic doesn't crash server",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:35:59Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.950137777Z",
+  "started_at": "2026-07-18T05:14:43.140310578Z",
+  "closed_at": "2026-07-18T05:29:28.950137777Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-70g",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:36:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

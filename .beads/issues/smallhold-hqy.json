@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-hqy",
+  "title": "POST /api/v1/statuses with Idempotency-Key",
+  "description": "Implement post creation. Accepts status text, visibility, sensitive, spoiler_text, in_reply_to_id, language, media_ids. Handles Idempotency-Key header: hash with SHA-256 + account_id, check idempotency_keys table, return existing post if found. Store new post in posts table with snowflake ID. Prune idempotency_keys older than 24h in a background task.",
+  "design": "Idempotency-Key header: hash SHA-256 of value + account_id (as hex). Check before insert. Return 200 with existing status if found. Post created with new snowflake ID. ap_id = https://{domain}/users/{username}/statuses/{id}. Status URL = https://{domain}/@{username}/{id}.",
+  "acceptance_criteria": "Post from Ivory appears in the DB with correct fields; Idempotency-Key prevents duplicate on retry (same key returns same post); visibility options (public/unlisted/private/direct) are stored correctly; in_reply_to_id links to existing post; spoiler_text stored; missing required fields return 422",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:51Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.333202137Z",
+  "closed_at": "2026-07-18T05:30:00.333202137Z",
+  "close_reason": "Done in posting.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:01:16Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

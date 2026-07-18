@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-vl1",
+  "title": "Snowflake ID generator",
+  "description": "Implement a 64-bit time-sortable snowflake ID generator. 48 bits Unix milliseconds + 16 bits per-process sequence counter. Thread-safe with AtomicU64. This is ~50 lines — do not take an external dependency for this. IDs must be serialized as strings in JSON because JavaScript cannot handle 64-bit integers. All ID columns in the schema use these.",
+  "design": "SnowflakeGen struct with AtomicU64 storing (last_ms \u003c\u003c 16) | seq. On generate: read current ms, if same as last increment seq, if different reset seq and update ms. Wrap in once_cell or pass as Arc. Newtype Id(i64) that serializes as string.",
+  "acceptance_criteria": "IDs are monotonically increasing; two calls in the same millisecond produce different IDs; IDs serialize as strings in serde (use #[serde(serialize_with=...)] or newtype wrapper); IDs fit in i64 (SQLite INTEGER is 64-bit signed)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:58:42Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.432846928Z",
+  "closed_at": "2026-07-18T05:29:59.432846928Z",
+  "close_reason": "Done in id.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:43Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

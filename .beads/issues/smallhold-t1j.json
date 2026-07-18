@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Returns correct following/followed_by state; blocking field reflects domain blocks; requested=true for pending follow requests; multiple IDs return array in same order as input",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:05:39Z",
+  "created_by": "Mark Atwood",
+  "description": "Return relationship status between the authed account and one or more other accounts. The id[] query param accepts multiple account IDs. Returns array of Relationship objects with: following, followed_by, blocking, muting, requested (follow request pending), endorsed, mute_notifications, show_reblogs, notifying, domain_blocking.",
+  "design": "Relationship.id = account id string. Look up in follows, followers, domain_blocks tables. All boolean fields — default false if no row. requested: check follow_requests table for pending outbound follow.",
+  "ephemeral": false,
+  "id": "smallhold-t1j",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/accounts/relationships",
+  "updated_at": "2026-04-23T00:05:39Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:05:43Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-w59",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

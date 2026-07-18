@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:19:32Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nCreate two new tables via migration: `filters` (id PK snowflake, persona_id, title TEXT, context TEXT as JSON array, expires_at INTEGER nullable, filter_action TEXT CHECK IN ('warn','hide'), created_at INTEGER) and `filter_keywords` (id PK snowflake, filter_id FK, keyword TEXT, whole_word BOOLEAN). Implement all v2 filter CRUD endpoints: GET/POST /api/v1/filters; GET/PUT/DELETE /api/v1/filters/:id; GET/POST/DELETE /api/v1/filters/:id/keywords.\n\n## Why\nClients need the full v2 filter API (not v1) to manage keyword filters. The v2 API has a different shape than v1 — filters contain nested keywords objects — and current clients (Ivory, Elk, Tusky 2.x) use v2.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social GET /api/v1/filters and GET /api/v1/filters/:id/keywords to capture the exact v2 JSON shape; compare v1 vs v2 filter shapes (v1 returns flat keyword in filter object; v2 returns nested filter_keywords array); note what `context` values are valid (['home','public','thread','account','notifications'])\n- Spawn an Implementation subagent to: write SQLite migrations for both tables; implement all 9 endpoint handlers scoped to authenticated persona; serialize Filter and FilterKeyword response objects matching v2 shape; validate filter_action is one of 'warn'/'hide'; validate context values are from the known set; expires_at is optional\n- Spawn a Test subagent to: create a filter via POST, assert response shape matches v2 spec; add keywords via POST /filters/:id/keywords; GET the filter and assert keywords are nested; PUT to update title/action; DELETE keyword; DELETE filter and assert cascade; test 404 on unknown ids\n\n## Test discipline\n- Independent oracle: mastodon.social live v2 filter API response — capture GET /api/v1/filters response shape including nested filter_keywords array; note field names and types exactly (id as string, whole_word as boolean, etc.)\n- Test approach: integration tests exercising full CRUD lifecycle; assert JSON response fields match captured mastodon.social shape field-for-field; assert persona isolation (persona A cannot see persona B's filters)\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Scope all filter queries to authenticated persona_id — never expose another persona's filters\n- Validate `context` array values against the known set; reject unknown context strings with 422\n- Validate `filter_action` is exactly 'warn' or 'hide'; reject others with 422\n- Store context as JSON text in SQLite; deserialize on read\n- Return 404 (not 403) for filter ids belonging to another persona",
+  "ephemeral": false,
+  "id": "smallhold-3ak5",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Schema and CRUD endpoints for v2 keyword filters API",
+  "updated_at": "2026-04-23T04:19:32Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:19:52Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-3pkx",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

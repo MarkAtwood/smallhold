@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-624",
+  "title": "host-meta: XML endpoint for WebFinger discovery",
+  "description": "Implement /.well-known/host-meta returning XML with a Link element whose template points to the WebFinger URL. Some servers check this before attempting WebFinger.\n\nTest discipline:\n- Parse the response XML and verify the Link/@template attribute points to the correct WebFinger URL\n- Test Content-Type is application/xrd+xml\n\nDefensive programming:\n- Do not use a templating library for 10 lines of XML — just format! a string to avoid introducing an XML dep",
+  "acceptance_criteria": "Valid XML with correct WebFinger template; Content-Type application/xrd+xml; domain is correctly interpolated",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:27Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.176276761Z",
+  "started_at": "2026-07-18T05:06:25.434014696Z",
+  "closed_at": "2026-07-18T05:14:23.176276761Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4uc",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:35Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

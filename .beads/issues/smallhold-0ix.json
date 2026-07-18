@@ -1,0 +1,50 @@
+{
+  "id": "smallhold-0ix",
+  "title": "Phase 4-A: Content rendering (markdown, mentions, hashtags)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:30:11Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:29.007190666Z",
+  "started_at": "2026-07-18T05:14:42.580096755Z",
+  "closed_at": "2026-07-18T05:29:29.007190666Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-0e9u",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:33:37Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:57:39Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-m5g",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:32:09Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-na7",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:33:21Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

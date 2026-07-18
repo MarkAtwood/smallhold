@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-gyd",
+  "title": "Outbound Delete activity delivery",
+  "description": "On post deletion, enqueue a Delete{Tombstone} activity to the same inbox set as the original Create. Reuse the same inbox collection logic from Create (all followers' shared inboxes). The deletion must propagate within the retry window to be meaningful.",
+  "design": "Same inbox collection logic as outbound Create. Activity: {type:Delete, actor:actor_uri, object:{type:Tombstone, id:ap_id}, to:[AS2Public]}. Sign with the account that owns the post.",
+  "acceptance_criteria": "Delete activity in delivery_queue targets correct inbox URLs; delivered Delete causes mastodon.social to remove the boosted/cached post; activity is signed by the post author's keypair",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:24Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.515547381Z",
+  "closed_at": "2026-07-18T05:30:00.515547381Z",
+  "close_reason": "Done in delivery.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:33Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-d6u",
+  "title": "Delivery worker (tokio task, retry, circuit breaker)",
+  "description": "Implement the in-process delivery worker as a tokio task that continuously polls delivery_queue and delivers outbound ActivityPub activities via HTTP POST with HTTP signatures. Retry schedule: 1m, 5m, 30m, 2h, 8h, 24h (max 6 attempts, then dead_at). 410 Gone → dead immediately. 4xx (not 410) → dead after 1 retry. Per-domain circuit breaker: 10 consecutive failures → 1hr pause.",
+  "design": "Poll interval: configurable, default 5s. Batch size: configurable, default 100. Parallel delivery: tokio::spawn per delivery up to delivery_concurrency. HTTP signature: sign (request-target), host, date, digest. Digest: SHA-256 of body, base64. keyId: {actor_uri}#main-key. Circuit breaker: in-memory HashMap\u003cdomain, (fail_count, backoff_until)\u003e. Update next_attempt_at using retry schedule on failure.",
+  "acceptance_criteria": "Activity delivered to mastodon.social inbox with correct HTTP-Signature header; failed delivery retries on schedule; 410 Gone marks row dead immediately; circuit breaker prevents hammering dead domains; smallhold queue inspect shows pending deliveries",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:03Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.988483921Z",
+  "started_at": "2026-07-18T05:14:43.221536491Z",
+  "closed_at": "2026-07-18T05:29:28.988483921Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

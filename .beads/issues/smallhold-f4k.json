@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-f4k",
+  "title": "GET /@username: minimal server-rendered profile page",
+  "description": "Implement a minimal HTML profile page at /@username. Shows: display name, bio (HTML rendered), avatar (if set), post count, follower/following counts, recent posts list. This is what people see when they paste a smallhold profile URL into a browser or share it on social media.\n\nAgent workflow: No subagents needed — this is a small, self-contained HTML template.\n\nTest discipline:\n- Test that HTML is valid (use html5ever or just check for required elements)\n- Test that bio HTML is sanitized (ammonia) — no script tags\n- Test that unknown username returns 404\n\nDefensive programming:\n- All user-generated content (display name, bio) must go through ammonia sanitization before embedding in HTML\n- Do not embed post content directly — link to individual post pages",
+  "acceptance_criteria": "Profile page renders with correct display name and bio; unknown username 404; bio HTML is sanitized; page includes open graph meta tags for social sharing",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:58Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.209631996Z",
+  "started_at": "2026-07-18T05:06:25.519977008Z",
+  "closed_at": "2026-07-18T05:14:23.209631996Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5l8",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:03Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

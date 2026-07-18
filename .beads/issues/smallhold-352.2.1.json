@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:50:20Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nRun `smallhold compat-test --target=mastodon.social` and fix every failing row in the compat matrix. Required green rows: Follow, Post, Reply, Boost, Like, DM, Media, Edit, Delete. Document any intentional gaps (e.g., features not in scope for v0.1) in `docs/compat.md` with an explicit \"— (out of scope v0.1)\" notation.\n\n## Why\nmastodon.social is the canonical reference implementation and the primary release gate. All protocol shape decisions must match what mastodon.social actually does, not what the spec says.\n\n## Agent team pattern\n- Spawn a Research subagent to: run `smallhold compat-test --target=mastodon.social` and capture the output; for each failing row, use curl to capture the exact mastodon.social request/response that fails; identify whether the failure is in outbound format, inbound parsing, or delivery.\n- Spawn an Implementation subagent to: fix each failing compatibility issue in the appropriate handler or serialization layer; update `docs/compat.md` with results; ensure no regression on previously passing rows.\n- Spawn a Test subagent to: add or update federation replay tests in `tests/federation_replay.rs` for any new mastodon.social AP shapes discovered; verify tests pass with independent DB-state assertions.\n\n## Test discipline\n- Independent oracle: live mastodon.social responses captured via curl; compat matrix rows are the oracle (each row is pass/fail, not derived from our own implementation).\n- Test approach: `smallhold compat-test` against live mastodon.social for acceptance; fixture replay tests in CI for regression guard.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- Follow activity: handle `object` as either URI string or full object — both shapes arrive from mastodon.social.\n- Delete activity: must 202 silently for unknown post IDs.\n- Boost (Announce): `object` may be a URI to an uncached post — fetch and cache before rendering.\n- Accept/Reject of Follow must be sent asynchronously via the delivery worker, not inline in the inbox handler.\n- Never log full activity bodies at INFO — log type+target+status only.\n",
+  "ephemeral": false,
+  "id": "smallhold-352.2.1",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Mastodon 4.x federation compatibility",
+  "updated_at": "2026-04-23T00:50:20Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:50:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352.2",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "smallhold persona rotate-key writer generates new keypair and stores it; Update Actor activity delivered to all followers with new publicKey; after rotation, new activities signed with new key are accepted; old signatures from before rotation are invalidated; profile edits trigger Update Actor delivery",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:13:27Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement the persona rotate-key command: generate a new RSA-2048 keypair, update the accounts row, send an Update{Actor} activity to all followers announcing the new public key. Also implement the general outbound Update Actor delivery triggered by profile changes (display name, bio, avatar). This ensures federated servers have fresh public keys and profiles.",
+  "design": "Update Actor activity: {type:Update, actor:actor_uri, object:{...full_actor_document...}}. Deliver to all follower inboxes (collect from followers table). Rotate-key: generate new keypair, update accounts, enqueue Update Actor to all follower inboxes. Profile changes: reuse same delivery path.",
+  "ephemeral": false,
+  "id": "smallhold-7go",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "smallhold persona rotate-key CLI command + Update Actor delivery",
+  "updated_at": "2026-04-23T00:13:27Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:13:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-s70",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

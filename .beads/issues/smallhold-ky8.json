@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Ivory can upload an image and receive 202 with url field; GET /api/v1/media/:id returns processing status then complete attachment; video upload returns 422 with helpful error message; file over limit returns 422; unsupported MIME type returns 422; description stored and returned",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:03:02Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement the async media upload endpoint. Accepts multipart/form-data with 'file' field and optional 'description' and 'focus' fields. Returns 202 Accepted immediately with a partial MediaAttachment object containing the URL to poll. Spawns a tokio task for processing. Validate file size and MIME type before accepting. Reject video with 422.",
+  "design": "Accepted MIME types: image/jpeg, image/png, image/gif, image/webp, image/heic. Max size from config (default 40MB). 202 response: {id, url:null, preview_url:null, text_url:null, meta:null, description, blurhash:null}. Processing state tracked in media table with a processing flag or null blurhash as sentinel.",
+  "ephemeral": false,
+  "id": "smallhold-ky8",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "POST /api/v2/media — async upload endpoint",
+  "updated_at": "2026-04-23T00:03:02Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:03:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-leu",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

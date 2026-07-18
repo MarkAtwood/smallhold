@@ -1,0 +1,49 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:20:04Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nIntegrate tantivy as an in-process full-text search engine for posts, wire it into GET /api/v2/search?type=statuses, and provide a CLI reindex command.\n\n## Why\nUsers need to find their own posts and public posts by keyword without loading the full timeline; tantivy is a pure-Rust, embeddable search library that fits the single-binary constraint.\n\n## Scope\n- tantivy index schema and lifecycle (startup, background reindex)\n- Index maintenance on post create/edit/delete\n- Wire into /api/v2/search?type=statuses\n- CLI reindex subcommand\n- Config: search_index_path\n- Visibility filtering: only own posts and public posts",
+  "ephemeral": false,
+  "id": "smallhold-i28n",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Full-text post search via tantivy",
+  "updated_at": "2026-04-23T04:20:04Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:21:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-buds",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T21:21:21Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-mic6",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T21:21:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-quu3",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T21:21:19Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-xlqc",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Magic byte validation rejects mislabeled files; video rejected; over-limit rejected; 202 shape matches mastodon.social oracle; client filename not used in storage path",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:32:01Z",
+  "created_by": "Mark Atwood",
+  "description": "Accept multipart/form-data with 'file' field and optional 'description' and 'focus' fields. Validate: MIME type must be image/jpeg, image/png, image/gif, image/webp, or image/heic (check magic bytes, NOT just file extension or Content-Type header — never trust client-declared MIME). File size must not exceed max_media_mb from config. Reject video with 422. Store original to disk at media/{id[0..2]}/{id}.{ext}. Insert media row with post_id=NULL. Spawn async processing task. Return 202 with partial MediaAttachment.\n\nAGENT WORKFLOW: Spawn a research subagent to collect POST /api/v2/media responses from mastodon.social and document the 202 partial response shape. Spawn a parallel subagent to research magic byte detection for image types (do NOT trust Content-Type header — clients and proxies may mislabel).\n\nTEST DISCIPLINE:\n- Upload valid JPEG → 202 with partial attachment, processing starts\n- Upload valid PNG → 202\n- Upload file with .jpg extension but MP4 magic bytes → 422 (magic byte check, not extension)\n- Upload file labeled image/jpeg but actually a shell script → 422\n- Upload over size limit → 422 with clear error\n- Upload video/mp4 → 422 with 'video not supported' error\n- Verify 202 response shape matches mastodon.social oracle (id, url=null, preview_url=null, blurhash=null)\n\nDEFENSIVE PROGRAMMING:\n- Magic byte detection: first 8 bytes sufficient for JPEG (FFD8FF), PNG (89504E47), GIF (47494638), WebP (52494646...57454250), HEIC (check ftyp box)\n- Storage path: sanitize derived filename, use only the ID (snowflake) — never use client-provided filename\n- Prevent directory traversal: storage path must be computed as media_dir + id[0..2] + '/' + id + '.' + ext — no user input in path\n- Rate limit: max 10 uploads per minute per account",
+  "ephemeral": false,
+  "id": "smallhold-72l",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "POST /api/v2/media: multipart upload, MIME validation, 202 Accepted",
+  "updated_at": "2026-04-23T00:32:01Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:23Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-l2h",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

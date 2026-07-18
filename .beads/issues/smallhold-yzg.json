@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-yzg",
+  "title": "NodeInfo endpoints (/.well-known/nodeinfo + /nodeinfo/2.0)",
+  "description": "Implement NodeInfo 2.0 for instance discovery. Two endpoints: /.well-known/nodeinfo returns the link document pointing to /nodeinfo/2.0, which returns the full metadata. users.total is hardcoded to 1 (not persona count) to keep persona count out of aggregators.",
+  "design": "users.total=1 intentionally. localPosts from COUNT of posts table. software.name='smallhold', software.version from Cargo.toml via env\\!('CARGO_PKG_VERSION').",
+  "acceptance_criteria": "GET /.well-known/nodeinfo returns link to /nodeinfo/2.0; GET /nodeinfo/2.0 returns valid NodeInfo 2.0 document with software name 'smallhold', protocol 'activitypub', openRegistrations false",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:48Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.739314138Z",
+  "closed_at": "2026-07-18T05:29:59.739314138Z",
+  "close_reason": "Done in discovery.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b89",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "smallhold-cq9",
+  "title": "Phase 0-C: Database layer (pool, migrations, pragmas)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:25:04Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.542451372Z",
+  "started_at": "2026-07-18T05:00:11.375573208Z",
+  "closed_at": "2026-07-18T05:06:16.542451372Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:21Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-8k8",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-fj7",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-uae",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:05Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

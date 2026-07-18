@@ -1,0 +1,50 @@
+{
+  "id": "smallhold-2o6",
+  "title": "Phase 0-A: Workspace and toolchain",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:25:02Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.510568693Z",
+  "started_at": "2026-07-18T05:00:11.292458335Z",
+  "closed_at": "2026-07-18T05:06:16.510568693Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2m5",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:58Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:14Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-9c7",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:56Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-q7a",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:57Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

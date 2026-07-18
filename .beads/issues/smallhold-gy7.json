@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Post with #rust appears in GET /api/v1/timelines/tag/rust; hashtag matching is case-insensitive; pagination works; local=true param shows only local posts with that tag; hashtag streaming channel receives events for new posts with the tag",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:12:07Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement hashtag timeline. Requires a tags extraction step at post-creation time: parse hashtags from content and store in a post_tags junction table (or equivalent). GET /api/v1/timelines/tag/:hashtag returns paginated public posts containing that hashtag, from both local posts and cached remote posts.",
+  "design": "Create post_tags table: post_id, tag (lowercase). Also a remote_post_tags table for remote posts. Insert tags at post creation time (both local and inbound remote Create Note). Hashtag timeline query: UNION posts and remote_posts filtered by tag. Case-insensitive: store tags in lowercase.",
+  "ephemeral": false,
+  "id": "smallhold-gy7",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "GET /api/v1/timelines/tag/:hashtag — hashtag timelines",
+  "updated_at": "2026-04-23T00:12:07Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:12:12Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-s70",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

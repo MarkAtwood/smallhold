@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-45j5",
+  "title": "Idempotency-Key header: hash, check, return existing post on retry",
+  "description": "On POST /api/v1/statuses, if Idempotency-Key header present: SHA-256 hash of (key + account_id), check idempotency_keys table. If row exists, return the existing post. Otherwise proceed with creation, store the key hash. Prune keys older than 24h in a background tokio task.\n\nAgent workflow: Spawn a research subagent to test Ivory's retry behavior — does it always send the same Idempotency-Key on retry? Does it change the key on a new post?\n\nTest discipline:\n- POST with key, succeed → key stored, post returned\n- POST same key again → SAME post returned (identical Status object), no new post created\n- POST different key with same content → NEW post created (Idempotency-Key is key, not content-hash)\n- POST after 25h → key expired, new post allowed (pruning works)\n- Two concurrent POSTs with same key (race condition) → only one post created\n\nDefensive programming:\n- Key hash must include account_id to prevent cross-account idempotency collisions\n- Concurrent duplicate: use INSERT OR IGNORE + SELECT pattern (not check-then-insert race condition)\n- Never return a 5xx if the idempotency lookup fails — degrade gracefully and create the post",
+  "acceptance_criteria": "Duplicate request with same key returns same post; new key creates new post; 25h expiry works; concurrent duplicates produce one post",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:34:14Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.844830072Z",
+  "started_at": "2026-07-18T05:14:42.930708205Z",
+  "closed_at": "2026-07-18T05:29:28.844830072Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3l1",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:34:29Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

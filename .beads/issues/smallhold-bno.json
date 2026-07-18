@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-bno",
+  "title": "Inbound Delete activity",
+  "description": "Handle inbound Delete{Note} and Delete{Actor} activities. Delete of a Note removes the remote_posts row (and associated mentions, notifications). Delete of an Actor removes the remote_accounts row, their posts, their follows, and their follower relationships. Activities arriving for objects that don't exist should be silently ignored (no 500, no 404 error).",
+  "design": "Delete.object may be a URI string or an object with id field. Match against remote_posts.ap_uri or remote_accounts.actor_uri. Use ON DELETE CASCADE or explicit cleanup queries. Verify the Delete is signed by the same actor that owns the object (or same domain).",
+  "acceptance_criteria": "Delete of known remote post removes it from remote_posts and timelines; Delete of unknown post is silently ignored; Delete of Actor removes all their data; delete triggers streaming 'delete' event for affected local actors",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:33Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.001465784Z",
+  "started_at": "2026-07-18T05:14:41.855222293Z",
+  "closed_at": "2026-07-18T05:29:28.001465784Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:39Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

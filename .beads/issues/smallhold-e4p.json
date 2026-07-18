@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-e4p",
+  "title": "GET /api/v1/statuses/:id — status serialization",
+  "description": "Implement the status retrieval endpoint with full Mastodon Status object serialization. The Status object has many required fields — match mastodon.social's shape exactly. Key invariants: id is a string, media_attachments is always an array (never null), mentions/tags/emojis are always arrays, in_reply_to_id is string or null (never empty string), reblog is null for normal posts.",
+  "design": "Status.url = https://{domain}/@{username}/{id}. Status.uri = ap_id. Status.content = content_html (not raw markdown). Status.account: full Account object embedded. Status.application: the OAuth app the post was through, or {'name':'Web','website':null}. favourites_count and reblogs_count from DB counts.",
+  "acceptance_criteria": "GET /api/v1/statuses/:id returns correct Status JSON; all required fields present; id is a string; media_attachments is [] not null; in_reply_to_id is null not '' for non-replies; Status.application is {'name':'Web','website':null} for CLI-posted statuses; visibility is one of public/unlisted/private/direct",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:05Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.394186208Z",
+  "closed_at": "2026-07-18T05:30:00.394186208Z",
+  "close_reason": "Done in posting.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:11Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

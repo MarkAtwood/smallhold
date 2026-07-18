@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-duw",
+  "title": "Account lookup endpoints: by ID and by acct handle",
+  "description": "GET /api/v1/accounts/:id returns account by snowflake ID (works for local accounts from accounts table and remote accounts from remote_accounts table). GET /api/v1/accounts/lookup?acct=username or ?acct=username@domain resolves the handle and returns the account.\n\nAgent workflow: Spawn a research subagent to test these endpoints against mastodon.social and document exact response shapes.\n\nTest discipline: local account by ID returns correct Account object; remote account by ID returns Account object from remote_accounts row; unknown ID returns 404; lookup local handle returns local account; lookup remote handle triggers resolution if not cached; lookup non-existent handle returns 404. Use real in-memory SQLite not mocks. mastodon.social responses are the oracle for response shape.\n\nDefensive programming: ID parameter validated as valid i64 before DB query, return 404 not 422 for non-numeric IDs (Mastodon behavior); lookup acct resolves remote if not cached with a timeout to not hang the request; no .unwrap() outside tests; all errors Result\u003cT, AppError\u003e.",
+  "acceptance_criteria": "Local and remote accounts returned by ID; lookup works for local and remote handles; non-existent returns 404; non-numeric ID returns 404 not 422; remote resolution has timeout",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:32:28Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.397082924Z",
+  "started_at": "2026-07-18T05:14:42.303289271Z",
+  "closed_at": "2026-07-18T05:29:28.397082924Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2io",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:32:30Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "206 while processing; 200 with full fields after processing; PUT updates description; another account's media returns 404; URLs are absolute",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:33:03Z",
+  "created_by": "Mark Atwood",
+  "description": "Return media attachment status. While processing (width IS NULL): return 206 partial with null url/preview_url/blurhash. When complete: return 200 with full MediaAttachment including url, preview_url (thumbnail URL), width, height, blurhash, type (image/gifv/unknown). type=image for JPEG/PNG/WebP. type=gifv for GIF. PUT /api/v1/media/:id: update description (alt text).\n\nAGENT WORKFLOW: Spawn a research subagent to poll a mastodon.social media upload in progress and document the 206 vs 200 response shapes.\n\nTEST DISCIPLINE:\n- Query while processing (width=NULL): returns 206 with null fields\n- Query after processing: returns 200 with all fields\n- PUT to update description: description updated in DB\n- GET on another account's media: 404 (not 403 — Mastodon returns 404 to prevent enumeration)\n- MediaAttachment.url and preview_url are absolute URLs (https://)\n\nDEFENSIVE PROGRAMMING:\n- Never serve media from another account via this endpoint (404 to prevent enumeration)\n- type field: 'image' for still images, 'gifv' for animated GIF, 'unknown' if unrecognized",
+  "ephemeral": false,
+  "id": "smallhold-ah5",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/media/:id: return processing status, full attachment when done",
+  "updated_at": "2026-04-23T00:33:03Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:31Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-aav",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

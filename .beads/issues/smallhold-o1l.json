@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-o1l",
+  "title": "SQLite setup + embedded migrations (sqlx-migrate)",
+  "description": "Initialize the SQLite database with the full schema from the spec and set up sqlx-migrate for embedded migrations. Apply all SQLite PRAGMAs on every connection. The schema includes: admin, accounts, remote_accounts, posts, remote_posts, mentions, media, follows, follow_requests, followers, favourites, notifications, oauth_apps, oauth_tokens, oauth_authz_codes, domain_blocks, delivery_queue, idempotency_keys, also_known_as.",
+  "design": "Use sqlx::SqlitePool. Apply PRAGMAs via after_connect hook on pool creation. Embed migrations with sqlx::migrate!() macro pointing at migrations/ directory.",
+  "acceptance_criteria": "sqlx::query! macros compile against the schema; all tables and indexes created correctly; PRAGMAs applied: journal_mode=WAL, synchronous=NORMAL, foreign_keys=ON, busy_timeout=5000, cache_size=-64000; migrations run automatically on startup",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:58:27Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.495172655Z",
+  "closed_at": "2026-07-18T05:29:59.495172655Z",
+  "close_reason": "Done in db.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:29Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

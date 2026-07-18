@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-y28",
+  "title": "Inbound Undo Follow activity",
+  "description": "Handle inbound Undo{Follow} when a remote actor unfollows a local persona. Remove the row from followers table. If there was a pending follow_request, remove that instead.",
+  "design": "Match Undo.object against Follow activities. The object may be a full Follow activity or just the Follow activity URI. Remove from followers or follow_requests table. No outbound activity needed.",
+  "acceptance_criteria": "Remote unfollow removes follower row; subsequent fetch of /api/v1/accounts/relationships shows not following; duplicate Undo is idempotent (no error if row doesn't exist)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:03Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.86111385Z",
+  "closed_at": "2026-07-18T05:29:59.86111385Z",
+  "close_reason": "Done in inbox.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:09Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

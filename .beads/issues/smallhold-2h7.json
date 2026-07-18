@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-2h7",
+  "title": "Inbound Update{Actor}: re-fetch and update remote_accounts cache",
+  "description": "Handle Update{Person/Service/Application}: re-fetch the actor document, parse, update remote_accounts row with new display_name, bio_html, avatar_url, header_url, public_key_pem, and last_fetched_at. Do not update actor_uri or username — those are immutable.\n\n**Agent workflow**: Spawn a research subagent to capture Update{Person} fixtures from mastodon.social and document the structure.\n\n**Test discipline**:\n- Update with new display_name: remote_accounts.display_name updated\n- Update with new public_key_pem: old key replaced (important for key rotation)\n- Update with malformed actor document: reject, keep old data\n- Verify ammonia sanitizes new bio_html\nAll fixtures captured from real servers. Never use implementation as its own oracle. Real in-memory SQLite for DB tests.\n\n**Defensive programming**:\n- Always re-fetch the full actor document rather than trusting the embedded object in the Update activity\n- Verify Update is signed by the same actor\n- Do not update immutable fields (actor_uri, username, domain, public_key_id)\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e",
+  "acceptance_criteria": "Profile fields updated; key rotation handled by replacing public_key_pem; malformed update rejected with old data preserved; immutable fields unchanged; bio_html sanitized by ammonia",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:30:01Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.921088433Z",
+  "started_at": "2026-07-18T05:14:41.662891701Z",
+  "closed_at": "2026-07-18T05:29:27.921088433Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p99",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:11Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

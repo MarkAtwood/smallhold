@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:18:48Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nWire metric recording into axum Tower middleware (request count + latency per route), the delivery worker (queue depth gauge on every tick), and SQLx query execution via a custom executor logger.\n\n## Why\nRaw metric registration is useless without instrumentation at every measurement point; this task makes the counters actually reflect real traffic.\n\n## Agent team pattern\n- Spawn a Research subagent to: read Tower middleware docs for writing a custom layer/service wrapper; read sqlx BeforeQuery/AfterQuery hooks or executor wrapper patterns; read delivery worker source to identify the poll tick location.\n- Spawn an Implementation subagent to: implement a Tower `Layer` + `Service` that wraps each request, records method/route-template/status labels to `http_requests_total` counter and `http_request_duration_seconds` histogram; add the middleware to the main axum router; in the delivery worker tick, query `SELECT COUNT(*) FROM delivery_queue WHERE dead_at IS NULL` and `SELECT COUNT(*) FROM delivery_queue WHERE dead_at IS NOT NULL` and update the two gauges; wrap SQLx query execution to record per-query duration to `sqlite_query_duration_seconds` histogram with a `query` label set to a sanitized query template (not user data).\n- Spawn a Test subagent to: fire exactly 10 GET /api/v1/timelines/home requests, scrape /metrics, parse output, assert `http_requests_total{method=\"GET\",path=\"/api/v1/timelines/home\",status=\"200\"}` equals 10; assert histogram `_count` field also equals 10.\n\n## Test discipline\n- Independent oracle: manually count requests sent vs counter value in scraped text; no code-under-test self-reference.\n- Test approach: deterministic request count, scrape, parse text exposition format with a simple line scanner, assert numeric equality.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Route label must use axum MatchedPath (the template string), never the raw request URI — prevents label cardinality explosion from post IDs in URLs\n- SQLx label must be a static query name or truncated template, never interpolated user input\n- Duration histogram must use seconds (not ms) to match Prometheus convention\n- Gauge updates in delivery worker must not block the async executor — use `metrics::gauge!` which is non-blocking",
+  "ephemeral": false,
+  "id": "smallhold-jex0",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Instrument axum middleware, delivery worker, and SQLx for metrics",
+  "updated_at": "2026-04-23T04:18:48Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:18:52Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-zgdm",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-dt9",
+  "title": "Instance metadata: v1 and v2 endpoints, report version 4.x",
+  "description": "Return instance metadata. v2 is preferred by newer clients, v1 by older ones. Report version 4.0.0 (not the actual smallhold version) to maximize client compatibility — clients gate features on version. Include correct configuration.statuses.max_characters from config.\n\nAgent workflow: Spawn a research subagent to fetch both endpoints from mastodon.social and document field differences between v1 and v2 as the oracle.\n\nTest discipline: both endpoints return valid JSON with correct shapes validated against mastodon.social oracle; version field is 4.0.0 in both; max_toot_chars matches config value; openRegistrations is false; v2 configuration.media_attachments.supported_mime_types lists only images (no video). Never use implementation as its own oracle.\n\nDefensive programming: contact_account returns null rather than leaking a persona name; do not return backend technical details (database type, OS) in any field; no .unwrap() outside tests; all errors Result\u003cT, AppError\u003e.",
+  "acceptance_criteria": "v1 and v2 return correct shapes matching mastodon.social oracle; version is 4.0.0; max_toot_chars from config; openRegistrations false; contact_account null; no internal technical details in response",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:32:40Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.378627462Z",
+  "started_at": "2026-07-18T05:14:42.261613678Z",
+  "closed_at": "2026-07-18T05:29:28.378627462Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2io",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:32:42Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Inbound Move from actor A to actor B: verify B.alsoKnownAs includes A's URI; for each local follower of A, create follow to B and enqueue Follow activity; A's followers removed; B's followers updated; migration without valid alsoKnownAs is rejected",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:08:15Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement alsoKnownAs for migration support. Store alsoKnownAs URIs per local account in also_known_as table. Handle inbound Move activities: verify new actor has alsoKnownAs pointing to old actor, migrate follower relationships (create follows to new actor for each local account that followed old actor, send Follow activities), update remote_accounts to reflect the move.",
+  "design": "Also_known_as table: account_id + uri. Verify Move: fetch new actor document, check alsoKnownAs field includes old actor URI. Migrate: INSERT INTO follows (follower_id, followee_remote_id) for new actor; DELETE FROM follows where followee was old actor. Enqueue Follow activities for each migrated follow.",
+  "ephemeral": false,
+  "id": "smallhold-61i",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "alsoKnownAs storage and inbound Move handling",
+  "updated_at": "2026-04-23T00:08:15Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:08:18Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-s70",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-shz",
+  "title": "Remote actor resolution and remote_accounts cache",
+  "description": "Implement the pipeline to resolve an ActivityPub actor URI or acct handle to a remote_accounts row: WebFinger lookup (for acct handles) → fetch actor document → parse → upsert into remote_accounts. Cache aggressively; invalidate on signature verification failure. Handle resolution failures gracefully (store failed_at, fail_count).",
+  "design": "Resolution steps: 1) If URI, fetch directly. 2) If acct, WebFinger then fetch actor URI. Cache in remote_accounts. Re-fetch if last_fetched_at \u003e 24h or on signature failure. Parse domain from actor_uri for the domain field. shared_inbox_url from endpoints.sharedInbox.",
+  "acceptance_criteria": "Given 'gargron@mastodon.social', can resolve to actor URI then fetch and store actor document; remote_accounts row has correct public_key_pem, inbox_url, shared_inbox_url; resolution failure increments fetch_fail_count and sets fetched_failed_at; cached actors are reused without re-fetching within a reasonable TTL",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:16Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.800567613Z",
+  "closed_at": "2026-07-18T05:29:59.800567613Z",
+  "close_reason": "Done in federation.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b89",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:23Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-d5r",
+  "title": "Initialize Cargo workspace and crate layout",
+  "description": "Set up the Cargo workspace with the initial crate structure. The binary crate is named 'smallhold'. Decide workspace layout: single crate or split lib+bin. Given the scope, a single crate with modules is appropriate for v1. Add all dependency crates to Cargo.toml with pinned versions matching the spec.",
+  "design": "Single crate, modules for: db, config, api, federation, cli, media, streaming. No lib/bin split in v1 — premature.",
+  "acceptance_criteria": "cargo build succeeds; cargo clippy --all-features -- -D warnings passes; all crates from spec are in Cargo.toml (axum, sqlx/sqlite, activitypub-federation, reqwest/rustls-tls, serde_json, ammonia, pulldown-cmark, image, fast_image_resize, blurhash, argon2, tracing, tracing-subscriber, clap v4)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:57:57Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.296895725Z",
+  "started_at": "2026-07-18T05:01:04.529757624Z",
+  "closed_at": "2026-07-18T05:06:16.296895725Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

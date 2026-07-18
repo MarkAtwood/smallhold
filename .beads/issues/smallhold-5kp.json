@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-5kp",
+  "title": "Content rendering pipeline (markdown, mentions, hashtags)",
+  "description": "Implement the pipeline that converts post text input into stored content_html. Steps: 1) Parse @mentions (local and remote), link them. 2) Parse #hashtags, link them. 3) Render markdown to HTML with pulldown-cmark. 4) Sanitize HTML with ammonia. 5) Store original text in posts.content and rendered HTML in posts.content_html. 6) Create mention rows in the mentions table for each @mention.",
+  "design": "Mention parsing: regex or nom parser for @user@domain and @user (local). Resolve local mentions to accounts table, remote to remote_accounts (resolve if not cached). ammonia::Builder with allowlist of tags: a, br, p, strong, em, pre, code, ul, ol, li, blockquote. Hashtag parser: #[a-zA-Z0-9_]+ not followed by alphanumeric.",
+  "acceptance_criteria": "@username@domain mention links to the remote profile URL; #hashtag becomes a link; markdown bold/italic/links render correctly; ammonia strips disallowed HTML tags; mention rows are created in mentions table; mention notification is created for mentioned local actors",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:02:26Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.797071789Z",
+  "started_at": "2026-07-18T05:14:42.855014069Z",
+  "closed_at": "2026-07-18T05:29:28.797071789Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:02:44Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Phanpy receives live update events when followed accounts post; delete events fire on post deletion; notification events fire on mention; connection keeps alive with heartbeat; client can reconnect and not miss events (within broadcast buffer); multiple concurrent subscribers work",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:05:00Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement Server-Sent Events streaming. Routes: /api/v1/streaming/user, /streaming/public, /streaming/public/local, /streaming/hashtag?tag=, /streaming/hashtag/local?tag=, /streaming/direct. Authenticates via Bearer token in Authorization header or access_token query param. Returns text/event-stream response that stays open and sends events.",
+  "design": "axum SSE handler using axum::response::Sse. Subscribe to broadcast channel on connection. Forward StreamEvent to client as SSE data field with event: type. Heartbeat: empty comment line every 15s to keep connection alive. Auth: extract Bearer token from Authorization header or ?access_token= query param. On subscribe: create broadcast::Receiver from existing Sender.",
+  "ephemeral": false,
+  "id": "smallhold-jaz",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "SSE streaming endpoint (GET /api/v1/streaming/*)",
+  "updated_at": "2026-04-23T00:05:00Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:05:02Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-oo2",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

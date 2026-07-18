@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-5v2",
+  "title": "HTTP signature verification: draft-cavage-11, key caching, re-fetch on failure",
+  "description": "Verify HTTP signatures on all inbound ActivityPub POST requests before processing. Use activitypub-federation crate's verification. Key lookup: extract keyId from Signature header, fetch actor document (or use cached public_key_pem from remote_accounts), verify signature. On verification failure: attempt one re-fetch of actor document in case key was rotated, then try again before returning 401.\n\n**Agent workflow**: Spawn a research subagent to study the activitypub-federation crate's signature verification API in detail. Spawn a testing subagent to capture a real signed request from mastodon.social (using a test webhook receiver) and write verification tests against it.\n\n**Test discipline**:\n- Capture a real signed POST from mastodon.social to use as test fixture\n- Test valid signature: verification passes\n- Test tampered body (change one byte): verification fails with clear error\n- Test expired Date header (\u003e30s old): verification fails\n- Test missing Signature header: 401 immediately\n- Test keyId pointing to unknown actor: attempt fetch, if fetch fails return 401\nFixtures must be real captured requests — never synthesized by the implementation under test. Use real in-memory SQLite for DB tests.\n\n**Defensive programming**:\n- Consume and buffer the request body before verification — can only read once\n- Hard timeout on key fetch (5s) — don't let a slow remote server stall our inbox\n- Never expose signature verification failure details to the caller — 401 with generic message\n- Log verification failures at WARN with the sending domain for monitoring\n- No .unwrap() outside test code; all errors are Result\u003cT, AppError\u003e",
+  "acceptance_criteria": "Real mastodon.social signed request passes verification; tampered body fails; expired Date fails; missing Signature returns 401; key fetch timeout returns 401 within 5s",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:17Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.407545652Z",
+  "closed_at": "2026-07-18T05:14:23.407545652Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b0x",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:22Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

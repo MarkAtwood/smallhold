@@ -1,0 +1,48 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:31:38Z",
+  "created_by": "Mark Atwood",
+  "ephemeral": false,
+  "id": "smallhold-93z",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 5-B: Timeline queries (home, public, context)",
+  "updated_at": "2026-04-23T00:31:38Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:43:39Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-9w07",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:43:18Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-hnk6",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:43:02Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-p7i4",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:59:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-w59",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Subscribe/unsubscribe commands work; multi-stream subscription works; heartbeat every 15s; invalid commands ignored; disconnect cleans up all subscriptions",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:34:20Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement WebSocket streaming endpoint. Client sends JSON commands: {type:'subscribe', stream:'user'} and {type:'unsubscribe', stream:'user'}. Server sends events as {stream:['user'], event:'update', payload:'{...}'}. Multiple stream subscriptions per connection. Heartbeat: server sends {event:'ping'} every 15s. Elk and some other clients prefer WebSocket over SSE.\n\nAGENT WORKFLOW: Spawn a research subagent to connect to mastodon.social WebSocket endpoint and capture real subscribe/event/heartbeat messages as oracle.\n\nTEST DISCIPLINE:\n- Subscribe to 'user' stream → receive update events for followed account posts\n- Subscribe to multiple streams → events from both streams received\n- Unsubscribe → events from that stream stop\n- Heartbeat ping: received every 15s\n- Invalid command type → ignored gracefully (no disconnect)\n- auth: Bearer token in Authorization header on the initial HTTP upgrade\n\nDEFENSIVE PROGRAMMING:\n- WebSocket frame size limit: reject frames > 64KB to prevent memory exhaustion\n- Handle partial/fragmented WebSocket messages correctly (axum WS handles this but verify)\n- Client disconnect: drop all subscriptions for that connection",
+  "ephemeral": false,
+  "id": "smallhold-gl2b",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/streaming: WebSocket with subscribe/unsubscribe commands",
+  "updated_at": "2026-04-23T00:34:20Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:34:50Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-57e",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

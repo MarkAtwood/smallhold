@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Boost creates wrapper post; returned Status has empty content with nested reblog; Announce enqueued; unboost removes wrapper and enqueues Undo; own direct post not boostable",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:37:23Z",
+  "created_by": "Mark Atwood",
+  "description": "POST /api/v1/statuses/:id/reblog: create a new posts row that is a boost (boost_of_id or boost_of_uri set, content='', content_html=''). Enqueue Announce{object: original_ap_uri}. Return a Status object where outer wrapper has empty content and reblog field is the full original Status. POST /api/v1/statuses/:id/unreblog: delete the boost post, enqueue Undo{Announce}.\n\nAgent workflow: Spawn a research subagent to fetch a boost Status from mastodon.social and document the exact shape (the outer wrapper and the nested reblog object).\n\nTest discipline:\n- Boost local post → new posts row created with boost_of_id set\n- Returned Status: outer content is '', reblog is full nested Status\n- Boost already-boosted post → 422 or idempotent return of existing boost\n- Unboost → boost post deleted, Undo Announce enqueued\n- Announce activity JSON shape validated against mastodon.social oracle\n\nDefensive programming:\n- A user cannot boost their own direct-visibility post (visibility check)\n- Boost wrapper ap_id is a new unique URI, not the original's URI",
+  "ephemeral": false,
+  "id": "smallhold-ql49",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "POST /reblog and /unreblog: create boost post, Announce activity",
+  "updated_at": "2026-04-23T00:37:23Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:37:27Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-95u",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

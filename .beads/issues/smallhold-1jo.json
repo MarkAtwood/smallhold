@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Bookmark a post from Ivory; it appears in GET /api/v1/bookmarks; unbookmark removes it; bookmarks are per-persona not global; Status.bookmarked field is true for bookmarked posts when authed",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:13:06Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement local-only bookmarks. Bookmarks are stored locally and never federated. POST /api/v1/statuses/:id/bookmark adds a bookmark. POST /api/v1/statuses/:id/unbookmark removes it. GET /api/v1/bookmarks returns paginated list of bookmarked statuses. Requires a bookmarks table (account_id, post_id or remote_post_id, created_at).",
+  "design": "bookmarks table: account_id, post_id (nullable), remote_post_id (nullable), created_at, CHECK that exactly one of post_id/remote_post_id is set. Status.bookmarked: check if bookmarks row exists for authed account + post. GET /api/v1/bookmarks: JOIN to posts/remote_posts, serialize as Status array.",
+  "ephemeral": false,
+  "id": "smallhold-1jo",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "Bookmarks (POST /bookmark, /unbookmark, GET /api/v1/bookmarks)",
+  "updated_at": "2026-04-23T00:13:06Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:13:11Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-s70",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

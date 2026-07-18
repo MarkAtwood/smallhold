@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Search for 'gargron@mastodon.social' with resolve=true fetches and returns the remote account; hashtag search returns matching tags with usage counts; account search returns matching local accounts; statuses type returns empty array; limit param respected",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:12:26Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement search for accounts and hashtags. Full-text post search is deferred to v2. Account search: look up by username (local and remote, resolve if not cached). Hashtag search: match post_tags table. Type param: 'accounts', 'statuses' (return []), 'hashtags'. q param is the search query. resolve=true param triggers remote actor resolution for @user@domain queries.",
+  "design": "Search response: {accounts:[], statuses:[], hashtags:[]}. Hashtag: {name, url, history:[]}. history can be empty array. Account search: LIKE query on local accounts, resolve remote if resolve=true and looks like @user@domain. Order: local accounts first.",
+  "ephemeral": false,
+  "id": "smallhold-6gu",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "GET /api/v2/search — account and hashtag search",
+  "updated_at": "2026-04-23T00:12:26Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:12:32Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-s70",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

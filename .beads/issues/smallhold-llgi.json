@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:19:23Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nCreate the `lists` and `list_accounts` tables via migration and implement all five CRUD endpoints for list management.\n\n## Why\nBefore list timelines or membership can work, the data model and management API must exist.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/lists and /api/v1/lists/:id to capture the exact JSON shape of the List object (id, title, replies_policy); check which HTTP methods and request body shapes are used for POST and PUT; verify the replies_policy enum values ('followed', 'list', 'none').\n- Spawn an Implementation subagent to: write a SQLite migration adding `lists (id INTEGER PRIMARY KEY, persona_id INTEGER NOT NULL REFERENCES personas(id), title TEXT NOT NULL, replies_policy TEXT NOT NULL DEFAULT 'list' CHECK(replies_policy IN ('followed','list','none')), created_at INTEGER NOT NULL)` and `list_accounts (list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE, account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, PRIMARY KEY(list_id, account_id))`; implement GET /api/v1/lists (all lists for authed persona), POST /api/v1/lists (create, enforce 50-list limit, return 422 if at limit), GET /api/v1/lists/:id (404 if not owned by authed persona), PUT /api/v1/lists/:id (update title and/or replies_policy), DELETE /api/v1/lists/:id (cascade deletes list_accounts rows).\n- Spawn a Test subagent to: write integration tests using live mastodon.social /api/v1/lists responses as fixture JSON to validate serialization shape; test CRUD round-trip; test 50-list limit returns 422; test that fetching another persona's list returns 404.\n\n## Test discipline\n- Independent oracle: mastodon.social live fixture — curl /api/v1/lists with a real token, capture JSON, use as shape reference for serialization tests.\n- Test approach: create list via POST, assert response matches fixture shape; GET list by id, assert fields match; PUT to rename, assert updated; DELETE, assert GET returns 404; attempt 51st list, assert 422.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Enforce persona ownership on all read/write/delete operations — never allow cross-persona list access\n- 50-list limit enforced atomically with a SELECT COUNT before INSERT (or a CHECK constraint + unique index)\n- replies_policy value must be validated against the enum; reject unknown values with 422\n- id is a snowflake string in JSON, not a raw integer",
+  "ephemeral": false,
+  "id": "smallhold-llgi",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "DB schema and CRUD endpoints for lists",
+  "updated_at": "2026-04-23T04:19:23Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:19:56Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-c8oq",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

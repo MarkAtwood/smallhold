@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Create a post → verify event appears on public channel; create a post with #rust hashtag → verify event on hashtag:rust channel; delete post → verify delete event with correct ID; create notification → verify notification event on correct user channel; boost triggers update event",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:05:31Z",
+  "created_by": "Mark Atwood",
+  "description": "Add broadcast calls at every point where streaming events should fire: post creation (update event on public, public:local if local, user channels for all followers, hashtag channels for tags in post), post deletion (delete event with status ID), post edit (status.update event), notification creation (notification event on user channel for the notified account). This wires the broadcast infrastructure into the domain layer.",
+  "design": "Emit events after successful DB write, not before. For follower fan-out on streaming: look up all local followers and emit user channel events for each. Remote followers don't have streaming connections. Use tokio::spawn for async event emission so it doesn't block the HTTP handler.",
+  "ephemeral": false,
+  "id": "smallhold-7r9",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Wire broadcast events to post/notification writes",
+  "updated_at": "2026-04-23T00:05:31Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:05:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-oo2",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,25 @@
+{
+  "id": "smallhold-lh8a",
+  "title": "GET /health and GET /healthz endpoints",
+  "description": "## What\nImplement GET /health and GET /healthz (k8s convention alias) endpoints. Each checks DB with `SELECT 1` and checks media dir writable via tempfile. Returns `{\"status\":\"ok\",\"db\":\"ok\",\"media\":\"ok\"}` with HTTP 200 when all checks pass; returns `{\"status\":\"degraded\",\"db\":\"error: \u003csanitized msg\u003e\"}` with HTTP 503 when any check fails. All checks must complete within 1 second (use tokio::time::timeout). No authentication required.\n\n## Why\nWithout a health endpoint, load balancers and container orchestrators cannot determine if the server is ready to accept traffic; degraded responses enable automated failover and alerting.\n\n## Agent team pattern\n- Spawn a Research subagent to: review k8s liveness/readiness probe conventions; check what mastodon.social exposes at /health or /healthz; document the JSON shape and HTTP status conventions used by similar Rust/axum services\n- Spawn an Implementation subagent to: add /health and /healthz routes to the axum router (no auth middleware); implement db check (SELECT 1 with 1s timeout); implement media dir check (create and delete a tempfile in media dir); build response JSON with sanitized error messages; return 503 on failure\n- Spawn a Test subagent to: write tests for (a) healthy server returns 200 with status=ok and both checks ok, (b) invalid DB path (intentionally broken) causes db check to return error and endpoint returns 503, (c) media dir non-writable causes media check to return error and endpoint returns 503\n\n## Test discipline\n- Independent oracle: k8s health check convention -- 200 means ready, 503 means not ready; response body JSON is convention, not a standard, but the shape here matches common practice (Prometheus, Grafana, etc.)\n- Test approach: inject broken DB connection and assert 503; use test-only config pointing to non-existent media dir and assert 503; assert healthy path returns 200 with all fields present\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Never expose raw OS error messages or file paths in the response body -- sanitize to generic \"error: check failed\" or similar before including in JSON\n- Use tokio::time::timeout for both DB and media checks -- a hung DB must not block the health endpoint forever\n- No auth required -- health endpoints must be reachable by load balancers without credentials\n- Tempfile cleanup: always delete the tempfile even if write fails (use RAII or explicit cleanup in error path)",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T04:19:05Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:37:35.096559837Z",
+  "closed_at": "2026-07-18T05:37:35.096559837Z",
+  "close_reason": "Health endpoint already in server.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-fxty",
+      "type": "relates-to",
+      "created_at": "2026-04-22T21:19:10Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

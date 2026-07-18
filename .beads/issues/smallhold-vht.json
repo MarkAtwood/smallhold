@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-vht",
+  "title": "Inbound Update{Note}: refresh remote_posts, emit streaming event",
+  "description": "Handle Update{Note}: find post by ap_uri, update content_html (re-sanitize with ammonia), spoiler_text, sensitive, language. Record edited_at timestamp. Emit status.update streaming event to affected local subscribers.\n\n**Agent workflow**: Spawn a research subagent to capture Update{Note} fixtures from mastodon.social. Spawn a parallel subagent to study the streaming event format.\n\n**Test discipline**:\n- Update known post: content_html updated, edited_at set\n- Update with new HTML content: ammonia sanitizes independently\n- Update unknown post: 200, no error\n- Verify streaming event emitted after successful update\nAll fixtures captured from real servers. Never use implementation as its own oracle. Real in-memory SQLite for DB tests.\n\n**Defensive programming**:\n- Verify Update signed by original author\n- Re-sanitize content even if it looks clean\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e\n- Never log token values or private keys",
+  "acceptance_criteria": "Update modifies remote_posts content_html; ammonia re-sanitizes; edited_at updated; streaming event emitted; unknown post returns 200; author signature verified",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:23Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.835913112Z",
+  "started_at": "2026-07-18T05:14:41.493782474Z",
+  "closed_at": "2026-07-18T05:29:27.835913112Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-v0z",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:25Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

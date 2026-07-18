@@ -1,0 +1,109 @@
+{
+  "id": "smallhold-4xr",
+  "title": "Phase 4: Posting and Delivery",
+  "description": "Implement post creation, deletion, and outbound federation. This is the v0.1 release milestone — after this phase you can post from a real client and your followers on mastodon.social see the post. The delivery worker is in-process, polls the delivery_queue table, and handles retry with exponential backoff and per-domain circuit breaking.",
+  "design": "Delivery retry schedule: 1m, 5m, 30m, 2h, 8h, 24h, max 6 attempts then dead_at. 410 Gone → dead immediately. 4xx (non-410) → dead after 1 retry. Circuit breaker: per-domain, 10 consecutive failures → 1hr backoff in-memory. Idempotency: hash key + account_id, 24h TTL, prune in background task. Content rendering: pulldown-cmark for markdown, ammonia for HTML sanitization, mention linking on @user@domain patterns.",
+  "acceptance_criteria": "Post from Ivory → followers on mastodon.social see it in their home timeline within 60s; delete the post → followers see deletion; Idempotency-Key prevents duplicate posts on retry; delivery worker retries on 5xx, marks dead on 410, circuit-breaks after 10 consecutive domain failures",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:55:21Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:29.087937515Z",
+  "started_at": "2026-07-18T05:14:42.538993613Z",
+  "closed_at": "2026-07-18T05:29:29.087937515Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-0ix",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:57:45Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-0pk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:50Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3l1",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:58:30Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3qp",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:59:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5kp",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:02:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-70g",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:59:17Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-d6u",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-e4p",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:11Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-gyd",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:33Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-hqy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:01:25Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-pbd",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:24Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-wyk",
+  "title": "Inbound Update Actor + inbound Move activities",
+  "description": "Handle inbound Update{Actor} to refresh cached remote actor profiles (display name, bio, avatar URL, public key). Handle inbound Move{Actor} for account migration in: update alsoKnownAs on the moving actor, migrate follow relationships from old actor to new actor, send a Follow to the new actor for each local actor that followed the old one.",
+  "design": "Update Actor: re-fetch actor document, update remote_accounts row. Move: verify new actor has alsoKnownAs pointing to old actor (required by spec). For each local follow of old actor: create follow of new actor, enqueue Follow activity, remove old follow.",
+  "acceptance_criteria": "Remote actor updates profile and local cache reflects new display name/bio; Move migrates follower relationships; after Move, outbound posts go to new actor's inbox; alsoKnownAs row created for the old actor URI",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:21Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.095448649Z",
+  "closed_at": "2026-07-18T05:30:00.095448649Z",
+  "close_reason": "Done in inbox.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:26Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:19:53Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nImplement GET /api/v1/timelines/list/:id returning a paginated timeline of posts from accounts in the specified list, with replies_policy filtering applied.\n\n## Why\nThe list timeline is the primary value of the feature — operators and users create lists to get a focused reading experience.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/timelines/list/:id to capture the exact JSON response shape and Link header format; test with replies_policy values 'list', 'followed', 'none' on mastodon.social to observe which reply posts are included or excluded in each mode; confirm that since_id/max_id/min_id/limit query params work the same as home timeline.\n- Spawn an Implementation subagent to: implement GET /api/v1/timelines/list/:id; verify list belongs to authed persona (404 otherwise); query posts WHERE account_id IN (SELECT account_id FROM list_accounts WHERE list_id = ?) with pagination (since_id/max_id/min_id/limit, default limit 20, max 40); apply replies_policy: for 'none' add AND in_reply_to_id IS NULL; for 'list' add AND (in_reply_to_id IS NULL OR in_reply_to_account_id IN (SELECT account_id FROM list_accounts WHERE list_id = ?)); for 'followed' add AND (in_reply_to_id IS NULL OR in_reply_to_account_id IN (SELECT target_id FROM follows WHERE source_id = ?)); exclude posts from muted accounts; serialize as Status objects; set Link header with next/prev.\n- Spawn a Test subagent to: create list with two accounts, post from each, assert both appear in list timeline; post a reply from account A to account B, test all three replies_policy values and assert correct inclusion/exclusion; test pagination with since_id/max_id.\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/timelines/list/:id live fixture for response shape; mastodon.social observed replies_policy behavior for each of the three enum values.\n- Test approach: seed DB with known posts in a list, execute timeline query for each replies_policy value, assert exact set of post ids returned matches expected set derived from mastodon.social-observed behavior.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- List ownership verified before returning any posts — prevents cross-persona timeline reads\n- replies_policy must be read from DB at query time, not cached in memory, so PUT updates take effect immediately\n- Muted accounts are excluded regardless of replies_policy\n- Pagination uses snowflake IDs; since_id/max_id/min_id comparisons must use integer comparison (not string sort) on the stored INTEGER id\n- limit capped at 40; default 20; never trust client-supplied limit without bounds check",
+  "ephemeral": false,
+  "id": "smallhold-p2gj",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "List timeline endpoint with replies_policy",
+  "updated_at": "2026-04-23T04:19:53Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:19:57Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-c8oq",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

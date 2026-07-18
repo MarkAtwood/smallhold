@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "docs/compat.md Misskey and Sharkey rows show applicable checkmarks; Emoji objects with short-code ids don't cause parse failures; Misskey posts appear in federated timeline; follow/follow-back works",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:14:54Z",
+  "created_by": "Mark Atwood",
+  "description": "Test and fix compatibility with Misskey/Sharkey. Known quirks: Emoji objects with non-URI id fields, different visibility model, MFM formatting in content. Test the applicable compat matrix rows.",
+  "design": "Known Misskey quirk from spec: Emoji objects have id fields that are short codes not URIs. Tolerate on inbound. MFM (Misskey Flavored Markdown): accept HTML in content_html, don't attempt to parse MFM. Test against misskey.io.",
+  "ephemeral": false,
+  "id": "smallhold-aox",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Misskey / Sharkey compatibility testing and bug fixes",
+  "updated_at": "2026-04-23T00:14:54Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:14:59Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

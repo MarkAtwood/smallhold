@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:18:32Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nIntegrate the `metrics` and `metrics-exporter-prometheus` crates; expose a Prometheus scrape endpoint; register all required metrics.\n\n## Why\nOperators can scrape and alert on server health without parsing logs.\n\n## Agent team pattern\n- Spawn a Research subagent to: read metrics-exporter-prometheus docs and examples; identify correct macro usage (`counter!`, `gauge!`, `histogram!`); determine how to run a separate TCP listener in axum; review Prometheus data model spec for label naming rules (snake_case, no dots).\n- Spawn an Implementation subagent to: add `metrics` and `metrics-exporter-prometheus` to Cargo.toml; add `[monitoring]` config section with `metrics_enabled` (bool, default false) and `metrics_addr` (String, default \"127.0.0.1:9090\"); on startup when enabled, spawn a separate axum listener on metrics_addr serving GET /metrics via PrometheusHandle; register these metrics: `http_requests_total{method,path,status}` counter, `http_request_duration_seconds{method,path}` histogram, `delivery_queue_depth` gauge (pending rows), `delivery_queue_dead` gauge (dead rows), `active_websocket_connections` gauge, `active_sse_connections` gauge, `sqlite_query_duration_seconds` histogram.\n- Spawn a Test subagent to: write integration test that starts server with metrics enabled, fires HTTP requests, scrapes /metrics, parses the text exposition format, asserts correct counter values; use `promtool check metrics` as an independent oracle for format validity.\n\n## Test discipline\n- Independent oracle: Prometheus data model spec for correct label naming conventions; validate scraped output with `promtool check metrics` (exit 0 = valid).\n- Test approach: fire N known requests, scrape /metrics, assert `http_requests_total` incremented by N; assert histogram bucket lines are present; assert all registered gauge names appear.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Do not expose metrics that leak user content, usernames, or counts of private posts\n- /metrics must only be reachable on the separate metrics_addr listener, never on the public port\n- metrics_enabled defaults to false so production installs are not accidentally exposed\n- Label values for `path` must be route templates (e.g. `/api/v1/statuses/:id`), not raw URLs, to prevent high-cardinality label explosion",
+  "ephemeral": false,
+  "id": "smallhold-oi9v",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Add metrics crates and expose GET /metrics endpoint",
+  "updated_at": "2026-04-23T04:18:32Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:18:51Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-zgdm",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

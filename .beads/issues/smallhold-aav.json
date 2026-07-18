@@ -1,0 +1,49 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:31:32Z",
+  "created_by": "Mark Atwood",
+  "description": "Sub-epic covering media retrieval endpoints, static file serving with cache headers, and attaching media attachments to statuses.",
+  "ephemeral": false,
+  "id": "smallhold-aav",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 6-B: Media retrieval, update, and attachment to posts",
+  "updated_at": "2026-04-23T00:31:32Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:31Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-ah5",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:33:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-flj",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:31:40Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-leu",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:33:36Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-vsbn",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

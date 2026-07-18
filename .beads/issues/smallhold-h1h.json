@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Favourite from Ivory creates favourites row; post author on mastodon.social receives Like notification; unfavourite removes row and sends Undo Like; favourites_count in status response is accurate; favouriting own post works",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:04:44Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement POST /api/v1/statuses/:id/favourite and /unfavourite. Create/remove favourites row. Enqueue outbound Like or Undo{Like} activity to the post's actor inbox. For remote posts, use the remote_posts.ap_uri as the object. Return the updated status object.",
+  "design": "Like activity: {type:Like, actor:local_actor_uri, object:post_ap_uri}. For local posts, object = posts.ap_id. For remote posts, object = remote_posts.ap_uri. Deliver to: post author's inbox (or shared inbox if remote). Undo: {type:Undo, actor:..., object:{type:Like,...}}.",
+  "ephemeral": false,
+  "id": "smallhold-h1h",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Favourite / unfavourite endpoints + outbound Like/Undo Like",
+  "updated_at": "2026-04-23T00:04:44Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:04:56Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-w59",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

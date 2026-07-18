@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:49:23Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\n`tests/common/mod.rs` with a `spawn_test_app()` function returning a `TestApp` struct. The struct holds a randomly-bound TCP port, an in-memory SQLite database (WAL mode, all required PRAGMAs), a base URL, and an admin bearer token. Every integration test in `tests/` must use this harness — no ad-hoc server setup, no mocking of the database layer.\n\n## Why\nWithout a shared harness, every test file reinvents server startup, leading to divergence, test pollution, and flaky port conflicts. A single canonical harness ensures all integration tests run against the same code paths as production.\n\n## Agent team pattern\n- Spawn a Research subagent to: read axum integration test patterns from the axum docs and examples repo; identify how `axum::serve` binds to port 0 and how to extract the bound address; check how `sqlx::SqlitePool` with `mode=memory&cache=shared` can be seeded with migrations at test startup.\n- Spawn an Implementation subagent to: write `tests/common/mod.rs` with `spawn_test_app()` that calls `sqlx::migrate!()`, creates an admin persona row, issues a test OAuth token, spawns the axum app on port 0, and returns `TestApp { base_url, token, db }`. Wire it into one smoke-test to prove the harness works.\n- Spawn a Test subagent to: write at least two integration tests that call `spawn_test_app()` and assert: (a) GET /api/v1/instance returns 200 with a valid JSON body; (b) GET /.well-known/webfinger?resource=acct:writer@localhost returns 200 with a valid JRD JSON body.\n\n## Test discipline\n- Independent oracle: axum integration test patterns from https://github.com/tokio-rs/axum/tree/main/examples and axum docs \"Testing\" section.\n- Test approach: real SQLite in-memory with migrations applied; real HTTP via `reqwest`; assert on HTTP status codes and response body shape (not implementation internals).\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths — `spawn_test_app()` may use `unwrap()` only inside the test helper itself, not in any production code path it exercises.\n- Port 0 binding must be used (never hardcode a test port).\n- Admin token must be a valid OAuth bearer token that passes the production auth middleware.\n- Migration failures must panic loudly with context, not silently skip.\n- `TestApp` must implement `Drop` to shut down the background tokio task and close the DB pool.\n",
+  "ephemeral": false,
+  "id": "smallhold-352.1.1",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Integration test harness setup",
+  "updated_at": "2026-04-23T00:49:23Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:49:23Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352.1",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:17:50Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nServe a persona's public posts as RSS 2.0 and Atom 1.0 feeds. No auth required. Only `public` and `unlisted` visibility posts. Limit to 20 most recent. Include title, description, pubDate, guid (post URI), content:encoded (rendered HTML). No new deps — pure string generation with `format!`. Content-Type: `application/rss+xml; charset=utf-8` and `application/atom+xml; charset=utf-8`.\n\n## Why\nFeed readers and aggregators can subscribe to individual persona output without needing an ActivityPub client, improving reach and interoperability.\n\n## Agent team pattern\n- Spawn a Research subagent to: review RSS 2.0 spec (https://www.rssboard.org/rss-specification) and Atom 1.0 spec (RFC 4287) for required and optional elements; check what mastodon.social emits for its RSS feed at /users/:username.rss as a live reference shape\n- Spawn an Implementation subagent to: add axum routes for `/users/:username/feed.rss` and `/users/:username/feed.atom`, query DB for up to 20 most recent public/unlisted posts, escape all user-provided content (display name, bio, post content) for XML safety, build feed string with `format!`, return with correct Content-Type header\n- Spawn a Test subagent to: write integration tests that fetch the feed endpoints, parse the returned XML, and validate structure against RSS 2.0 and Atom 1.0 required elements; test that DMs and followers-only posts are excluded; test XML escaping with posts containing `<`, `>`, `&`, `\"`\n\n## Test discipline\n- Independent oracle: RSS 2.0 spec (https://www.rssboard.org/rss-specification) and Atom 1.0 spec (RFC 4287) define required elements authoritatively; mastodon.social live feed at /users/:username.rss provides a real-world reference shape\n- Test approach: parse returned XML with a Rust XML parser (quick-xml), assert required elements present and non-empty; assert non-public posts absent; assert XML-escaped content in title/description elements\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Escape `<`, `>`, `&`, `\"` in all user-provided fields (display name, bio, post content) — XSS in RSS readers is a real attack surface\n- Do NOT include DMs or followers-only posts\n- Return 404 if persona username does not exist",
+  "ephemeral": false,
+  "id": "smallhold-jjko",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Implement GET /users/:username/feed.rss and /users/:username/feed.atom endpoints",
+  "updated_at": "2026-04-23T04:17:50Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:18:05Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-ymt9",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

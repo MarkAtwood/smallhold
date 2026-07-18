@@ -1,0 +1,42 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:31:34Z",
+  "created_by": "Mark Atwood",
+  "description": "Sub-epic covering the SSE and WebSocket HTTP endpoints with auth, keepalive, and multi-stream subscription.",
+  "ephemeral": false,
+  "id": "smallhold-57e",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 7-B: SSE and WebSocket streaming endpoints",
+  "updated_at": "2026-04-23T00:31:34Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:34:47Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-7322",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:34:50Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-gl2b",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:31:42Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-oo2",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

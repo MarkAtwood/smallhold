@@ -1,0 +1,72 @@
+{
+  "acceptance_criteria": "Phanpy receives live update events when a new post arrives on the home timeline; delete event fires when a post is deleted; notification event fires on mention; both SSE and WebSocket endpoints work; client can subscribe to multiple channels",
+  "compaction_level": 0,
+  "created_at": "2026-04-22T23:55:47Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement real-time streaming via both SSE (Server-Sent Events) and WebSocket. Clients differ on which they use — both are required. The infrastructure is a tokio broadcast channel keyed by (account_id, channel). Five channel types: user, public, public:local, hashtag, hashtag:local, direct. Four event types: update, notification, delete, status.update.",
+  "design": "tokio::sync::broadcast per channel type. SSE: text/event-stream, Connection: keep-alive. WebSocket: axum-ws. Event format matches Mastodon wire protocol exactly (type field + payload field). Channel keys: user:{account_id}, public, public:local, hashtag:{tag}, hashtag:local:{tag}, direct:{account_id}. Broadcast on post write, delete, notification creation.",
+  "ephemeral": false,
+  "id": "smallhold-oo2",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 7: Streaming",
+  "updated_at": "2026-04-22T23:55:47Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:31:43Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-3vt",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:31:42Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-57e",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:04:50Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-7ch",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:05:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-7r9",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:31:41Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-hen",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:05:03Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-jaz",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:05:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-xe2",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

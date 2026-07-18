@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "docs/compat.md Akkoma row shows all applicable checkmarks; Pleroma Content-Type with charset is accepted; HTTP signatures from Pleroma verify correctly; emoji in posts don't cause parse errors",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:14:39Z",
+  "created_by": "Mark Atwood",
+  "description": "Test and fix compatibility with Akkoma/Pleroma. Known quirks: Content-Type includes charset parameter (already handled in inbox), may use older HTTP signature format, emoji handling differences. Test full compat matrix rows.",
+  "design": "Test against a live Akkoma instance. Known Akkoma quirks from spec: Content-Type: application/activity+json; charset=utf-8. Also check for hs2019 signature algorithm (should not accept per spec). Document findings.",
+  "ephemeral": false,
+  "id": "smallhold-amf",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Akkoma / Pleroma compatibility testing and bug fixes",
+  "updated_at": "2026-04-23T00:14:39Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:14:44Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

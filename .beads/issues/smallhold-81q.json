@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-81q",
+  "title": "Inbound Block + Undo Block activities",
+  "description": "Handle inbound Block activities from remote actors targeting local personas. Remove any follow relationship (the blocker unfollows the local actor and the local actor's follow of the blocker). Do not create error notifications — just silently clean up. Handle Undo{Block} by doing nothing (does not restore follows).",
+  "design": "Block.object is the local actor URI. Find and remove rows in followers (where remote_account_id matches) and follows (where followee_remote_id matches). No notification. Undo Block: accept with 200, do nothing.",
+  "acceptance_criteria": "Remote actor blocks local persona; any follow relationships are removed; no error is returned; Undo Block is accepted and ignored gracefully",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:11Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.024731729Z",
+  "started_at": "2026-07-18T05:14:41.898495784Z",
+  "closed_at": "2026-07-18T05:29:28.024731729Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:12Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

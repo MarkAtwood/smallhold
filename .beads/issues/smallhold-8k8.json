@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-8k8",
+  "title": "DB repository pattern: typed queries, no raw SQL in handlers",
+  "description": "Establish the repository pattern for all DB access. No handler should contain raw SQL strings — all queries live in db/ module as functions that take typed parameters and return typed structs. Use sqlx::query_as!() and sqlx::query!() with compile-time checking. Create repositories for: accounts, posts, remote_accounts, follows, notifications (initial set).\n\nAgent workflow: Spawn a subagent to audit all query patterns and ensure query_as!() compile-time checking is in use (not query() which skips type checking).\n\nTest discipline:\n- Every repository function has at least one test using a real in-memory SQLite database (not mocked)\n- Tests insert known rows, call repository function, verify returned struct fields exactly\n- Test error cases: calling get_account(999) when ID doesn't exist returns Err(NotFound), not panic\n\nDefensive programming:\n- All IDs in repository functions are typed (Id newtype), not raw i64 — prevents accidental swap of account_id for post_id\n- Pagination parameters (limit, before_id) are validated: limit in [1, 40], before_id is non-negative",
+  "acceptance_criteria": "cargo build with SQLX_OFFLINE=false succeeds (queries are checked at compile time); no raw SQL strings in non-db modules; all repository functions have integration tests with real SQLite",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:02Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.493727226Z",
+  "started_at": "2026-07-18T05:01:04.344528407Z",
+  "closed_at": "2026-07-18T05:06:16.493727226Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-cq9",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

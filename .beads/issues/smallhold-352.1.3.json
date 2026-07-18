@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:50:00Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nA `smallhold compat-test` CLI subcommand (added to the existing `clap` CLI) that connects to a running smallhold instance and a target remote (e.g., mastodon.social), performs a scripted round-trip sequence, and prints a pass/fail table. Exits nonzero if any row fails. Flags: `--target=<host>`, `--persona=<local-persona>`. Sequence: WebFinger self-lookup, follow/unfollow round-trip, post+delete cycle, check that a remote timeline entry appears.\n\n## Why\nAutomated probing of a live instance catches regressions that unit and fixture tests cannot: real HTTP signature verification, real federation delivery, real OAuth flows. This is the release gate tool — the compat matrix in `docs/compat.md` is filled by running this command.\n\n## Agent team pattern\n- Spawn a Research subagent to: review the PRFAQ federation table to enumerate the pass/fail criteria for each row; check mastodon.social's public API for how to verify that a post appeared on a remote timeline (e.g., GET /api/v1/accounts/:id/statuses); document the exact curl sequence for a follow/unfollow round-trip including Accept activity polling.\n- Spawn an Implementation subagent to: add `compat_test.rs` as a new CLI subcommand under `src/cli/`; implement each probe as an async function returning `Result<(), String>` (Ok = pass, Err = failure message); collect results and render as an ASCII table with PASS/FAIL columns; exit with code 1 if any failure.\n- Spawn a Test subagent to: write a test that runs the compat-test subcommand against a locally spawned test server (using the integration harness from 9-A-1) with `--target=localhost:<port>`; assert the command exits 0 for a correctly configured server and exits 1 when the server is intentionally broken (e.g., WebFinger disabled).\n\n## Test discipline\n- Independent oracle: pass criteria defined from the PRFAQ federation table and mastodon.social's documented API behavior; exit code is the oracle for CI — 0 = all pass, 1 = any failure.\n- Test approach: integration test using local test harness; simulate success and failure scenarios by toggling intentional server misconfigurations.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- `compat-test` must never write to the production database; it only reads (or uses its own ephemeral OAuth token created for the test run).\n- All HTTP calls in compat-test must have explicit timeouts (no hanging).\n- Probe failures must print the HTTP status and response body for debugging, not just \"FAIL\".\n- The command must be safe to run against a production instance (non-destructive: any posts created during the test must be deleted by the test).\n",
+  "ephemeral": false,
+  "id": "smallhold-352.1.3",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "smallhold compat-test CLI command",
+  "updated_at": "2026-04-23T00:50:00Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:49:59Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352.1",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

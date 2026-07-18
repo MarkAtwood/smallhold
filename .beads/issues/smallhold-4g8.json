@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-4g8",
+  "title": "Inbound Create Note (post, reply, mention, DM)",
+  "description": "Handle inbound Create{Note} activities. Parse the Note into a remote_posts row. If the Note mentions a local actor, create a notification row. If it is a reply to a local post, link via in_reply_to_id and create a mention notification. If visibility is direct and addressed to a local actor, create a direct notification. Handle unknown object types (Question, Page) gracefully without 500.",
+  "design": "visibility mapping: to contains AS2 Public → public. to contains followers URL → unlisted or private. only addressed to specific actors → direct. Parse mentions from tag[] array where type=Mention. Parse hashtags from tag[] where type=Hashtag. Store in remote_posts. Resolve Announce object if URI (may need fetch).",
+  "acceptance_criteria": "Remote post appears in correct timeline and cache; mention of local actor creates notification; reply to local post links correctly; direct message (visibility=direct addressed to local actor) creates notification; Lemmy Page type is ignored without 500; Create for post already in remote_posts is idempotent",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:18Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.982011669Z",
+  "started_at": "2026-07-18T05:14:41.816102455Z",
+  "closed_at": "2026-07-18T05:29:27.982011669Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:20Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

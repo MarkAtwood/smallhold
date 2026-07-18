@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "GET returns partial attachment while processing; GET returns full attachment with blurhash after processing; PUT updates description; PUT on media attached to a post is allowed (changes alt text); PUT on another account's media returns 403",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:03:59Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement the media polling endpoint (GET) that clients use to check upload status, and the update endpoint (PUT) to update the description. GET returns the full MediaAttachment object once processing is complete, or a partial object with null fields while still processing. PUT allows updating the description (alt text) up until the media is attached to a post.",
+  "design": "MediaAttachment fields: id (string), type (image/gifv/video/unknown), url (full URL), preview_url (thumbnail URL), remote_url (null for local), text_url (deprecated, null), meta (original and small dimensions), description, blurhash. type=image for JPEG/PNG/WebP. type=gifv for GIF.",
+  "ephemeral": false,
+  "id": "smallhold-p3i",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/media/:id and PUT /api/v1/media/:id",
+  "updated_at": "2026-04-23T00:03:59Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:04:04Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-leu",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

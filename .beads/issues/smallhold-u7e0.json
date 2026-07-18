@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:53:24Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nImplement the hashtag timeline endpoint. Index hashtags from post content at post-creation time into a post_tags table. GET /api/v1/timelines/tag/:hashtag returns paginated public posts containing that hashtag, from both local posts and cached remote posts. Support since_id, max_id, min_id, and limit pagination using snowflake ordering. Support local=true param to filter to only local posts.\n\n## Why\nHashtag timelines are a primary discovery feature. Ivory and Elk both render hashtag pages. Without this, clicking any hashtag shows an empty feed. Part of sub-epic 8-C.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/timelines/tag/rust to capture exact Status array response shape and Link header pagination format; document whether mastodon.social uses /api/v1/trends/tags or /api/v1/timelines/tag for the hashtag page; check what local=true param does in mastodon source.\n- Spawn an Implementation subagent to: create post_tags migration (post_id INTEGER, tag TEXT, UNIQUE(post_id, tag)); create remote_post_tags migration (remote_post_id INTEGER, tag TEXT); add hashtag extraction at post creation time (parse #word patterns from content, lowercase, insert into post_tags); add same extraction for inbound Create Note in inbox handler; implement GET /api/v1/timelines/tag/:hashtag handler: UNION query over posts JOIN post_tags and remote_posts JOIN remote_post_tags WHERE tag = lower(:hashtag) AND visibility = public; apply since_id/max_id/min_id/limit pagination; set Link header with rel=next/prev; respect local=true by excluding remote_post_tags rows.\n- Spawn a Test subagent to: write integration tests with in-memory SQLite; create local post with #Rust hashtag; assert it appears in GET /api/v1/timelines/tag/rust (case-insensitive match); assert pagination Link header present; assert local=true excludes remote posts; assert post without #rust does not appear; assert response shape matches mastodon.social fixture.\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/timelines/tag/rust live fixture for Status array shape and Link header format; hashtag regex: #[[:word:]]+ per Unicode standard (not the extraction code under test).\n- Test approach: integration test with in-memory SQLite; create post via the post creation path (exercises hashtag extraction); query timeline; verify response; pagination test: create 5 posts with same hashtag; query with limit=2; verify Link header next URL; fetch next page; verify non-overlapping results.\n\n## Defensive programming checklist\n- Lowercase all hashtags before storing and querying (case-insensitive matching)\n- Hashtag extraction regex must be Unicode-aware (#cafe should match, #123 should not)\n- Hashtag param: strip leading # if present (clients may include it)\n- Pagination: use snowflake IDs not OFFSET (OFFSET breaks with new inserts)\n- No .unwrap() in handler path\n- Do not 500 on a hashtag with zero posts — return empty array with 200",
+  "ephemeral": false,
+  "id": "smallhold-u7e0",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "GET /api/v1/timelines/tag/:hashtag — hashtag timeline with pagination",
+  "updated_at": "2026-04-23T00:53:24Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:53:27Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-wn62",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

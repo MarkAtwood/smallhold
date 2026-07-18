@@ -1,0 +1,28 @@
+{
+  "closed_at": "2026-04-23T01:00:06Z",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:30:04Z",
+  "created_by": "Mark Atwood",
+  "ephemeral": false,
+  "id": "smallhold-dq7",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "closed",
+  "title": "Phase 4: Posting and Delivery",
+  "updated_at": "2026-04-23T01:00:06Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T18:00:05Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-4xr",
+      "metadata": "{}",
+      "type": "supersedes"
+    }
+  ],
+  "timeout": 0
+}

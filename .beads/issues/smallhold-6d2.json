@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-6d2",
+  "title": "Inbound Follow activity + auto-Accept",
+  "description": "Handle inbound Follow activities from remote actors targeting local personas. If the target account has is_locked=false, auto-accept: create a followers row and send an Accept{Follow} activity back. If is_locked=true, create a follow_requests row instead. The Accept activity must be delivered to the requester's inbox.",
+  "design": "Mastodon sends Follow where object is sometimes a full object, sometimes a URI string — handle both shapes. This is the single most common bug in AP implementations. Accept activity: {type:Accept, actor:{local_actor_uri}, object:{original_follow_activity}}. Enqueue Accept to delivery_queue targeting requester's inbox.",
+  "acceptance_criteria": "Remote Mastodon user follows local persona and receives Accept notification within 60s; locked persona creates follow_request row instead; Follow with object as URI string is handled (Mastodon quirk); duplicate Follow is idempotent",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:55Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.962802829Z",
+  "started_at": "2026-07-18T05:14:41.778162622Z",
+  "closed_at": "2026-07-18T05:29:27.962802829Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:57Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

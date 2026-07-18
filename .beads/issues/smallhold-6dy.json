@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-6dy",
+  "title": "Resolve acct:user@domain handle via WebFinger to actor URI",
+  "description": "Given an acct handle like gargron@mastodon.social, perform: (1) WebFinger lookup at https://mastodon.social/.well-known/webfinger?resource=acct:gargron@mastodon.social, (2) extract self link with type application/activity+json, (3) return the actor URI. Handle servers that don't have host-meta and those that do.\n\nAgent workflow: Spawn a research subagent to test handle resolution for several fediverse servers (mastodon.social, fosstodon.org, hachyderm.io) and document any variation in WebFinger response structure.\n\nTest discipline:\n- Test with hardcoded fixture WebFinger responses (NOT live network calls in unit tests)\n- Test: response with multiple links returns the correct self+activity+json link\n- Test: no self link in response returns clear error\n- Test: WebFinger returns 404 returns NotFound error\n\nDefensive programming:\n- Validate the resolved URI before proceeding: must be https://, must be on expected domain\n- Prevent SSRF: reject acct handles pointing to localhost, 10.x, 192.168.x, 172.16-31.x",
+  "acceptance_criteria": "Resolves real acct handles using fixture responses; selects correct link from multi-link JRD; rejects localhost/private IP actor URIs",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:34Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.260615402Z",
+  "started_at": "2026-07-18T05:06:25.641561413Z",
+  "closed_at": "2026-07-18T05:14:23.260615402Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-e8g",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

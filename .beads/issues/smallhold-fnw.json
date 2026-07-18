@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fnw",
+  "title": "Inbound Announce (boost) + Undo Announce",
+  "description": "Handle inbound Announce activities (boosts) of local posts and remote posts. If the Announce.object is a URI to an unfetched post, fetch and cache it first. Create a reblogs_count increment and a reblog notification for local post authors. Handle Undo{Announce} symmetrically.",
+  "design": "Announce.object may be a URI — fetch synchronously before proceeding. Cache fetched post in remote_posts. Track boosts in a separate boosts table or via remote_posts with a boost_of reference. Undo matches by the boosting actor URI and the boosted post URI.",
+  "acceptance_criteria": "Remote actor boosts local post; post author gets reblog notification; reblogs_count increments; Announce of remote post fetches and caches the post; Undo Announce removes the boost; Announce.object as URI (not object) is handled correctly",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:01Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.035395402Z",
+  "closed_at": "2026-07-18T05:30:00.035395402Z",
+  "close_reason": "Done in inbox.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

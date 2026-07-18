@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-i8u",
+  "title": "POST /inbox: shared inbox with actor routing via to/cc fields",
+  "description": "Implement the shared inbox at /inbox and per-actor inbox at /users/:username/inbox. Both endpoints receive POST requests with ActivityPub activities. The shared inbox must parse the activity's to and cc fields to determine which local actors are targeted and route accordingly. Activities targeted at no local actors are silently dropped.\n\n**Agent workflow**: Spawn a research subagent to collect 10 sample real ActivityPub activities (Follow, Create, Announce, etc.) from mastodon.social and document their to/cc field patterns. Spawn a parallel subagent to research how activitypub-federation crate structures inbox dispatch.\n\n**Test discipline**:\n- Test with fixture activity targeting local actor in 'to': routes to correct actor\n- Test with fixture targeting nobody local: dropped without error\n- Test with fixture targeting multiple local actors (shared inbox delivery): routes to all\n- Test malformed JSON body: returns 400\n- Test correct JSON but not an ActivityPub object: returns 400\nAll fixtures must be captured from real servers (mastodon.social, GoToSocial). Never use the implementation as its own oracle. Use real in-memory SQLite for DB tests — never mock the database.\n\n**Defensive programming**:\n- Body size limit: reject bodies over max_incoming_body_mb (from config) with 413\n- Content-Type must be application/activity+json or application/ld+json — reject others with 415\n- Process activities asynchronously (spawn tokio task) — return 202 quickly, don't block on processing\n- Deduplicate activities by activity ID — if we've processed this activity ID before, return 200 without reprocessing\n- No .unwrap() outside test code; all errors are Result\u003cT, AppError\u003e\n- Validate all inputs at system boundaries\n- Never log token values or private keys",
+  "acceptance_criteria": "Shared inbox routes to correct local actors; oversized bodies rejected with 413; activities processed async with 202; duplicate activity IDs are idempotent; Content-Type enforced",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:06Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.423170381Z",
+  "closed_at": "2026-07-18T05:14:23.423170381Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b0x",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:22Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

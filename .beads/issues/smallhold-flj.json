@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Path traversal attempts return 400; correct file served; Cache-Control: immutable; conditional GET returns 304; media_dir not in error messages",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:33:11Z",
+  "created_by": "Mark Atwood",
+  "description": "Serve media files from disk at GET /media/{path}. Validate path: no '..' components, no absolute paths, no null bytes, only alphanumeric/underscore/hyphen/dot/slash. Return file with Cache-Control: public, max-age=31536000, immutable. Correct Content-Type from media row MIME type. ETag header from file size + mtime. Support conditional GET (If-None-Match → 304).\n\nTEST DISCIPLINE:\n- Valid path → correct file served with Cache-Control: public, max-age=31536000, immutable\n- Path with '../' component → 400\n- Path with null byte → 400\n- Non-existent file → 404\n- Conditional GET with matching ETag → 304 with empty body\n\nDEFENSIVE PROGRAMMING:\n- Canonicalize the path AFTER joining with media_dir and verify it still starts with media_dir (defense-in-depth against path traversal even after validation)\n- Never reveal media_dir in error messages",
+  "ephemeral": false,
+  "id": "smallhold-flj",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Static media serving: validate path, set immutable cache headers",
+  "updated_at": "2026-04-23T00:33:11Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-aav",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

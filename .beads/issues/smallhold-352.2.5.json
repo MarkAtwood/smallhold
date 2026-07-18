@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:53:33Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nSmoke test federation with Lemmy and Pixelfed. Lemmy: test reply/boost/like only (Lemmy sends `Page` objects, not `Note` — must not 500); DM and follow are not expected to work (mark as `—`). Pixelfed: test follow/post/reply/boost/like/media/delete; note DM gaps. Document results in `docs/compat.md`. This is a smoke test, not a full compat pass — fix only 500 errors and inbox crashes.\n\n## Why\nLemmy and Pixelfed are widely deployed. Lemmy's `Page` objects arrive in the inbox and must be silently ignored (not 500'd). Pixelfed has enough overlap with Mastodon AP that basic federation should work without major changes.\n\n## Agent team pattern\n- Spawn a Research subagent to: capture live Lemmy and Pixelfed responses for actor doc and inbox POST shapes (Create Page from Lemmy, Create Note from Pixelfed); document all object types that differ from Mastodon Note; check Pixelfed's media attachment AP shape.\n- Spawn an Implementation subagent to: ensure `Page` object type in Create activities returns 202 (not 500); add Pixelfed-specific shape tolerance if needed; update the `docs/compat.md` Lemmy and Pixelfed rows.\n- Spawn a Test subagent to: add Lemmy fixture files in `tests/fixtures/lemmy/` including a Create Page activity; write a replay test asserting 202 for Create Page; add Pixelfed fixture files and replay tests.\n\n## Test discipline\n- Independent oracle: live Lemmy and Pixelfed instance responses captured via curl; the oracle for Lemmy Page is HTTP 202 (not 500).\n- Test approach: fixture replay asserting correct HTTP status for each fixture type.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- `Page`, `Article`, `Question`, and any unknown object type in Create activities must return 202, not 500.\n- Lemmy may send activities with `@context` arrays including Lemmy-specific extensions — must not error on unknown context values.\n- Pixelfed media attachment AP shape may differ from Mastodon's — use optional fields and defaults.\n- Never 500 on syntactically valid JSON activity with unknown object type.\n",
+  "ephemeral": false,
+  "id": "smallhold-352.2.5",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Lemmy and Pixelfed smoke test",
+  "updated_at": "2026-04-23T00:53:33Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:53:32Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352.2",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-miq",
+  "title": "Inbound Like + Undo Like activities",
+  "description": "Handle inbound Like activities targeting local posts (create a favourites row, create a favourite notification for the post author). Handle inbound Undo{Like} (remove the favourites row). Like count visible in GET /api/v1/statuses/:id via COUNT of favourites.",
+  "design": "Like.object is the local post URI. Verify the local post exists. Create favourites row with remote_account_id. Create notification of kind=favourite for the post's account_id. Undo matches by remote_account_id + post_id.",
+  "acceptance_criteria": "Remote actor likes local post; post author gets favourite notification; favourites_count increments in status response; Undo Like removes the row and decrements count",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:58Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.976880403Z",
+  "closed_at": "2026-07-18T05:29:59.976880403Z",
+  "close_reason": "Done in inbox.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:01:00Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "smallhold-70g",
+  "title": "Phase 4-D: Outbound delivery worker (queue, retry, circuit breaker)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:30:24Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:29.066904967Z",
+  "started_at": "2026-07-18T05:14:42.702701119Z",
+  "closed_at": "2026-07-18T05:29:29.066904967Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:59:17Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-iwry",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:35:41Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-k9i4",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:36:25Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-m2o7",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:36:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:17:48Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nImplement POST /api/v1/statuses/:id/pin (set pinned_at = now() for own post, limit 5 pins per persona, return updated Status) and DELETE /api/v1/statuses/:id/unpin (clear pinned_at, return updated Status).\n\n## Why\nWithout pin/unpin actions, users cannot manage their pinned posts through clients; the feature is read-only and useless.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social POST /api/v1/statuses/:id/pin and observe response shape, HTTP status for pinning another user's post (403), and response when pin limit exceeded; confirm limit is 5\n- Spawn an Implementation subagent to: implement pin handler (verify post.persona_id == authenticated persona, count existing pins, set pinned_at, return Status); implement unpin handler (verify ownership, clear pinned_at, return Status)\n- Spawn a Test subagent to: write tests for (a) successful pin returns Status with pinned=true, (b) pinning another persona's post returns 403, (c) pinning a 6th post returns 422, (d) unpin returns Status with pinned=false\n\n## Test discipline\n- Independent oracle: mastodon.social POST /api/v1/statuses/:id/pin — returns 200 Status object with pinned=true; pinning non-owned post returns 403; exceeding limit returns 422\n- Test approach: use authenticated test client; verify ownership check and limit enforcement via HTTP status codes matching Mastodon reference\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Verify post.persona_id == authenticated persona before any write — return 403 otherwise\n- Count existing pins in same transaction as insert to avoid TOCTOU race\n- Parameterized queries only — no string interpolation of IDs into SQL\n- Return 422 when pin limit (5) is exceeded, matching Mastodon behavior",
+  "ephemeral": false,
+  "id": "smallhold-d5bb",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "POST /statuses/:id/pin and DELETE /statuses/:id/unpin endpoints",
+  "updated_at": "2026-04-23T04:17:48Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:17:51Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-ijui",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

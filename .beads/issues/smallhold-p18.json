@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-p18",
+  "title": "OAuth2 authorize page + token exchange + revoke",
+  "description": "Implement the full OAuth2 authorization code flow and password grant. GET /oauth/authorize: render a minimal HTML form where admin enters password and selects which persona to authenticate as. POST /oauth/authorize: validate password, create authorization code, redirect. POST /oauth/token: exchange code for bearer token, or handle password grant for CLI-minted tokens. POST /oauth/revoke: invalidate token.",
+  "design": "Auth code: 32 random bytes base64url, stored as SHA-256 hash in oauth_authz_codes, expires 10 minutes. Bearer token: 64 random bytes base64url, stored as SHA-256 hash. Auth page: minimal HTML, no JavaScript required, admin password + persona dropdown. Rate limit: 3 failed logins/minute per IP, in-memory.",
+  "acceptance_criteria": "Ivory and Elk can complete the OAuth2 login flow; authorization code expires after use; token is stored as SHA-256 hash; wrong password returns correct OAuth2 error response; revoke invalidates token immediately",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:52Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.152930417Z",
+  "closed_at": "2026-07-18T05:30:00.152930417Z",
+  "close_reason": "Done in api.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:54Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

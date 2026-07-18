@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:53:03Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nTest follow/post/reply/boost/like against a Misskey or Sharkey instance. Misskey uses different AP Note shapes: `_misskey_content` field, `_misskey_quote`, emoji reactions (`EmojiReact` activity type). DM is not expected to work (mark as `—` in compat matrix). Fix shape mismatches that cause 500 errors. Document results in `docs/compat.md`.\n\n## Why\nMisskey/Sharkey has significant AP shape deviations that can cause 500 errors in our inbox if we assume strict Mastodon shapes. The goal is graceful handling: accept what we can, silently ignore what we can't, never 500.\n\n## Agent team pattern\n- Spawn a Research subagent to: read Misskey AP source (https://github.com/misskey-dev/misskey) for Note and EmojiReact shapes; capture live Misskey instance responses for actor doc, Follow, Create Note, Announce, Like, EmojiReact activities; document all deviations from Mastodon shapes.\n- Spawn an Implementation subagent to: add handling for `EmojiReact` activity type (accept and ignore — return 202, do not 500); handle `_misskey_content` field in Note objects gracefully; ensure unknown activity types never cause 500.\n- Spawn a Test subagent to: add Misskey fixture files in `tests/fixtures/misskey/`; write replay tests asserting 202 for EmojiReact and correct DB insertion for Follow/Create Note from Misskey.\n\n## Test discipline\n- Independent oracle: Misskey AP source code and live instance responses captured via curl; the oracle for \"correct\" behavior on unknown types is HTTP 202 (not 500).\n- Test approach: fixture replay against inbox handler; assert HTTP status code for each fixture (202 for unknown types, correct DB state for known types).\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- `EmojiReact` and any unknown activity type must return 202, not 500.\n- Misskey Note `_misskey_content` field must not cause deserialization failure — use `#[serde(flatten)]` or `serde_json::Value` for unknown fields.\n- `sensitive` field may be absent on Misskey Notes — treat as `false`.\n- Never 500 on any valid JSON that doesn't match our expected AP shapes.\n",
+  "ephemeral": false,
+  "id": "smallhold-352.2.3",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Misskey/Sharkey compatibility",
+  "updated_at": "2026-04-23T00:53:03Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:53:03Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352.2",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

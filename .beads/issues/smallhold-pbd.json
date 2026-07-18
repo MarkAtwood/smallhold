@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-pbd",
+  "title": "DELETE /api/v1/statuses/:id",
+  "description": "Implement post deletion. Verify the authed account owns the post. Delete from posts table. Enqueue a Delete activity to delivery_queue targeting all followers' inboxes. Return the deleted status object (clients expect this). Trigger streaming delete event.",
+  "design": "Delete activity: {type:Delete, actor:actor_uri, object:{type:Tombstone, id:ap_id}}. Determine inbox list: all remote follower shared inboxes + all inboxes for remote followers without shared inbox. Dedup by shared inbox URL. Enqueue to delivery_queue.",
+  "acceptance_criteria": "Delete from Ivory removes the post; followers on mastodon.social see a delete notification; streaming clients receive 'delete' event with the status ID; deleting another account's post returns 403; deleting non-existent post returns 404",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:03:20Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.455079527Z",
+  "closed_at": "2026-07-18T05:30:00.455079527Z",
+  "close_reason": "Done in posting.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4xr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:24Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

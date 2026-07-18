@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:49:43Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nImplement `smallhold persona rotate-key <username>` CLI subcommand. Generate a new RSA-2048 keypair via OsRng. Update the accounts row atomically. Send an Update(Person) activity to all followers announcing the new public key. Verify the new key passes `openssl rsa -check`.\n\n## Why\nKey rotation is a security hygiene requirement. Without it, a compromised private key cannot be safely replaced without losing federation. Part of sub-epic 8-A polish.\n\n## Agent team pattern\n- Spawn a Research subagent to: read the ActivityPub Update(Person) activity shape from the spec and from mastodon.social live Update actor fixture (mastodon.social broadcasts these when profile changes); check activitypub-federation crate docs for how it handles Update Actor activities; document the exact JSON shape required for the publicKey embedded in the actor document.\n- Spawn an Implementation subagent to: add `persona rotate-key <username>` to the CLI (clap derive); generate RSA-2048 keypair with `rsa` crate + OsRng; serialize private key as PKCS#8 PEM and public key as SPKI PEM; update accounts row in a single transaction (set new private_key_pem, public_key_pem); load all follower inboxes from followers table; enqueue one Update(Person) activity per unique shared inbox (or per follower inbox if no shared inbox); deliver via the existing outbound delivery worker.\n- Spawn a Test subagent to: write a test that calls the rotate-key path, then verifies the new private key parses correctly with the `rsa` crate; verifies the Update(Person) activity JSON has the correct @context, type=Update, object.type=Person, object.publicKey.publicKeyPem field; verifies the activity is delivered to the test follower inbox URL (use a mock HTTP server like `wiremock`).\n\n## Test discipline\n- Independent oracle: ActivityPub spec Section 7.3 (Update activity); mastodon.social live Update(Person) fixture captured via curl; `openssl rsa -check -in new_key.pem` exit code 0 is the key validity oracle.\n- Test approach: integration test; generate a keypair, verify with openssl subprocess call in test; verify Update activity JSON shape against mastodon.social fixture (not against the serialization code itself); use `wiremock` for the inbox delivery assertion.\n\n## Defensive programming checklist\n- Generate key with OsRng (not a seeded RNG)\n- Perform DB update and delivery enqueue in same transaction — do not update DB without enqueuing\n- Do not log the private key at any log level\n- Verify the new keypair round-trips before committing to DB (sign + verify a test message)\n- No `.unwrap()` anywhere in the CLI path\n- If username does not exist, exit with non-zero code and clear error message",
+  "ephemeral": false,
+  "id": "smallhold-hswq",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "persona rotate-key CLI command — new RSA keypair + Update(Person) delivery",
+  "updated_at": "2026-04-23T00:49:43Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:49:46Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-bb7s",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

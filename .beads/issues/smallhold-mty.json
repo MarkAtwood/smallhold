@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-mty",
+  "title": "Bearer token authentication middleware",
+  "description": "Implement Tower middleware (or axum extractor) that validates Bearer tokens on protected endpoints. Extracts Authorization header, hashes the token with SHA-256, looks up in oauth_tokens, checks revoked_at is null, returns account_id and scopes. Unauthorized requests to protected endpoints return 401 with {\"error\": \"The access token is invalid\"}.",
+  "design": "Axum extractor AuthUser that returns (account_id, scopes). Scope checking per endpoint (read scope for GETs, write scope for POSTs). Use axum::extract::TypedHeader for Authorization header. Update last_used_at with a non-blocking fire-and-forget update.",
+  "acceptance_criteria": "Protected endpoint with valid token returns data; invalid token returns 401 JSON; expired/revoked token returns 401; missing token returns 401; token last_used_at is updated on use",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:01Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.209457796Z",
+  "closed_at": "2026-07-18T05:30:00.209457796Z",
+  "close_reason": "Done in api.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:03Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

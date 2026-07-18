@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-vi4",
+  "title": "NodeInfo 2.0: accurate usage stats, correct schema",
+  "description": "Implement /.well-known/nodeinfo (link document) and /nodeinfo/2.0 (data). users.total is hardcoded to 1 regardless of persona count (intentional — don't leak persona count to aggregators). localPosts from COUNT(*) of posts table. software.version from CARGO_PKG_VERSION.\n\nTest discipline:\n- Validate response against NodeInfo 2.0 JSON schema (include schema in test as reference)\n- Test that users.total is 1 even when 5 personas exist\n- Test that localPosts increments after creating a post\n\nDefensive programming:\n- openRegistrations: always false — never read from config, hardcoded\n- Cache localPosts count (COUNT(*) can be expensive at scale — use approximate or cached value)",
+  "acceptance_criteria": "Response validates against NodeInfo 2.0 schema; users.total always 1; localPosts accurate; version matches Cargo.toml",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:19Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.158690232Z",
+  "started_at": "2026-07-18T05:06:25.393371123Z",
+  "closed_at": "2026-07-18T05:14:23.158690232Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4uc",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:33Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

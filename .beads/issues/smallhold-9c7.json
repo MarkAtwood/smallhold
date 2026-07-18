@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-9c7",
+  "title": "Initialize Cargo workspace with all pinned dependencies",
+  "description": "Set up the Cargo workspace. Single binary crate named 'smallhold'. Add all dependencies from the spec with pinned major versions: axum, sqlx (sqlite feature, compile-time checked queries), activitypub-federation (LemmyNet), reqwest (rustls-tls feature, NOT openssl), serde_json, ammonia, pulldown-cmark, image, fast_image_resize, blurhash, argon2, tracing, tracing-subscriber, clap v4 (derive), tokio (full features), rsa or similar for keypair generation. Also: proptest for property-based tests, once_cell, uuid, rand, hex, base64.\n\nAgent workflow: Spawn a subagent to research current crate versions and compatibility before writing Cargo.toml. Spawn a second subagent to verify each dep has no known RUSTSEC advisories.\n\nTest discipline: cargo audit must pass clean. cargo hack check --feature-powerset must compile.\n\nDefensive programming: Pin major versions. Use deny(unsafe_code) at crate level (exceptions: only in a dedicated ffi module if needed). Clippy config: deny warnings.",
+  "design": "Single crate with module tree: db/, api/, federation/, cli/, media/, streaming/, core/. Edition 2021. rust-version = '1.75' minimum.",
+  "acceptance_criteria": "cargo build --release succeeds; cargo clippy --all-features -- -D warnings passes; cargo audit reports no vulnerabilities; all spec-required crates present",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:25:45Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.277435296Z",
+  "started_at": "2026-07-18T05:01:04.07553442Z",
+  "closed_at": "2026-07-18T05:06:16.277435296Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2o6",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:56Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

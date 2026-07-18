@@ -1,0 +1,101 @@
+{
+  "id": "smallhold-b89",
+  "title": "Phase 1: Actor Publication",
+  "description": "Publish this server's identity to the fediverse: actor documents, WebFinger, NodeInfo, host-meta, and the ability to resolve and cache remote actors. This is the derisk phase — get a live Mastodon instance to fetch your WebFinger and display your profile before writing a single HTTP handler for the client API.",
+  "design": "Content-type negotiation on /users/:username: AP doc for activity+json or ld+json, HTML redirect for browsers, AP doc also for application/json (Pleroma compat). activitypub-federation crate for HTTP signature handling on outbound GETs.",
+  "acceptance_criteria": "curl of actor URI returns valid AP document; mastodon.social can fetch WebFinger and display the profile; a remote actor can be resolved and stored in remote_accounts; signed GETs work against GoToSocial (which requires authorized fetch)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:54:51Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.387147704Z",
+  "started_at": "2026-07-18T05:06:25.143329767Z",
+  "closed_at": "2026-07-18T05:14:23.387147704Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-23e",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:41Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-23j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:27Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-41j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4uc",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:25Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5l8",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:26Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-bzn",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:57Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-e8g",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:28Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-pwx",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:26Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-shz",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:25Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-yzg",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

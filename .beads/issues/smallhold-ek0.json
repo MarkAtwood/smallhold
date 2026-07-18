@@ -1,0 +1,41 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:31:48Z",
+  "created_by": "Mark Atwood",
+  "ephemeral": false,
+  "id": "smallhold-ek0",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 5-C: Notifications, followers/following lists",
+  "updated_at": "2026-04-23T00:31:48Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:44:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-ei3b",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:43:57Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-jtud",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:59:28Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-w59",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

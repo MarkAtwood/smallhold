@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-u4m",
+  "title": "CLI: clap v4 derive, subcommand routing, global options",
+  "description": "Set up the full CLI structure with clap v4 derive API. Top-level subcommands: init, serve, admin (sub-sub: set-password, enable-totp), persona (sub-sub: create, list, update, delete, rotate-key), token (sub-sub: mint, list, revoke), follow, unfollow, domain-block, domain-unblock, domain-block-list, queue (sub-sub: inspect, retry-dead), compat-test. Global options: --config path.\n\nAgent workflow: Spawn a subagent to enumerate all CLI commands from the spec and verify none are missing.\n\nTest discipline:\n- Test --help output for each subcommand (snapshot test)\n- Test that required args (--display-name for persona create) produce clear errors when missing\n- Test that --config with a non-existent file produces a clear error before attempting any DB operation\n\nDefensive programming:\n- All CLI args that take file paths: validate existence/permissions before proceeding\n- All CLI args that take usernames: validate against [a-z0-9_-]+ regex before DB query (prevent SQL injection even with parameterized queries as defense-in-depth)",
+  "acceptance_criteria": "smallhold --help lists all subcommands; each subcommand --help shows its args; missing required arg produces actionable error message; --config with bad path fails before opening DB",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:18Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.401276881Z",
+  "started_at": "2026-07-18T05:01:04.391249027Z",
+  "closed_at": "2026-07-18T05:06:16.401276881Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2eb",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:45Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

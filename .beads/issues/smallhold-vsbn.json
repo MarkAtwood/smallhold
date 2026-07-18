@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Valid media attached and in response; another account's media rejected with 422; still-processing media rejected; media_attachments is always []",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:33:20Z",
+  "created_by": "Mark Atwood",
+  "description": "On POST /api/v1/statuses with media_ids: validate each media row (1) belongs to authed account, (2) has post_id=NULL (not already attached), (3) processing is complete (width IS NOT NULL). On post creation, UPDATE media SET post_id=? for each media_id. In Status serialization, include full MediaAttachment objects in media_attachments array.\n\nTEST DISCIPLINE:\n- Post with valid image media_ids → media_attachments in response contains full MediaAttachment\n- Post with media belonging to other account → 422\n- Post with media still processing (width=NULL) → 422 'media is still processing'\n- Post with media already attached to another post → 422\n- Status with no media: media_attachments is [] not null\n\nDEFENSIVE PROGRAMMING:\n- Validate all media_ids in a single query before creating the post — atomic validation\n- Maximum 4 media attachments per post (configurable, per Mastodon default)",
+  "ephemeral": false,
+  "id": "smallhold-vsbn",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Attach media to post: validate ownership, serialize MediaAttachment in Status",
+  "updated_at": "2026-04-23T00:33:20Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:35Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-aav",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

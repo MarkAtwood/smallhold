@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-086",
+  "title": "'smallhold init': bootstrap instance with config and DB",
+  "description": "Implement the init command: generate 32 random bytes as hex for secret_key, write config.toml skeleton with all sections from spec, create data directory, initialize SQLite database, run migrations. Print next-steps instructions.\n\nAgent workflow: Spawn a subagent to test the init flow on a fresh temp directory end-to-end.\n\nTest discipline:\n- Test in a temp directory: run init, verify config.toml exists with all required sections\n- Verify secret_key in written config is exactly 64 hex characters\n- Verify database file is created and migrations ran (query sqlite_master)\n- Test init on existing config: must prompt or error clearly (not silently overwrite)\n- Test init with bad --data-dir (no write permission): must fail before writing any files\n\nDefensive programming:\n- Use rand::rngs::OsRng for secret_key generation (not rand::thread_rng())\n- Atomic write: write config to temp file, then rename — never leave a half-written config\n- Verify written config can be parsed back before reporting success",
+  "acceptance_criteria": "init in fresh dir creates valid config.toml and database; secret_key is 64 hex chars from OsRng; init on existing config prompts; partial failure leaves no corrupt files",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:26Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.417627909Z",
+  "started_at": "2026-07-18T05:01:04.437340281Z",
+  "closed_at": "2026-07-18T05:06:16.417627909Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2eb",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:53Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

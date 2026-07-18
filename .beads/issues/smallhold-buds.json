@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:20:40Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nHook into the post create, edit, and delete paths to keep the tantivy index in sync with the posts table.\n\n## Why\nSearch results are only as good as the index; stale or missing documents produce wrong results and erode user trust.\n\n## Agent team pattern\n- Spawn a Research subagent to: read tantivy docs for deleting documents by term (Term::from_field_u64 on the id field, IndexWriter::delete_term); understand how IndexWriter::add_document and delete_term are ordered relative to commit; read tantivy docs for confirming that a commit flushes both adds and deletes atomically.\n- Spawn an Implementation subagent to: in the new-post handler, after successful DB INSERT, call a `search::index_post(&app_state.index_writer, &post)` function that acquires the Mutex, calls add_document with all schema fields populated, releases lock, then spawns a blocking task to call commit; in the edit-post handler, after successful DB UPDATE, acquire lock, call delete_term for the old id, call add_document for the new content, release lock, spawn blocking commit; in the delete-post handler, after DB DELETE, acquire lock, call delete_term for the post id, release lock, spawn blocking commit; add a `search::delete_all_for_persona(persona_id)` function called when a persona is deleted, using a range query on the persona_id FAST field.\n- Spawn a Test subagent to: write integration tests: (1) create a post containing unique word W, search index for W, assert post id appears; (2) edit post to remove W and add unique word X, search for W assert no result, search for X assert result; (3) delete post, search for X assert no result. Each step commits and opens a new reader to avoid stale cache.\n\n## Test discipline\n- Independent oracle: the test constructs expected post ids from the DB row returned by INSERT — the search result is verified against the DB-returned id, not re-derived from the search code itself.\n- Test approach: three sequential subtests as above; each subtest opens a fresh IndexReader via index.reader() after commit to ensure committed state is queried.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Index write failures must be logged at ERROR but must not fail the HTTP request — the DB write is the source of truth; index is a derived view\n- Never hold Mutex<IndexWriter> across an await point\n- Commit is spawned in spawn_blocking; errors from commit are logged, not propagated to the request handler\n- delete_all_for_persona must run inside a spawn_blocking call, not inline in an async handler\n- Visibility field must be set correctly on index — used by search to filter results",
+  "ephemeral": false,
+  "id": "smallhold-buds",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Index posts on create, edit, and delete",
+  "updated_at": "2026-04-23T04:20:40Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:21:20Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-i28n",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

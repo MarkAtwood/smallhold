@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-7tw",
+  "title": "Inbound Move: verify alsoKnownAs, migrate follows to new actor",
+  "description": "Handle Move{actor: old_actor_uri, object: new_actor_uri}. Verify the new actor's document has alsoKnownAs containing the old actor URI — reject if not. For each local account that follows the old actor: create a follow for the new actor, enqueue a Follow activity to the new actor's inbox, remove the old follow. Update old actor record with a moved_to marker.\n\n**Agent workflow**: Spawn a research subagent to find real Move activity examples and document the alsoKnownAs verification flow from mastodon.social.\n\n**Test discipline**:\n- Move with valid alsoKnownAs: follows migrated atomically\n- Move without alsoKnownAs: rejected with clear error\n- Move to actor on suspended domain: rejected\n- Move when no local accounts follow old actor: 200, no-op\nAll fixtures captured from real server interactions. Real in-memory SQLite for DB tests — never mock.\n\n**Defensive programming**:\n- Wrap the entire migration in a transaction — either all follows migrate or none\n- Do not re-migrate if already migrated (check for existing follows to new actor)\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e\n- Validate inputs at system boundaries",
+  "acceptance_criteria": "Valid Move with alsoKnownAs migrates all follows atomically; invalid Move without alsoKnownAs rejected; suspended domain Move rejected; migration is idempotent; no double-migration",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:30:08Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.940232886Z",
+  "started_at": "2026-07-18T05:14:41.699661887Z",
+  "closed_at": "2026-07-18T05:29:27.940232886Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p99",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:11Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

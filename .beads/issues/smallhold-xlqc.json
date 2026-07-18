@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:20:24Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nAdd the `tantivy` crate, define the post index schema, open/create the index on startup, and run a background reindex task when the index is empty.\n\n## Why\nThe index must exist and be warm before any search or write path can work; getting the schema right first avoids costly migrations later.\n\n## Agent team pattern\n- Spawn a Research subagent to: read tantivy docs and examples for schema creation (u64 FAST field, TEXT field with tokenizer, i64 FAST field, stored fields); understand IndexWriter lifecycle and how to safely share it across async tasks with Arc<Mutex<IndexWriter>>; read tantivy docs for opening an existing index vs creating a new one; understand how to run a background rebuild task using tokio::task::spawn_blocking.\n- Spawn an Implementation subagent to: add `tantivy` to Cargo.toml; add `[storage] search_index_path` config field (default: `<data_dir>/search.tantivy`); define schema with fields: id (u64, FAST|STORED), persona_id (u64, FAST|STORED), content (TEXT, indexed+stored), spoiler_text (TEXT, indexed+stored), visibility (text stored as keyword facet or TEXT), created_at (i64, FAST|STORED); on startup, open index if directory exists else create; wrap IndexWriter in Arc<Mutex<IndexWriter>> stored in AppState; if index is empty (reader.searcher().num_docs() == 0) and posts table is non-empty, spawn a tokio::task::spawn_blocking background task that iterates all posts in batches of 500 and indexes them.\n- Spawn a Test subagent to: write a test that creates the index in a tempdir, adds a known document, commits, opens a reader, searches for a term, and asserts the document id is returned — using tantivy's own test examples as the oracle for correct API usage, not the code under test.\n\n## Test discipline\n- Independent oracle: tantivy crate docs and included examples for correct schema/writer/reader/searcher API usage; the test does not call application code as its oracle — it calls tantivy directly to verify the schema round-trips correctly.\n- Test approach: open index in tempdir, index a synthetic document with known content, search for a word in that content, assert the stored id field in the result matches the document's id.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Index writes are async via spawn_blocking — never block the tokio runtime thread on IndexWriter operations\n- The Mutex<IndexWriter> must not be held across await points — lock, do sync work, drop lock, then await\n- Index directory must be on the same filesystem as the SQLite DB so that backup instructions cover both — document this in CLAUDE.md or a config comment\n- If the index directory is not writable on startup, log an error and disable search (do not panic)\n- Background reindex task must not starve request handling — run in spawn_blocking with batch commits",
+  "ephemeral": false,
+  "id": "smallhold-xlqc",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Add tantivy crate, define index schema, and handle startup reindex",
+  "updated_at": "2026-04-23T04:20:24Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:21:19Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-i28n",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

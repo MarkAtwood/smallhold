@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-8ay",
+  "title": "Inbound Create{Note}: parse Note, store in remote_posts, create notifications",
+  "description": "Handle Create{Note} from verified remote actor. Parse the Note object: extract content_html (sanitize with ammonia), spoiler_text, visibility (from to/cc fields), sensitive, language, in_reply_to, tags (Mention and Hashtag), attachments. Store in remote_posts. Create notification rows for mentioned local actors. Handle Create{Question} by treating as Note without poll.\n\n**Agent workflow**: Spawn a research subagent to collect Create{Note} fixtures from mastodon.social, Misskey, GoToSocial, Akkoma and document structural differences. Spawn a testing subagent to write parse tests for each fixture. Spawn a third subagent to implement notification creation.\n\n**Test discipline**:\n- Parse mastodon.social Create{Note} fixture → verify all fields extracted correctly\n- Parse Misskey Note (different structure) → verify graceful handling\n- Parse Create{Question} → stored as Note, poll fields ignored without error\n- Parse Note with Mention tags → verify mention notifications created for local actors\n- Parse Note with Hashtag tags → stored for hashtag timeline queries\n- Parse Note with in_reply_to referencing unknown post → stored with in_reply_to_uri set, no error\nAll fixtures captured from real servers. Never use implementation as its own oracle. Real in-memory SQLite for DB tests — never mock.\n\n**Defensive programming**:\n- ammonia sanitize content_html BEFORE storage — never store unsanitized remote HTML\n- Handle missing fields gracefully: if content is missing, use empty string\n- content_html length limit: truncate at 100KB maximum to prevent DB bloat\n- Reject activities from actors on suspended domains before any processing\n- No .unwrap() outside test code; all errors are Result\u003cT, AppError\u003e\n- Log at ERROR/WARN level — never include token values or private keys",
+  "acceptance_criteria": "mastodon.social Create Note parsed and stored; Misskey Note structure handled; mentions create notifications; HTML sanitized with ammonia before storage; suspended domain actors rejected; unknown in_reply_to stored without error",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:02Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.789623683Z",
+  "started_at": "2026-07-18T05:14:41.417907613Z",
+  "closed_at": "2026-07-18T05:29:27.789623683Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-v0z",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:12Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

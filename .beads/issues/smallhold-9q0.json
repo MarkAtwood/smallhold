@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Public timeline shows public posts in reverse chron order; local=true filters to local accounts only; only_media=true filters to posts with media attachments; pagination works",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:06:06Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement the public timeline. Two variants: local=true shows only posts from local accounts (visibility=public); local=false (default) shows all public posts including cached remote posts. Supports max_id, since_id, min_id, limit, only_media params.",
+  "design": "Local timeline: SELECT from posts WHERE visibility='public' ORDER BY id DESC. Federated: UNION posts and remote_posts WHERE visibility='public'. Exclude boosts from public timeline (they appear in home timeline via the boost wrapper).",
+  "ephemeral": false,
+  "id": "smallhold-9q0",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/timelines/public (local + federated)",
+  "updated_at": "2026-04-23T00:06:06Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:06:10Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-w59",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

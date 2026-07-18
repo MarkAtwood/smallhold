@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Output thumbnail dimensions exactly correct per aspect ratio math; HEIC converted to valid JPEG; corrupt images handled without panic; oversized pixel count rejected",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:32:13Z",
+  "created_by": "Mark Atwood",
+  "description": "In the spawned processing task: (1) If HEIC: convert to JPEG using image crate with heic feature. (2) Load image with image crate, extract dimensions (width, height). (3) Generate thumbnail at max 400x400 preserving aspect ratio using fast_image_resize (Lanczos3 filter). Store thumbnail as {id}_thumb.jpg at JPEG quality 85. (4) Update media row: file_path, mime_type, file_size, width, height. Processing state: media row initially has blurhash=NULL and width=NULL as 'still processing' sentinel.\n\nAGENT WORKFLOW: Spawn a research subagent to study fast_image_resize API and Lanczos3 resampling setup. Spawn a testing subagent to generate test images of known dimensions and verify output dimensions exactly.\n\nTEST DISCIPLINE:\n- 800x600 image → thumbnail is exactly 400x300 (preserves aspect, fits in 400x400)\n- 400x800 image → thumbnail is 200x400 (portrait orientation handled)\n- 400x400 image → thumbnail is exactly 400x400 (no upscaling needed)\n- 100x100 image → thumbnail is 100x100 (do NOT upscale small images)\n- Verify output dimensions using imagesize crate or image::open() — NOT our own resize code\n- HEIC input: verify output is valid JPEG (check magic bytes of output file)\n- Processing failure: media row updated with error indicator, GET /api/v1/media/:id returns 'failed' state\n\nDEFENSIVE PROGRAMMING:\n- Handle corrupt image files: wrap image::open() in a timeout + catch-unwind equivalent (async-aware)\n- Limit processing memory: reject images with pixel count > 50 megapixels before loading\n- Processing task must not crash the server on corrupt input — catch panics",
+  "ephemeral": false,
+  "id": "smallhold-btq",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Async media processing: thumbnail generation, HEIC conversion, dimension extraction",
+  "updated_at": "2026-04-23T00:32:13Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:33:25Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-l2h",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

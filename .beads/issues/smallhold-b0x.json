@@ -1,0 +1,43 @@
+{
+  "id": "smallhold-b0x",
+  "title": "Phase 2-A: Inbox routing and HTTP signature verification",
+  "description": "Implement the shared inbox endpoint and per-actor inbox endpoint, with HTTP signature verification on all inbound ActivityPub POST requests. This is the foundation all inbound federation depends on.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:25Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.051167085Z",
+  "started_at": "2026-07-18T05:14:41.080862864Z",
+  "closed_at": "2026-07-18T05:29:28.051167085Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5v2",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:23Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-i8u",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:22Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:36Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

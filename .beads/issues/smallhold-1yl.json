@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-1yl",
+  "title": "Inbound Block: clean up follow relationships, no error exposed",
+  "description": "Handle Block{object: local_actor_uri}: remove any follow relationships (remove from followers where remote_account blocks local, remove from follows where local follows remote). Return 200. Handle Undo{Block}: return 200 and do nothing (does not restore follows).\n\n**Agent workflow**: Spawn a research subagent to capture Block and Undo{Block} fixtures from mastodon.social.\n\n**Test discipline**:\n- Block: followers row removed\n- Block with no follow relationship: 200, no error\n- Undo Block: 200, no change to follows\nAll fixtures captured from real servers. Real in-memory SQLite for DB tests — never mock the database.\n\n**Defensive programming**:\n- Never expose 'you are blocked' information to the blocking actor\n- The block operation must be idempotent\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e\n- Validate inputs at system boundaries",
+  "acceptance_criteria": "Block removes follow relationships; no prior relationship returns 200; Undo Block accepted and silently ignored; operation is idempotent; no block status leaked to blocking actor",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:51Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.899377665Z",
+  "started_at": "2026-07-18T05:14:41.62249208Z",
+  "closed_at": "2026-07-18T05:29:27.899377665Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-h8c",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:52Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

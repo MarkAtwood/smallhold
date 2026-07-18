@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-8e8",
+  "title": "Tracing and logging setup",
+  "description": "Configure tracing + tracing-subscriber for structured logging. Log level controlled by RUST_LOG env var. INFO level: activity type + target + HTTP status. Full request/response bodies only at TRACE. Never log tokens, never log full activity bodies at INFO. Include request ID in log spans.",
+  "design": "tracing-subscriber with EnvFilter from RUST_LOG. Use #[tracing::instrument] on handler functions. Tower TraceLayer for HTTP request logging. Span fields: request_id (uuid), method, path, status.",
+  "acceptance_criteria": "Server logs incoming requests with method, path, status, and latency at INFO; RUST_LOG=trace shows full details; tokens are never visible in any log output; startup logs include listen address and domain",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:58:50Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.464393432Z",
+  "started_at": "2026-07-18T05:01:04.609759509Z",
+  "closed_at": "2026-07-18T05:06:16.464393432Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:52Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

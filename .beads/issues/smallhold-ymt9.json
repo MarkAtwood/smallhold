@@ -1,0 +1,35 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:17:33Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nServe each persona's public posts as RSS 2.0 and Atom 1.0 feeds, discoverable via actor document and WebFinger.\n\n## Why\nFeed readers and aggregators can follow smallhold personas without ActivityPub support, broadening reach and interoperability.\n\n## Phases covered\n- Feed endpoints (GET /users/:username/feed.rss and .atom)\n- Autodiscovery links in actor doc and WebFinger JRD",
+  "ephemeral": false,
+  "id": "smallhold-ymt9",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "RSS/Atom feed per persona",
+  "updated_at": "2026-04-23T04:17:33Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:18:06Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-aeck",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T21:18:06Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-jjko",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

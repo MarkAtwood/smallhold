@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "docker compose up brings up smallhold + Mastodon + Phanpy; Phanpy can log in to the local smallhold instance; local Mastodon can federate with the local smallhold instance (via custom domain and host entries); basic client operations work end-to-end",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:13:46Z",
+  "created_by": "Mark Atwood",
+  "description": "Create a Docker Compose setup for local compatibility testing. Components: smallhold instance, a local Mastodon instance (official Docker image), Phanpy pointed at both instances. Used to catch client API compatibility regressions before they reach live federated servers. Should be runnable with 'docker compose up' and requires no external accounts.",
+  "design": "Use Mastodon's official docker-compose.yml as base. Add smallhold service built from local Dockerfile. Custom docker network for inter-service communication. Phanpy: use official Docker image. Document in docs/compat-harness.md. Include test script that runs canned operations and checks responses.",
+  "ephemeral": false,
+  "id": "smallhold-1ub",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Docker Compose compat test harness",
+  "updated_at": "2026-04-23T00:13:46Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:13:51Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,51 @@
+{
+  "id": "smallhold-h8c",
+  "title": "Phase 2-D: Inbound interactions (Like, Announce, Block)",
+  "description": "Handle inbound Like/Undo Like, Announce/Undo Announce (boost), and Block/Undo Block activities from remote actors.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:30Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.11495436Z",
+  "started_at": "2026-07-18T05:14:41.20737859Z",
+  "closed_at": "2026-07-18T05:29:28.11495436Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-1yl",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:52Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5wm",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:45Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-f8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:44Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:38Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

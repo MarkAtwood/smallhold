@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-18kg",
+  "title": "POST /api/v1/statuses: full post creation with validation",
+  "description": "Create a post from an authenticated client. Accept: status (text, max config.limits.max_post_chars), visibility (public/unlisted/private/direct), sensitive (bool), spoiler_text, in_reply_to_id (validated to exist), language (BCP-47), media_ids (validated to belong to authed account and not already attached). Run content through rendering pipeline (markdown, mentions, hashtags). Insert into posts table. Enqueue outbound activity. Return Status object.\n\nAgent workflow: Spawn a research subagent to POST test statuses to mastodon.social and document every field in the response Status object as the oracle. Spawn a parallel subagent to implement input validation.\n\nTest discipline:\n- Create simple text post → response Status shape matches mastodon.social oracle\n- Create post over max_post_chars → 422 with error message\n- Create post with invalid in_reply_to_id → 422\n- Create post with media_ids belonging to different account → 422\n- Create public post → ap_id and url are correct URLs\n- Status.id is a quoted string\n\nDefensive programming:\n- Wrap post creation + mention row creation + hashtag row creation in a single DB transaction\n- media_ids: verify each media.account_id = authed account AND media.post_id IS NULL\n- language: validate as BCP-47 tag if provided (don't accept 'english', only 'en')\n- visibility: reject any value not in {public, unlisted, private, direct}",
+  "acceptance_criteria": "Post created atomically; over-length post rejected with 422; wrong account's media rejected; Status.id is quoted string; response matches mastodon.social shape",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:33:52Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.821209336Z",
+  "started_at": "2026-07-18T05:14:42.893539876Z",
+  "closed_at": "2026-07-18T05:29:28.821209336Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3l1",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:33:57Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

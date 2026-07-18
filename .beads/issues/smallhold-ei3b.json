@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Local and remote followers/following listed; pagination works; private accounts protected",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:44:26Z",
+  "created_by": "Mark Atwood",
+  "description": "GET /api/v1/accounts/:id/followers returns accounts that follow the given account (from followers table for local accounts). GET /api/v1/accounts/:id/following returns accounts followed (from follows table). Both include local and remote accounts. Paginated by ID with Link header.\n\nTest discipline:\n- 5 followers from remote accounts → all 5 appear in followers list\n- Following 3 local + 2 remote → all 5 appear in following list\n- Pagination: limit=2 through 5 followers → receives all 5\n- Unauthenticated request: public accounts show followers; private accounts require auth\n\nDefensive programming:\n- Private accounts (is_locked=true): followers/following lists only visible to self or followers",
+  "ephemeral": false,
+  "id": "smallhold-ei3b",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/accounts/:id/followers and /following: paginated, local and remote",
+  "updated_at": "2026-04-23T00:44:26Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:44:33Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-ek0",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-lia",
+  "title": "Persona CLI commands (create, list, update, delete)",
+  "description": "Implement the CLI commands for managing personas: smallhold persona create \u003cusername\u003e, smallhold persona list, smallhold persona update \u003cusername\u003e, smallhold persona delete \u003cusername\u003e. Each persona is a row in the accounts table with its own RSA-2048 keypair (stored as PKCS8 PEM). Creating a persona generates the keypair in-process.",
+  "design": "Generate RSA-2048 keypair with rsa crate (or rcgen). Store private key as PKCS8 PEM, public key as SPKI PEM. ap_id = https://{domain}/users/{username}. Actor URI embedded at creation time. Admin commands bypass the running server and talk to SQLite directly.",
+  "acceptance_criteria": "smallhold persona create writer --display-name='My Name' inserts a valid row in accounts with RSA keypair; smallhold persona list prints all personas; created persona has valid RSA-2048 PKCS8 private key and SPKI public key; username uniqueness enforced at DB level",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:14Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.620051447Z",
+  "closed_at": "2026-07-18T05:29:59.620051447Z",
+  "close_reason": "Done in cli.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:15Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

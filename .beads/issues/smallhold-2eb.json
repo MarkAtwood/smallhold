@@ -1,0 +1,50 @@
+{
+  "id": "smallhold-2eb",
+  "title": "Phase 0-D: CLI and initialization",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:25:05Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.559652536Z",
+  "started_at": "2026-07-18T05:00:11.416862194Z",
+  "closed_at": "2026-07-18T05:06:16.559652536Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-086",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:53Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6bp",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:58Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:24Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-u4m",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:46Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-p6o",
+  "title": "Inbound Update Note (post edit)",
+  "description": "Handle inbound Update{Note} activities to update a cached remote post. Update content_html, spoiler_text, sensitive in the remote_posts row. Trigger a status.update streaming event for affected local actors.",
+  "design": "Find remote_posts row by ap_uri from the Note's id field. Update content_html (re-sanitize with ammonia), spoiler_text, sensitive. Emit streaming event.",
+  "acceptance_criteria": "Edited remote post shows updated content; streaming clients receive status.update event; Update for unknown post is silently ignored",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:00:45Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.919477636Z",
+  "closed_at": "2026-07-18T05:29:59.919477636Z",
+  "close_reason": "Done in inbox.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:00:46Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

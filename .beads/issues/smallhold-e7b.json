@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "Uploaded JPEG: original stored, thumbnail generated at correct dimensions, blurhash computed; uploaded PNG: same; uploaded GIF: stored as-is (no resize needed for GIFs or just store); HEIC: converted to JPEG then processed; blurhash is non-null after processing; media table row updated with width, height, file_size, blurhash",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:03:45Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement async image processing: store original, generate thumbnail (max 400x400 preserving aspect ratio, JPEG quality 85), compute blurhash from a 32x32 downscale, convert HEIC to JPEG. Use 'image' crate with fast_image_resize for resizing. Storage path: media/{first_2_chars_of_id}/{id}.{ext}. Update media row with dimensions, blurhash, file_path on completion.",
+  "design": "Storage layout: media/{id[0..2]}/{id}.{ext} for originals. Thumbnail: media/{id[0..2]}/{id}_thumb.jpg. Blurhash: image::imageops::thumbnail to 32x32, then blurhash::encode(). HEIC: use image crate with heic feature flag. fast_image_resize for high-quality downsampling. Update media row atomically.",
+  "ephemeral": false,
+  "id": "smallhold-e7b",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Image processing pipeline (resize, blurhash, HEIC)",
+  "updated_at": "2026-04-23T00:03:45Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:03:46Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-leu",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

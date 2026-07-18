@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-pwx",
+  "title": "Actor document endpoint with AP content negotiation",
+  "description": "Implement GET /users/:username returning the ActivityPub actor document. Content-type negotiation: application/activity+json or application/ld+json → serve AP doc; text/html → redirect to /@username; application/json → serve AP doc (Pleroma compat deviation from spec). The actor document includes keypair, inbox, outbox, followers, following, featured, and the hardcoded @context array from the spec.",
+  "design": "@context: hardcoded array from spec (AS2, security/v1, toot extensions). Do not do real JSON-LD processing. Actor type: Person. publicKey.id = {actor_uri}#main-key. inbox = /users/{username}/inbox. sharedInbox = /inbox. outbox, followers, following as collection URLs.",
+  "acceptance_criteria": "curl -H 'Accept: application/activity+json' https://domain/users/writer returns valid AP Person object; mastodon.social can fetch and parse the actor; @context includes all required extension terms (Hashtag, sensitive, toot:, discoverable, etc.); unknown usernames return 404",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:24Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.679908376Z",
+  "closed_at": "2026-07-18T05:29:59.679908376Z",
+  "close_reason": "Done in activitypub.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b89",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:26Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

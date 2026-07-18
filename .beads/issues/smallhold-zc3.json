@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-zc3",
+  "title": "GET /api/v1/instance and GET /api/v2/instance",
+  "description": "Implement instance metadata endpoints. v1 and v2 have different shapes — clients prefer v2 but fall back to v1. Includes: uri, title, description, version (report '4.0.0' for max client compat), email (contact), max_toot_chars, thumbnail, languages, configuration object with limits.",
+  "design": "Report version as '4.0.0' even though we are not Mastodon — clients use this to gate features. configuration.statuses.max_characters from config. configuration.media_attachments.supported_mime_types lists image types only (no video). openRegistrations: false.",
+  "acceptance_criteria": "Ivory reads instance info on login; max_toot_chars matches config; version string is '4.0.0' or similar to maximize client compat; v1 and v2 both return correct shapes; thumbnail returns null if not configured",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:11Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.270695671Z",
+  "closed_at": "2026-07-18T05:30:00.270695671Z",
+  "close_reason": "Done in api.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:13Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "id": "smallhold-6sk",
+  "title": "Phase 0: Project Skeleton",
+  "description": "Bootstrap the entire Cargo workspace, config system, database layer, core ID generation, logging infrastructure, and CLI skeleton. This is the foundation everything else builds on — if the skeleton is wrong, every later phase pays for it. The CLI-first approach is deliberate: if 'smallhold persona create writer' produces a sane DB row, the data model is right.",
+  "design": "Single Cargo workspace. sqlx with compile-time query checking. sqlx-migrate for embedded migrations. clap v4 derive API. tracing + tracing-subscriber for structured logging. Custom snowflake generator (~50 lines with AtomicU64), no external dep.",
+  "acceptance_criteria": "smallhold init creates config.toml and DB with correct schema; smallhold persona create writer inserts a row in accounts with a valid RSA keypair; all SQLite PRAGMAs active; snowflake IDs are time-sortable 64-bit integers",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:54:43Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:06:16.575818872Z",
+  "started_at": "2026-07-18T05:00:11.248947385Z",
+  "closed_at": "2026-07-18T05:06:16.575818872Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2eb",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:24Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2o6",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:14Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4vg",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:15Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-8e8",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:52Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-8xq",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:19Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-cq9",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:23Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-d5r",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-lia",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:15Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-o1l",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:29Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p25",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-vl1",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:58:43Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

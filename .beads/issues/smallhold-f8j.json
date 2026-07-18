@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-f8j",
+  "title": "Inbound Like/Undo{Like}: update favourites count, create/remove notification",
+  "description": "Handle Like{object: local_post_uri}: create favourites row (remote_account_id + post_id), create notification of kind=favourite for the post author. Handle Undo{Like}: remove the favourites row. Like for unknown local post: 200 silently.\n\n**Agent workflow**: Spawn a research subagent to capture Like and Undo{Like} fixtures from mastodon.social.\n\n**Test discipline**:\n- Like known post: favourites row created, notification created, favourites_count queryable\n- Undo Like: row removed\n- Like already-liked post (duplicate): idempotent, no duplicate row created\n- Like unknown post: 200 no error\nAll fixtures captured from real servers. Real in-memory SQLite for DB tests — never mock the database.\n\n**Defensive programming**:\n- Verify Like.actor matches the authenticated sender\n- favourites_count must be computed from COUNT — do not maintain a denormalized counter that can drift\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e\n- Validate inputs at system boundaries",
+  "acceptance_criteria": "Like creates favourites row and notification; Undo Like removes row; duplicate Like is idempotent; unknown post returns 200; favourites_count is accurate COUNT not a cached counter",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:33Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.856647777Z",
+  "started_at": "2026-07-18T05:14:41.535874942Z",
+  "closed_at": "2026-07-18T05:29:27.856647777Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-h8c",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:44Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

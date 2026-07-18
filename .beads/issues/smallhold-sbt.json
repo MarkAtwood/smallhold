@@ -1,0 +1,59 @@
+{
+  "id": "smallhold-sbt",
+  "title": "Phase 3-A: OAuth2 protocol (apps, authorize, token, revoke)",
+  "description": "Implement the full OAuth2 flow: app registration, authorize page, token exchange (code grant and client credentials), and bearer token middleware. This is the authentication foundation for all client API endpoints.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:39Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.517562469Z",
+  "started_at": "2026-07-18T05:14:41.942507596Z",
+  "closed_at": "2026-07-18T05:29:28.517562469Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-8tw",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:32Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-9xn",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:32Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-dee",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:31:15Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-hcj",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:32:03Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:47Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

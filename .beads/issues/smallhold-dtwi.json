@@ -1,0 +1,19 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-06-16T00:26:43Z",
+  "created_by": "Mark Atwood",
+  "description": "Add flatfile-specific checks to bd doctor when backend=flatfile.\n\nStructural integrity:\n- Every .json in issues/ parses as valid JSON\n- Every issue has required fields (id, title, status)\n- Issue ID in JSON matches filename (proj-abc.json contains id:proj-abc)\n- No orphan comment dirs (comments/ entry with no matching issue)\n- No orphan event files (events/ entry with no matching issue)\n- counter.json parses and counter >= highest sequential ID on disk\n\nReferential integrity:\n- Every DependsOnID references an existing issue\n- No dependency cycles (reuse DetectCycles)\n- Parent-child deps: parent issue exists\n\nGit tracking:\n- .beads/issues/ not gitignored (reuse CheckGitignored)\n- No untracked issue files (git status --porcelain .beads/issues/)\n\nImplementation: add a flatfile check group in cmd/bd/doctor/ that runs when configfile.GetBackend() == flatfile. Skip Dolt-specific checks.",
+  "ephemeral": false,
+  "id": "smallhold-dtwi",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "bd doctor: flatfile backend health checks",
+  "updated_at": "2026-06-16T00:26:43Z",
+  "timeout": 0
+}

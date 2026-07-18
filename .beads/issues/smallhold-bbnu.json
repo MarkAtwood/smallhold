@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:50:57Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nCheck the domain_blocks table on every inbound activity before processing. Suspended domains: drop the activity (return 200 to not reveal the block). Silenced domains: process but filter posts from public/federated timelines. Also check domain blocks in the outbound delivery worker: skip delivery to suspended domains. Implement the check at the DB lookup layer so new handlers do not need to remember to check.\n\n## Why\nDomain blocks are a safety and moderation primitive. Without enforcement at the inbox layer, suspended domains can still inject content. Part of sub-epic 8-B federation lifecycle.\n\n## Agent team pattern\n- Spawn a Research subagent to: read Mastodon domain block behavior (mastodon.social admin API docs); check what HTTP status mastodon.social returns for activities from blocked domains; document the three severity levels: suspend (drop everything), silence (filter from public timelines), and reject_media (strip attachments).\n- Spawn an Implementation subagent to: add domain_blocks table migration (domain TEXT PRIMARY KEY, severity TEXT, reject_media BOOLEAN, created_at INTEGER); add check_domain_block(domain) function returning block level; call this at top of shared inbox handler before dispatching; for silence: add domain column to remote_posts or filter via JOIN on remote_accounts; add domain check in delivery worker before making HTTP request; implement reject_media flag (discard media_attachments before storing remote_post).\n- Spawn a Test subagent to: write integration tests; seed domain_blocks with suspended and silenced entries; dispatch activities from each; assert suspended domain activity is dropped and returns 200; assert silenced domain post does not appear in GET /api/v1/timelines/public; assert delivery worker skips suspended domain inbox URLs.\n\n## Test discipline\n- Independent oracle: Mastodon source code behavior (github.com/mastodon/mastodon); test assertions compare timeline query results against seeded DB state (not the filter code itself).\n- Test approach: integration test with in-memory SQLite; seed domain_blocks rows; POST activity to inbox; query timeline; assert presence/absence; delivery worker test: seed queued delivery to suspended domain, run worker, assert no HTTP call made via wiremock with no registered route.\n\n## Defensive programming checklist\n- Check domain block before any DB writes or activity processing\n- Return 200 (not 403) for suspended domains to avoid leaking block information\n- Domain extraction: parse from actor_id URI hostname, not from user-supplied field\n- No .unwrap() in inbox handler path\n- Apply reject_media BEFORE storing the remote_post row\n- Domain block check must be a single SQL lookup not N+1",
+  "ephemeral": false,
+  "id": "smallhold-bbnu",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 3,
+  "status": "open",
+  "title": "Domain block enforcement in inbox router and delivery worker",
+  "updated_at": "2026-04-23T00:50:57Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:50:59Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-j22v",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,42 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:31:33Z",
+  "created_by": "Mark Atwood",
+  "description": "Sub-epic covering the tokio broadcast channel hub, StreamEvent type definitions, and wire serialization.",
+  "ephemeral": false,
+  "id": "smallhold-hen",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 7-A: Streaming broadcast channel infrastructure",
+  "updated_at": "2026-04-23T00:31:33Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:34:45Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-jijx",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:31:41Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-oo2",
+      "metadata": "{}",
+      "type": "relates-to"
+    },
+    {
+      "created_at": "2026-04-22T17:34:42Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-xvp7",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

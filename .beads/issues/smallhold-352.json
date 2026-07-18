@@ -1,0 +1,21 @@
+{
+  "acceptance_criteria": "docs/compat.md mastodon.social row all checkmarks; 3+ other implementations all checkmarks; all 5 target clients (Ivory, Phanpy, Elk, Tusky, Tuba) pass login/timeline/post/media/reply/notifications/streaming; rate limit headers present; error responses are {\"error\": \"...\"} JSON",
+  "compaction_level": 0,
+  "created_at": "2026-04-22T23:56:06Z",
+  "created_by": "Mark Atwood",
+  "description": "Test and fix compatibility against real live fediverse instances and real clients. This is not optional — it is the release gate. The compat matrix in docs/compat.md must show a complete green row for mastodon.social and at least 3 other implementations before tagging v0.1.0. Bugs found here are often protocol-level edge cases not visible in unit tests.",
+  "design": "Test harness: Docker Compose with local Mastodon instance + Phanpy pointed at smallhold. Run harness on every commit touching client API surface. Canary against mastodon.social.social for federation. smallhold compat-test --target=mastodon.social --persona=writer for automated probes. Fix bugs by matching mastodon.social behavior, not spec docs.",
+  "ephemeral": false,
+  "id": "smallhold-352",
+  "is_template": false,
+  "issue_type": "epic",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 9: Compatibility Hardening",
+  "updated_at": "2026-04-22T23:56:06Z",
+  "timeout": 0
+}

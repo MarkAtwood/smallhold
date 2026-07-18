@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-22p",
+  "title": "FederationClient: reqwest + draft-cavage HTTP signature for GETs",
+  "description": "Implement the outbound HTTP client used for fetching remote actor documents and making signed requests. Uses reqwest with rustls-tls (NOT openssl). GET requests must be signed per draft-cavage-http-signatures-11: sign (request-target), host, date. Date header: RFC 7231 UTC format, must be within 30s of 'now'. Accept header: application/activity+json, application/ld+json; profile=...\n\nAgent workflow: Spawn a research subagent to study how activitypub-federation crate handles signing, and whether we should use its HTTP client or wrap our own. Spawn a testing subagent to write a mock server that validates the signature format.\n\nTest discipline:\n- Stand up a local mock server (axum or wiremock) that validates incoming HTTP signatures\n- Sign a request, send to mock server, verify: (1) Signature header present, (2) keyId ends with #main-key, (3) algorithm is rsa-sha256, (4) Date header within 30s, (5) headers parameter includes (request-target) host date\n- Test clock skew: signature with Date 31s old — verify a real server (GoToSocial) rejects it\n\nDefensive programming:\n- Set a connection timeout (20s from config) and request timeout separately\n- User-Agent header must always be set (from config) — missing User-Agent causes some servers to reject\n- Never follow redirects silently — log and handle\n- Never use HTTP (non-TLS) for production federation requests — fail with clear error",
+  "acceptance_criteria": "Signed GETs accepted by GoToSocial (requires authorized fetch); Date within 30s; keyId has #main-key fragment; reqwest uses rustls not openssl",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:18Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.227027574Z",
+  "started_at": "2026-07-18T05:06:25.559953695Z",
+  "closed_at": "2026-07-18T05:14:23.227027574Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-23j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:21Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

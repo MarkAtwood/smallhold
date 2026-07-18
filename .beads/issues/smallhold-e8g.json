@@ -1,0 +1,42 @@
+{
+  "id": "smallhold-e8g",
+  "title": "Phase 1-D: Remote actor resolution and caching",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:25:10Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.371208319Z",
+  "started_at": "2026-07-18T05:06:25.311447183Z",
+  "closed_at": "2026-07-18T05:14:23.371208319Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6dy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6nz",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:30:07Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-b89",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:25:28Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

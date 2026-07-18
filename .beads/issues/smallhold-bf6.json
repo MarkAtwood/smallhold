@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-bf6",
+  "title": "Shared inbox + per-actor inbox + HTTP signature verification",
+  "description": "Implement the ActivityPub inbox endpoints: shared inbox at /inbox and per-actor inbox at /users/:username/inbox. All inbound activities must have their HTTP signatures verified before processing. Use the activitypub-federation crate for signature verification. Fetch the sender's public key from remote_accounts (or resolve if unknown). Reject activities with invalid signatures with 401.",
+  "design": "Use activitypub-federation crate's inbox extraction. Verify signature by fetching keyId URL, parsing actor document, extracting publicKey.publicKeyPem. Cache in remote_accounts. On signature failure: re-fetch actor (key may have rotated), retry once, then 401. Parse to/cc to determine which local actors are targeted.",
+  "acceptance_criteria": "Inbound POST to /inbox with valid HTTP signature is accepted; invalid signature returns 401; Pleroma Content-Type with charset parameter is accepted; activities arrive in correct JSON structure; shared inbox correctly routes to local actors via to/cc fields",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:30Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.693970603Z",
+  "started_at": "2026-07-18T05:14:41.738159688Z",
+  "closed_at": "2026-07-18T05:29:27.693970603Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:45Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-0e9u",
+  "title": "Hashtag parser: extract, normalize, store in post_tags table",
+  "description": "Parse #hashtags from post text. Pattern: #[a-zA-Z][a-zA-Z0-9_]* not followed by alphanumeric. Normalize to lowercase for storage. Create post_tags junction rows (post_id, tag). Wrap hashtags in content_html with an anchor tag linking to /tags/tagname.\n\nTest discipline:\n- '#Rust' → stored as 'rust', linked as /tags/rust\n- '#123' (starts with digit) → NOT parsed as hashtag\n- '#rust #activitypub' in text → two separate post_tags rows\n- '#rust.' with trailing period → 'rust' extracted, period ignored\n- Duplicate hashtag in post → one post_tags row (not duplicates)\n\nDefensive programming:\n- Maximum 10 unique hashtags per post (prevent tag spam)\n- Tag normalization must be done before DB insert to prevent case-variant duplicates",
+  "acceptance_criteria": "Hashtags parsed, lowercased, stored in post_tags; trailing punctuation stripped; starts-with-digit not parsed; max 10 per post; duplicate tags are deduplicated",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:33:32Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.769445866Z",
+  "started_at": "2026-07-18T05:14:42.816952953Z",
+  "closed_at": "2026-07-18T05:29:28.769445866Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-0ix",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:33:37Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

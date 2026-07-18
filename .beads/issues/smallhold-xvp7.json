@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "Events broadcast to all subscribers of matching channel; different channel types are isolated; slow receiver gets Lagged error not panic; 100 concurrent subscribers work",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:33:49Z",
+  "created_by": "Mark Atwood",
+  "description": "Implement StreamingHub that manages broadcast channels for all streaming channel types. Channel types: Public, PublicLocal, User(account_id), Hashtag(String), Direct(account_id). Each channel is a tokio::sync::broadcast::Sender<StreamEvent>. StreamingHub is shared via Arc in axum State. Clients subscribe by calling hub.subscribe(ChannelKey) → Receiver<StreamEvent>.\n\nAGENT WORKFLOW: Spawn a research subagent to analyze tokio broadcast channel semantics (what happens to slow receivers, what's the right channel capacity, how to handle lagged receivers). Spawn a testing subagent to write concurrency tests.\n\nTEST DISCIPLINE:\n- Subscribe to Public channel → receive events published to Public channel\n- Subscribe to User(123) channel → do NOT receive events published to User(456) channel\n- Slow receiver: test that a receiver lagging behind by more than capacity receives a RecvError::Lagged — and the SSE handler degrades gracefully (sends reconnect hint, not panic)\n- 100 concurrent subscribers to same channel: all receive the same event\n\nDEFENSIVE PROGRAMMING:\n- Channel capacity: 256 events (configurable) — large enough to buffer a brief slow subscriber, small enough to limit memory\n- Use DashMap for concurrent access to channel map — not RwLock<HashMap> (avoids write lock on every subscribe)\n- Channel cleanup: remove channels with no active senders (but keep channels alive while server runs — they're lightweight)",
+  "ephemeral": false,
+  "id": "smallhold-xvp7",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "StreamingHub: tokio broadcast channels keyed by channel type",
+  "updated_at": "2026-04-23T00:33:49Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:34:42Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-hen",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

@@ -1,0 +1,29 @@
+{
+  "acceptance_criteria": "All relationship states correctly reflected; multiple IDs returned in order; unknown IDs return all-false; domain_blocking reflected",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:37:58Z",
+  "created_by": "Mark Atwood",
+  "description": "Return Relationship objects for given account IDs (id[] query param, multiple allowed). Fields: id, following, showing_reblogs, notifying, followed_by, blocking, blocked_by, muting, mute_notifications, requested, domain_blocking, endorsed. Look up each from follows, followers, domain_blocks tables.\n\nAgent workflow: Spawn a research subagent to test /api/v1/accounts/relationships against mastodon.social with various relationship states and document the exact response structure.\n\nTest discipline:\n- Following: returns following=true, showing_reblogs=true\n- Pending follow: returns requested=true, following=false\n- Domain blocked: returns domain_blocking=true\n- Multiple IDs in request: returns array in same order as input\n- Unknown ID: returns relationship with all false values (NOT 404)\n\nDefensive programming:\n- IDs that don't exist return relationships with all false (Mastodon behavior — not 404)\n- blocked_by requires checking if any of the target's blocks apply to us — complex query, test carefully",
+  "ephemeral": false,
+  "id": "smallhold-pp8r",
+  "is_template": false,
+  "issue_type": "feature",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "GET /api/v1/accounts/relationships: following, followed_by, blocking, requested",
+  "updated_at": "2026-04-23T00:37:58Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:38:04Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-95u",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

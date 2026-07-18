@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-85n",
+  "title": "Inbound Undo{Follow}: remove follower, handle unknown Follow gracefully",
+  "description": "Handle Undo{Follow} from a remote actor removing their follow of a local account. Remove from followers or follow_requests. If the row doesn't exist (perhaps already removed or never created), return 200 silently — do not 404.\n\n**Agent workflow**: Spawn a research subagent to capture Undo{Follow} fixtures from mastodon.social and document the activity structure.\n\n**Test discipline**:\n- Test: remove existing follower → row removed from followers\n- Test: Undo for non-existent follow → 200, no error\n- Test: Undo for a pending follow_request → request removed\nAll fixtures captured from real servers. Real in-memory SQLite for DB tests — never mock the database.\n\n**Defensive programming**:\n- Verify the Undo activity actor matches the original Follow actor\n- Undo.object may be the full Follow activity object or just the Follow activity URI — handle both\n- No .unwrap() outside test code; all errors are Result\u003cT, AppError\u003e\n- Validate all inputs at system boundaries",
+  "acceptance_criteria": "Existing follower removed; non-existent follow handled gracefully with 200; pending follow_request removed by Undo; both object shapes handled",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:38Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.741206536Z",
+  "started_at": "2026-07-18T05:14:41.34158996Z",
+  "closed_at": "2026-07-18T05:29:27.741206536Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ms0",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:41Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

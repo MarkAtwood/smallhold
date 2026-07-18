@@ -1,0 +1,24 @@
+{
+  "id": "smallhold-fxty",
+  "title": "Health and readiness endpoints",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T04:18:44Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:37:35.161590766Z",
+  "closed_at": "2026-07-18T05:37:35.161590766Z",
+  "close_reason": "Health endpoint already in server.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-lh8a",
+      "type": "relates-to",
+      "created_at": "2026-04-22T21:19:10Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

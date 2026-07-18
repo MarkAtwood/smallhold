@@ -1,0 +1,28 @@
+{
+  "compaction_level": 0,
+  "created_at": "2026-04-23T04:17:08Z",
+  "created_by": "Mark Atwood",
+  "description": "## What\nAdd `spoiler_text TEXT NOT NULL DEFAULT ''` column to posts table migration and include `spoiler_text` string field (never null, empty string when absent) and `sensitive: bool` field in Status serialization.\n\n## Why\nClients expect these fields on every Status object; without them Ivory and Phanpy render incorrectly for posts with content warnings.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/statuses/:id and document exact JSON shape of spoiler_text and sensitive fields, including types and null vs empty-string behavior\n- Spawn an Implementation subagent to: write the SQLite migration adding spoiler_text column, update the Status serializer to always emit spoiler_text (empty string, not null) and sensitive (bool)\n- Spawn a Test subagent to: write an integration test that creates a post with a CW via the API, fetches it back, and asserts spoiler_text equals the input string and sensitive equals true\n\n## Test discipline\n- Independent oracle: curl mastodon.social /api/v1/statuses/:id on a known CW post and inspect JSON — spoiler_text is a non-null string, sensitive is a bool\n- Test approach: create post with spoiler_text set, fetch via GET /api/v1/statuses/:id, assert spoiler_text field present and correct, assert sensitive field is bool\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- spoiler_text is user content — HTML-escape on read (serialization), not on write (store raw)\n- Migration must supply DEFAULT '' so existing rows are not null\n- Status serializer must never emit null for spoiler_text",
+  "ephemeral": false,
+  "id": "smallhold-0dn1",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 2,
+  "status": "open",
+  "title": "Add spoiler_text and sensitive fields to posts table and Status serialization",
+  "updated_at": "2026-04-23T04:17:08Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T21:17:21Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-m6xg",
+      "metadata": "{}",
+      "type": "relates-to"
+    }
+  ],
+  "timeout": 0
+}

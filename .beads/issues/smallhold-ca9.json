@@ -1,0 +1,43 @@
+{
+  "id": "smallhold-ca9",
+  "title": "Phase 3-C: Tier 1 stub and empty-array endpoints",
+  "description": "Implement all Tier 1 stub endpoints that return empty arrays or minimal fixed responses. Required for clients to complete startup without errors. Includes filters, lists, custom_emojis, preferences, markers, trends, directory, and account statuses timeline.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:43Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.56336026Z",
+  "started_at": "2026-07-18T05:14:42.023266218Z",
+  "closed_at": "2026-07-18T05:29:28.56336026Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5ne",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:33:10Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ntb",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:32:55Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

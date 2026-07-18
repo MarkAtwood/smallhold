@@ -1,0 +1,51 @@
+{
+  "id": "smallhold-ms0",
+  "title": "Phase 2-B: Inbound follow/unfollow lifecycle",
+  "description": "Handle the full Follow/Unfollow lifecycle: inbound Follow with auto-Accept for unlocked accounts, locked account queuing, Undo Follow, and outbound Accept/Reject for follow requests.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:27:27Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.07080151Z",
+  "started_at": "2026-07-18T05:14:41.124377194Z",
+  "closed_at": "2026-07-18T05:29:28.07080151Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-85n",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:41Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-efb",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-gcx",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:28:40Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ryy",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:36Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

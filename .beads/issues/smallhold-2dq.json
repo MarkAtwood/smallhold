@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-2dq",
+  "title": "GET /users/:username: AP doc with content-type negotiation",
+  "description": "Implement actor document endpoint. Content negotiation: Accept application/activity+json or application/ld+json serves AP Person document. Accept text/html serves 302 redirect to /@username. Accept application/json serves AP doc (Pleroma compat). Unknown Accept serves AP doc as default. The @context array must match the spec exactly.\n\nAgent workflow: Spawn a research subagent to fetch a real actor document from mastodon.social and document every field. Spawn a testing subagent to write a conformance test that validates our output against the mastodon.social structure.\n\nTest discipline:\n- Fetch https://mastodon.social/users/Gargron with Accept: application/activity+json — use as oracle\n- Test each content-type negotiation branch independently\n- Verify @context array contains all required extension terms from the spec\n- Verify publicKey.id ends with #main-key\n- Verify inbox is /users/{username}/inbox, sharedInbox is /inbox\n\nDefensive programming:\n- Never serve the private key or any hint of it in the actor document\n- Validate username from path against accounts table — return 404 for unknown usernames\n- featured collection URL must be present (empty OrderedCollection) even if no featured posts",
+  "acceptance_criteria": "Response matches mastodon.social actor document structure; HTML Accept gets redirect; Pleroma application/json gets AP doc; unknown username returns 404; @context has all extension terms",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:28:49Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:14:23.193304201Z",
+  "started_at": "2026-07-18T05:06:25.475746462Z",
+  "closed_at": "2026-07-18T05:14:23.193304201Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5l8",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:01Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

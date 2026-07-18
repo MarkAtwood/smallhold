@@ -1,0 +1,25 @@
+{
+  "id": "smallhold-352.4.1",
+  "title": "Rate limiting middleware",
+  "description": "## What\nImplement per-IP and per-OAuth-token rate limiting using an in-process token bucket (no Redis, no sidecar). Configurable limits in `config.toml` (e.g., `[rate_limit] api_per_ip = 300` per 5 minutes, `api_per_token = 300` per 5 minutes). Return HTTP 429 with `Retry-After` header when limit is exceeded. Include Mastodon rate limit headers on all API responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (RFC 3339 timestamp of window reset).\n\n## Why\nRate limit headers are checked by some clients (Ivory, Elk) to display \"slow down\" UI. Returning 429 correctly prevents clients from hammering the server. The `X-RateLimit-*` headers must match mastodon.social's shape or clients won't parse them.\n\n## Agent team pattern\n- Spawn a Research subagent to: capture mastodon.social's exact `X-RateLimit-*` header values and format (including the `X-RateLimit-Reset` timestamp format) via curl; read the Tower middleware docs for implementing rate limiting as axum middleware; evaluate whether `governor` crate (token bucket) fits the need without pulling in Redis.\n- Spawn an Implementation subagent to: add a Tower middleware layer using `governor` crate (or a minimal hand-rolled token bucket) keyed by IP + token; add `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` to all `/api/` responses; return 429 with `{\"error\": \"Too many requests\"}` and `Retry-After` header when limit exceeded; add config keys to `config.toml`.\n- Spawn a Test subagent to: write integration tests that send N+1 requests and assert the N+1th returns 429 with correct headers; assert that `X-RateLimit-Remaining` decrements on each request; assert `Retry-After` is a positive integer.\n\n## Test discipline\n- Independent oracle: mastodon.social rate limit header shapes captured via curl (header names, value formats, `X-RateLimit-Reset` as RFC 3339 string).\n- Test approach: integration tests with configurable low limit (e.g., 3 requests per window) to make exhaustion testable without thousands of requests.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- Rate limit state must be in-process only — no persistence, resets on restart (acceptable for solo-admin use case).\n- IP extraction must handle `X-Forwarded-For` (set by reverse proxy) — use the leftmost IP in the chain.\n- `X-RateLimit-Reset` must be an RFC 3339 UTC timestamp string matching mastodon.social's format exactly.\n- 429 response body must be `{\"error\": \"Too many requests\"}` — not HTML, not a Rust panic trace.\n- Federation inbox endpoint must have a separate (higher) rate limit or be exempt — follow delivery from mastodon.social must not be rate-limited to the point of rejecting legitimate federation traffic.\n",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:55:07Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:37:35.530373443Z",
+  "closed_at": "2026-07-18T05:37:35.530373443Z",
+  "close_reason": "Deferred - needs live testing",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352.4",
+      "type": "parent-child",
+      "created_at": "2026-04-22T17:55:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

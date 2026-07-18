@@ -1,0 +1,30 @@
+{
+  "acceptance_criteria": "docs/clients.md shows Ivory and Phanpy rows complete with all checkmarks; login flow completes without errors; home timeline loads; can post text, post with image, reply to a post; notifications appear; streaming updates appear in real time without manual refresh",
+  "compaction_level": 0,
+  "created_at": "2026-04-23T00:15:27Z",
+  "created_by": "Mark Atwood",
+  "description": "Full end-to-end manual testing of Ivory (iOS) and Phanpy (web) against a real smallhold instance. Test every column in the clients.md matrix: Login, Timeline, Post, Media, Reply, Notifications, Streaming. Document and fix every failure. These are the two highest-priority clients.",
+  "design": "Test against production-like smallhold instance. Ivory: test on actual iOS device or simulator. Phanpy: test in browser. For each test: check network requests with browser dev tools or proxy to identify exact API calls that fail. Fix by matching mastodon.social response shapes.",
+  "ephemeral": false,
+  "id": "smallhold-8bl",
+  "is_template": false,
+  "issue_type": "task",
+  "metadata": {},
+  "no_history": false,
+  "owner": "mark@wolfssl.com",
+  "pinned": false,
+  "priority": 1,
+  "status": "open",
+  "title": "Client compatibility: Ivory and Phanpy",
+  "updated_at": "2026-04-23T00:15:27Z",
+  "dependencies": [
+    {
+      "created_at": "2026-04-22T17:15:32Z",
+      "created_by": "Mark Atwood",
+      "depends_on_id": "smallhold-352",
+      "metadata": "{}",
+      "type": "parent-child"
+    }
+  ],
+  "timeout": 0
+}

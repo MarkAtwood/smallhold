@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-p25",
+  "title": "'smallhold init' CLI command",
+  "description": "Implement the init subcommand that bootstraps a new instance: creates the data directory, generates a random secret_key (64 hex chars), writes a config.toml skeleton, and initializes the SQLite database with the full schema. This is the entry point for any new deployment.",
+  "design": "Generate secret_key with rand crate (32 random bytes, hex-encoded). Write config.toml template with all sections. Run migrations via sqlx::migrate\\!().run(\u0026pool). Print: 'Instance initialized. Next: edit config.toml, set admin password with smallhold admin set-password, create a persona with smallhold persona create \u003cusername\u003e'",
+  "acceptance_criteria": "smallhold init creates config.toml with correct sections and a generated secret_key; creates the database file at the configured path; runs migrations; prints clear next-steps instructions; fails gracefully if config.toml already exists (prompt to confirm overwrite or use --force)",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:59:00Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:59.559696625Z",
+  "closed_at": "2026-07-18T05:29:59.559696625Z",
+  "close_reason": "Done in cli.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-6sk",
+      "type": "relates-to",
+      "created_at": "2026-04-22T16:59:06Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

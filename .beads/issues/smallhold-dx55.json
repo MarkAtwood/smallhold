@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-dx55",
+  "title": "DELETE /api/v1/statuses/:id: verify ownership, delete, enqueue Delete activity",
+  "description": "Delete a post. Verify authed account owns the post (not just same instance — exact account_id match). Delete posts row. Clean up mention rows, hashtag rows, idempotency key if any. Enqueue Delete{Tombstone} activity. Trigger streaming delete event. Return the deleted Status object (required by Mastodon API — clients expect it).\n\nTest discipline:\n- Delete own post → returns deleted Status, post gone from DB\n- Delete another account's post → 403\n- Delete non-existent post → 404\n- Delete boost → removes the boost post, sends Undo{Announce} not Delete{Note}\n- Verify streaming 'delete' event emitted with correct status ID\n\nDefensive programming:\n- Transaction: delete post + clean up related rows atomically\n- Tombstone: Delete activity must reference the ap_id (ActivityPub URI), not the numeric DB ID\n- Media files associated with deleted post: set media.post_id = NULL (don't delete media — user may have saved it)",
+  "acceptance_criteria": "Own post deleted with 200; other's post returns 403; non-existent returns 404; Delete activity enqueued; streaming delete event emitted; media post_id unlinked",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:35:18Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.885913915Z",
+  "started_at": "2026-07-18T05:14:43.016521672Z",
+  "closed_at": "2026-07-18T05:29:28.885913915Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3qp",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:35:23Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

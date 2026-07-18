@@ -1,0 +1,25 @@
+{
+  "id": "smallhold-352.4.2",
+  "title": "Error response shape normalization",
+  "description": "## What\nAudit every handler's error path. Ensure every 4xx and 5xx response returns a `{\"error\": \"...\"}` JSON body with `Content-Type: application/json`. No HTML error pages. No raw Rust panic messages. No empty bodies. `AppError` to JSON conversion must be exhaustive — every variant must map to a specific HTTP status and a human-readable error message. Test with: invalid bearer token, missing required body fields, oversized payloads, malformed JSON body, nonexistent resource IDs.\n\n## Why\nClients (especially Ivory) display the `error` field from 4xx responses to the user. An HTML page or empty body causes a UI crash or a confusing \"unknown error\". A Rust panic message in a 500 response is a security risk (leaks implementation details).\n\n## Agent team pattern\n- Spawn a Research subagent to: capture mastodon.social's exact error response bodies and Content-Type for: 401 unauthorized, 403 forbidden, 404 not found, 422 unprocessable (bad params), 429 rate limited; document the exact `{\"error\": \"...\"}` message strings mastodon.social uses.\n- Spawn an Implementation subagent to: audit all `AppError` variants in `src/error.rs`; add any missing variants; ensure the `IntoResponse` impl for `AppError` covers every variant with the correct HTTP status and `{\"error\": \"...\"}` body; add a catch-all 500 handler that never leaks Rust internals; configure axum's panic handler to return a generic 500 JSON body.\n- Spawn a Test subagent to: write integration tests that exercise each error condition listed in the What section; assert HTTP status code, Content-Type header, and `{\"error\": \"...\"}` body shape for each; use mastodon.social's actual error strings as oracle for 401 and 422.\n\n## Test discipline\n- Independent oracle: mastodon.social error response bodies captured via curl for each error condition; the oracle is the exact JSON body mastodon.social returns.\n- Test approach: integration tests sending intentionally bad requests and asserting the response matches mastodon.social's error shape.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- axum panic handler must be configured to catch panics and return 500 JSON (not the default behavior of closing the connection).\n- `Content-Type: application/json` must be set on all error responses — not `text/plain` or absent.\n- Never log the full request body in error handlers — log only the error type and HTTP status at INFO.\n- `AppError::from(sqlx::Error::RowNotFound)` must map to 404, not 500.\n- Oversized payload (\u003e configured max) must return 413 with `{\"error\": \"Payload too large\"}`.\n",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:55:24Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:37:35.467937857Z",
+  "closed_at": "2026-07-18T05:37:35.467937857Z",
+  "close_reason": "Error shapes done in error.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352.4",
+      "type": "parent-child",
+      "created_at": "2026-04-22T17:55:23Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

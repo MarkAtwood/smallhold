@@ -1,0 +1,107 @@
+{
+  "id": "smallhold-z8j",
+  "title": "Phase 3: OAuth2 + Client Reads",
+  "description": "Implement just enough OAuth2 for Mastodon clients to authenticate, plus all Tier 1 read endpoints. The authorization flow is: admin logs in with password, picks which persona this token should authenticate as, submits. No per-user accounts. After this phase, Ivory or Elk should be able to log in, land on an empty home timeline, and see the profile.",
+  "design": "Minimal OAuth2: only app registration, authorize, token exchange, revoke. Token: 64 random bytes base64url, stored as SHA-256 hex. Never log tokens. admin CLI mint-token command for scripting. Scopes: read, write, follow, push (push ignored). Authorization page: minimal HTML form.",
+  "acceptance_criteria": "Ivory can log in against the instance and land on the home timeline; GET /api/v1/accounts/verify_credentials returns correct account object; all Tier 1 empty-array endpoints (filters, lists, custom_emojis, etc.) return empty arrays with correct shapes; bearer token middleware rejects invalid tokens with 401",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:55:10Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.706696484Z",
+  "closed_at": "2026-07-18T05:30:00.706696484Z",
+  "close_reason": "Done in api.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-149",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:39Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-2io",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:48Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3fg",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:51Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ao5",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:37Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ca9",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:49Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-l6r",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:05:11Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-mty",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:03Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p18",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:03:54Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-pgr",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:05:01Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-sbt",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:27:47Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-zc3",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:13Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

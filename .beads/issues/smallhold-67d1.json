@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-67d1",
+  "title": "Status serialization: all required fields, correct types, match mastodon.social",
+  "description": "Implement Status serialization to JSON. Every field must match mastodon.social exactly. Critical invariants: id is quoted string; media_attachments/mentions/tags/emojis are always [] never null; in_reply_to_id is string-or-null never empty string; reblog is null for regular posts and full nested Status for boosts; visibility is exactly one of {public, unlisted, private, direct}; content is the HTML rendered content not raw markdown.\n\nAgent workflow: Spawn a research subagent to fetch 20 different Status objects from mastodon.social (with replies, boosts, media, no media, various visibilities) and build a comprehensive oracle test set.\n\nTest discipline:\n- Each field tested against mastodon.social oracle\n- Test Status for a boost: outer has empty content, reblog is full nested Status\n- Test Status with no media: media_attachments is [] not null\n- Test Status that is a reply: in_reply_to_id is '12345' (string) not 12345 (number)\n- Snapshot tests (use insta crate): serialize a known Status, compare against frozen snapshot\n\nDefensive programming:\n- Use a dedicated StatusResponse struct (not the DB model) for serialization — never accidentally include DB-internal fields",
+  "acceptance_criteria": "All fields present and correctly typed per mastodon.social oracle; arrays never null; in_reply_to_id is string-or-null; boost has full nested reblog",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:34:57Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:28.866588517Z",
+  "started_at": "2026-07-18T05:14:42.974736236Z",
+  "closed_at": "2026-07-18T05:29:28.866588517Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3l1",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:35:04Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

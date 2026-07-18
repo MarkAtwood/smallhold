@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-3fg",
+  "title": "GET /api/v1/accounts/:id/statuses",
+  "description": "Implement the account statuses timeline endpoint. Returns paginated list of posts by the given account. Supports max_id, since_id, min_id, limit query params. For local accounts returns posts table. For remote accounts returns remote_posts table. Excludes replies by default (exclude_replies param). Excludes boosts by default (exclude_reblogs param).",
+  "design": "Sort by snowflake ID descending. Paginate: WHERE id \u003c max_id (exclusive). Link header: next points to oldest ID in result, prev points to newest. Status serialization must include all required fields including application, media_attachments as array.",
+  "acceptance_criteria": "Timeline returns posts in reverse chronological order; pagination via Link header works; exclude_replies param filters out replies; limit param is respected (max 40); authenticated user sees DMs addressed to them",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:50Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:30:00.576400229Z",
+  "closed_at": "2026-07-18T05:30:00.576400229Z",
+  "close_reason": "Done in api.rs",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-z8j",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:04:51Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-5wm",
+  "title": "Inbound Announce: fetch-and-cache object URI, create notification",
+  "description": "Handle Announce{object: post_uri}. The object is often a URI to a post we have not seen yet — fetch and cache in remote_posts first. Then create a notification for the local post author if the boosted post is local. Handle Undo{Announce} by removing the boost record.\n\nCRITICAL: Announce.object is frequently a URI string, not an embedded object. This must trigger a fetch.\n\n**Agent workflow**: Spawn a research subagent to document the exact fetch-and-cache flow and capture Announce fixtures from mastodon.social. Spawn a testing subagent to write tests with pre-fetched fixtures.\n\n**Test discipline**:\n- Announce with object-as-URI: fetches object, caches in remote_posts\n- Announce of already-cached post: uses cache, no redundant fetch\n- Announce of local post: creates reblog notification for author\n- Undo Announce: removes boost record\n- Announce of post from suspended domain: silently dropped\nAll fixtures captured from real servers. Real in-memory SQLite for DB tests.\n\n**Defensive programming**:\n- Limit nested fetch depth: if fetching the Announce object returns another Announce, stop at depth 1\n- Timeout on object fetch: do not block inbox processing for more than 10s on a slow fetch\n- No .unwrap() outside test code; all errors Result\u003cT, AppError\u003e",
+  "acceptance_criteria": "Object URI triggers fetch and cache; cached posts reused without redundant fetch; local post authors notified; Undo removes boost; suspended domain posts dropped; fetch timeout enforced at 10s",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:29:41Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:29:27.877537377Z",
+  "started_at": "2026-07-18T05:14:41.579175461Z",
+  "closed_at": "2026-07-18T05:29:27.877537377Z",
+  "close_reason": "Closed",
+  "metadata": {},
+  "dependencies": [
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-h8c",
+      "type": "relates-to",
+      "created_at": "2026-04-22T17:29:45Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
