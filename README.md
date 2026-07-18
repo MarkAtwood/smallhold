@@ -125,7 +125,25 @@ max_media_mb = 40
 default_visibility = "public"
 default_sensitive = false
 default_language = "en"
+
+[branding]
+site_title = "My Instance"
+site_description = "A personal fediverse presence"
+custom_css_path = "custom.css"  # optional, drop a CSS file to customize
 ```
+
+### Custom theming
+
+Drop a `custom.css` file and point `branding.custom_css_path` at it. The default styles use CSS custom properties, so overriding colors is one line:
+
+```css
+:root { --link: #e4002b; --bg: #fafafa; }
+@media (prefers-color-scheme: dark) {
+  :root { --link: #ff6b6b; --bg: #1a1a2e; }
+}
+```
+
+Available variables: `--text`, `--muted`, `--bg`, `--card`, `--border`, `--link`.
 
 ---
 

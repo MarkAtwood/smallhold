@@ -204,11 +204,34 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 }
 "#;
 
+/// Load custom CSS from the configured path, or empty string if not set / not found.
+fn load_custom_css(config: &crate::config::Config) -> String {
+    let path = &config.branding.custom_css_path;
+    if path.is_empty() {
+        return String::new();
+    }
+    match std::fs::read_to_string(path) {
+        Ok(css) => css,
+        Err(e) => {
+            tracing::warn!(path, "failed to load custom CSS: {e}");
+            String::new()
+        }
+    }
+}
+
 /// GET / — root page listing personas.
 async fn index_page(
     State(state): State<Arc<AppState>>,
 ) -> Result<Html<String>, AppError> {
     let domain = &state.config.server.domain;
+    let site_title = ammonia::clean(&state.config.branding.site_title);
+    let site_desc = if state.config.branding.site_description.is_empty() {
+        format!("ActivityPub server on {domain}")
+    } else {
+        ammonia::clean(&state.config.branding.site_description)
+    };
+    let custom_css = load_custom_css(&state.config);
+
     let accounts: Vec<(String, String)> = sqlx::query_as(
         "SELECT username, display_name FROM accounts ORDER BY created_at",
     )
@@ -229,13 +252,14 @@ async fn index_page(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{domain} — smallhold</title>
+<title>{domain} — {site_title}</title>
 <style>{PAGE_CSS}</style>
+<style>{custom_css}</style>
 </head>
 <body>
 <main>
-<h1>smallhold</h1>
-<p class="handle">ActivityPub server on {domain}</p>
+<h1>{site_title}</h1>
+<p class="handle">{site_desc}</p>
 <ul>{personas_html}</ul>
 <footer class="site">Powered by smallhold</footer>
 </main>
@@ -253,6 +277,7 @@ async fn profile_page(
     let account = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
     let display_name = ammonia::clean(&account.display_name);
+    let custom_css = load_custom_css(&state.config);
 
     // Counts
     let account_id: Option<(i64,)> = sqlx::query_as(
@@ -339,6 +364,7 @@ async fn profile_page(
 <meta property="og:description" content="Profile on {domain}">
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}">
 <style>{PAGE_CSS}</style>
+<style>{custom_css}</style>
 </head>
 <body>
 <main>
@@ -380,6 +406,7 @@ async fn post_page(
 
     let account = fetch_account(&state.pool, &username).await?;
     let display_name = ammonia::clean(&account.display_name);
+    let custom_css = load_custom_css(&state.config);
 
     let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
     let date = dt.format("%Y-%m-%d %H:%M").to_string();
@@ -409,6 +436,7 @@ async fn post_page(
 <meta property="og:description" content="{og_desc}">
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}/statuses/{post_id}">
 <style>{PAGE_CSS}</style>
+<style>{custom_css}</style>
 </head>
 <body>
 <main>

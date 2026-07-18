@@ -9,6 +9,32 @@ pub struct Config {
     pub federation: FederationConfig,
     pub limits: LimitsConfig,
     pub defaults: DefaultsConfig,
+    #[serde(default)]
+    pub branding: BrandingConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BrandingConfig {
+    #[serde(default = "default_site_title")]
+    pub site_title: String,
+    #[serde(default)]
+    pub site_description: String,
+    #[serde(default)]
+    pub custom_css_path: String,
+}
+
+impl Default for BrandingConfig {
+    fn default() -> Self {
+        Self {
+            site_title: default_site_title(),
+            site_description: String::new(),
+            custom_css_path: String::new(),
+        }
+    }
+}
+
+fn default_site_title() -> String {
+    "smallhold".into()
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -208,6 +208,11 @@ max_media_mb = 40
 default_visibility = "public"
 default_sensitive = false
 default_language = "en"
+
+# [branding]
+# site_title = "smallhold"
+# site_description = ""
+# custom_css_path = ""  # path to a CSS file for visual customization
 "#
     );
 
