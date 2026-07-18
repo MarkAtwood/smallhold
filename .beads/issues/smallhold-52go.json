@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-52go",
+  "title": "C1: SSRF — no private IP blocking on federation HTTP client",
+  "description": "fetch_actor, resolve_webfinger, and delivery worker POST to attacker-controlled URLs without blocking private IPs (127.0.0.1, 169.254.169.254, 10.x, 192.168.x, etc). Add is_private_ip() check before all outbound requests.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.078217146Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.382778948Z",
+  "closed_at": "2026-07-18T17:01:03.382778948Z",
+  "close_reason": "Closed"
+}

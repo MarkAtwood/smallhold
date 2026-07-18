@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-5ryo",
+  "title": "C3: XSS — profile field values not sanitized in HTML page",
+  "description": "In /@username profile page, field values from fields_json are inserted into \u003ctd\u003e without ammonia::clean(). Attacker with profile edit can inject arbitrary HTML/JS.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.156508218Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.428500545Z",
+  "closed_at": "2026-07-18T17:01:03.428500545Z",
+  "close_reason": "Closed"
+}

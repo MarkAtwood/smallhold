@@ -212,6 +212,12 @@ async fn deliver_one(
     domain: &str,
 ) -> anyhow::Result<()> {
     let target_url: url::Url = row.target_inbox.parse()?;
+
+    if let Err(e) = crate::federation::validate_outbound_url(&target_url) {
+        mark_dead(pool, row.id, &e.to_string()).await?;
+        return Ok(());
+    }
+
     let key_id = format!("https://{domain}/users/{}#main-key", row.username);
     let body = row.activity_json.as_bytes();
 

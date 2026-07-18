@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,44 @@ fn random_bytes_b64url(len: usize) -> String {
     let mut bytes = vec![0u8; len];
     rand::thread_rng().fill_bytes(&mut bytes);
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes)
+}
+
+// ---------------------------------------------------------------------------
+// Login rate limiting
+// ---------------------------------------------------------------------------
+
+static LOGIN_ATTEMPTS: LazyLock<Mutex<HashMap<String, (u32, i64)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const MAX_LOGIN_ATTEMPTS: u32 = 5;
+const LOGIN_WINDOW_SECS: i64 = 60;
+
+fn check_login_rate_limit(ip: &str) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    let mut map = LOGIN_ATTEMPTS.lock().unwrap();
+    if let Some((count, window_start)) = map.get_mut(ip) {
+        if now - *window_start > LOGIN_WINDOW_SECS {
+            *count = 1;
+            *window_start = now;
+            true
+        } else if *count >= MAX_LOGIN_ATTEMPTS {
+            false
+        } else {
+            *count += 1;
+            true
+        }
+    } else {
+        map.insert(ip.to_string(), (1, now));
+        true
+    }
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
 }
 
 pub fn millis_to_iso(ms: i64) -> String {
@@ -216,6 +255,9 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
 
         let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
 
+        // ponytail: SQL equality on SHA-256 hash is acceptable — attacker would
+        // need to brute-force the hash, not the token. Constant-time comparison
+        // of the hash would require fetching all rows, which is worse.
         let row: Option<(i64, String, String)> = sqlx::query_as(
             "SELECT t.account_id, a.username, t.scopes FROM oauth_tokens t JOIN accounts a ON t.account_id = a.id WHERE t.token_hash = ? AND t.revoked_at IS NULL",
         )
@@ -318,18 +360,22 @@ async fn authorize_form(
     .fetch_all(&state.pool)
     .await?;
 
-    let response_type = params.response_type.as_deref().unwrap_or("code");
-    let client_id = params.client_id.as_deref().unwrap_or("");
-    let redirect_uri = params
-        .redirect_uri
-        .as_deref()
-        .unwrap_or("urn:ietf:wg:oauth:2.0:oob");
-    let scope = params.scope.as_deref().unwrap_or("read");
+    let response_type = html_escape(params.response_type.as_deref().unwrap_or("code"));
+    let client_id = html_escape(params.client_id.as_deref().unwrap_or(""));
+    let redirect_uri = html_escape(
+        params
+            .redirect_uri
+            .as_deref()
+            .unwrap_or("urn:ietf:wg:oauth:2.0:oob"),
+    );
+    let scope = html_escape(params.scope.as_deref().unwrap_or("read"));
 
     let mut options = String::new();
     for (id, username, display_name) in &accounts {
+        let escaped_display = html_escape(display_name);
+        let escaped_user = html_escape(username);
         options.push_str(&format!(
-            "<option value=\"{id}\">{display_name} (@{username})</option>\n"
+            "<option value=\"{id}\">{escaped_display} (@{escaped_user})</option>\n"
         ));
     }
 
@@ -388,8 +434,19 @@ struct AuthorizeForm {
 
 async fn authorize_submit(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     axum::Form(form): axum::Form<AuthorizeForm>,
 ) -> Result<Response, AppError> {
+    // Rate limit login attempts by client IP
+    let ip = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown");
+    if !check_login_rate_limit(ip) {
+        return Err(AppError::rate_limited());
+    }
+
     // Verify admin password
     let admin_row: Option<(String,)> =
         sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
@@ -411,13 +468,20 @@ async fn authorize_submit(
         return Err(AppError::bad_request("Account not found"));
     }
 
-    // Verify app exists
-    let app_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM oauth_apps WHERE client_id = ?")
+    // Verify app exists and redirect_uri matches registered URI
+    let app_row: Option<(i64, String)> =
+        sqlx::query_as("SELECT id, redirect_uri FROM oauth_apps WHERE client_id = ?")
             .bind(&form.client_id)
             .fetch_optional(&state.pool)
             .await?;
-    let (app_id,) = app_row.ok_or_else(|| AppError::bad_request("Unknown client_id"))?;
+    let (app_id, registered_uri) =
+        app_row.ok_or_else(|| AppError::bad_request("Unknown client_id"))?;
+
+    if form.redirect_uri != registered_uri {
+        return Err(AppError::bad_request(
+            "redirect_uri does not match registered URI",
+        ));
+    }
 
     // Generate authorization code
     let code = random_bytes_b64url(32);
@@ -506,26 +570,19 @@ async fn token(
 
     let code_hash = hex_encode(&Sha256::digest(code.as_bytes()));
 
-    // Look up and validate authorization code
-    let code_row: Option<(i64, i64, String, String, i64)> = sqlx::query_as(
-        "SELECT app_id, account_id, scopes, redirect_uri, expires_at FROM oauth_authz_codes WHERE code_hash = ?",
+    let now = now_millis();
+
+    // Atomically fetch and consume the authorization code (single-use)
+    let code_row: Option<(i64, i64, String, String)> = sqlx::query_as(
+        "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, account_id, scopes, redirect_uri",
     )
     .bind(&code_hash)
+    .bind(now)
     .fetch_optional(&state.pool)
     .await?;
 
-    let (app_id, account_id, scopes, stored_redirect, expires_at) =
-        code_row.ok_or_else(|| AppError::bad_request("Invalid authorization code"))?;
-
-    let now = now_millis();
-    if now > expires_at {
-        // Clean up expired code
-        let _ = sqlx::query("DELETE FROM oauth_authz_codes WHERE code_hash = ?")
-            .bind(&code_hash)
-            .execute(&state.pool)
-            .await;
-        return Err(AppError::bad_request("Authorization code expired"));
-    }
+    let (app_id, account_id, scopes, stored_redirect) =
+        code_row.ok_or_else(|| AppError::bad_request("Invalid or expired authorization code"))?;
 
     // Verify redirect_uri matches
     if let Some(ref uri) = form.redirect_uri {
@@ -555,12 +612,6 @@ async fn token(
             }
         }
     }
-
-    // Delete the authorization code (single-use)
-    sqlx::query("DELETE FROM oauth_authz_codes WHERE code_hash = ?")
-        .bind(&code_hash)
-        .execute(&state.pool)
-        .await?;
 
     // Generate access token
     let access_token = random_bytes_b64url(64);

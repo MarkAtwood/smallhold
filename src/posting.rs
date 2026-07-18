@@ -783,10 +783,10 @@ async fn create_status(
                     .execute(&state.pool)
                     .await?;
 
-                    // Notification for local mention
+                    // Notification for local mention (dedup via unique index)
                     let notif_id = generate_id();
                     sqlx::query(
-                        "INSERT INTO notifications \
+                        "INSERT OR IGNORE INTO notifications \
                          (id, account_id, kind, from_account_id, post_id, created_at) \
                          VALUES (?, ?, 'mention', ?, ?, ?)",
                     )
@@ -1352,13 +1352,13 @@ async fn status_context(
 
     // Descendants: recursive CTE
     let descendants_posts: Vec<PostRow> = sqlx::query_as::<_, PostRow>(&format!(
-        "WITH RECURSIVE thread(id) AS ( \
-            SELECT id FROM posts WHERE in_reply_to_id = ? \
+        "WITH RECURSIVE thread(id, depth) AS ( \
+            SELECT id, 1 FROM posts WHERE in_reply_to_id = ? \
             UNION ALL \
-            SELECT p.id FROM posts p JOIN thread t ON p.in_reply_to_id = t.id \
+            SELECT p.id, t.depth + 1 FROM posts p JOIN thread t ON p.in_reply_to_id = t.id WHERE t.depth < 200 \
          ) \
          SELECT p.{POST_COLUMNS} FROM thread t JOIN posts p ON t.id = p.id \
-         ORDER BY p.id ASC",
+         ORDER BY p.id ASC LIMIT 500",
         POST_COLUMNS = POST_COLUMNS.replace(", ", ", p.")
     ))
     .bind(post_id)
@@ -1414,7 +1414,7 @@ async fn favourite(
     if post.account_id != auth.account_id {
         let notif_id = generate_id();
         sqlx::query(
-            "INSERT INTO notifications \
+            "INSERT OR IGNORE INTO notifications \
              (id, account_id, kind, from_account_id, post_id, created_at) \
              VALUES (?, ?, 'favourite', ?, ?, ?)",
         )
@@ -1624,7 +1624,7 @@ async fn reblog(
         if original.account_id != auth.account_id {
             let notif_id = generate_id();
             sqlx::query(
-                "INSERT INTO notifications \
+                "INSERT OR IGNORE INTO notifications \
                  (id, account_id, kind, from_account_id, post_id, created_at) \
                  VALUES (?, ?, 'reblog', ?, ?, ?)",
             )

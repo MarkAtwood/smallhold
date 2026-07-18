@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-vb2h",
+  "title": "H4: No rate limit on admin password login",
+  "description": "POST /oauth/authorize accepts unlimited password attempts. Add in-memory rate limiter: 5 attempts per minute per IP.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.393064727Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.612864056Z",
+  "closed_at": "2026-07-18T17:01:03.612864056Z",
+  "close_reason": "Closed"
+}

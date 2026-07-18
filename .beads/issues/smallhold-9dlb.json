@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-9dlb",
+  "title": "H3: Remote actor display_name/bio not sanitized",
+  "description": "Remote actor fields (display_name, bio_html) stored without ammonia::clean. XSS if rendered in HTML contexts. Sanitize on ingest.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.359968653Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.58655376Z",
+  "closed_at": "2026-07-18T17:01:03.58655376Z",
+  "close_reason": "Closed"
+}

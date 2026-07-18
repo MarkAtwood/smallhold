@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-ueo8",
+  "title": "M1-M10: Medium severity security findings",
+  "description": "M1: Date freshness (overlaps H1). M2: OG meta not escaped. M3: RSS username not XML-escaped. M4: No Cache-Control headers. M5: LIKE wildcards not escaped. M6: Unsigned to/cc spoofable. M7: No inbox rate limit. M8: Null bytes not rejected. M9: Multipart buffered before size check. M10: No WS connection limit.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.576740215Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.734031355Z",
+  "closed_at": "2026-07-18T17:01:03.734031355Z",
+  "close_reason": "Closed"
+}

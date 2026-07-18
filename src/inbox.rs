@@ -21,6 +21,43 @@ const MAX_SPOILER_LEN: usize = 500;
 const MAX_URI_LEN: usize = 2048;
 const MAX_LANGUAGE_LEN: usize = 10;
 
+/// Pre-check JSON nesting depth without fully parsing.
+fn check_json_depth(bytes: &[u8], max_depth: usize) -> bool {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escape = false;
+    for &b in bytes {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if b == b'\\' && in_string {
+            escape = true;
+            continue;
+        }
+        if b == b'"' {
+            in_string = !in_string;
+            continue;
+        }
+        if in_string {
+            continue;
+        }
+        match b {
+            b'{' | b'[' => {
+                depth += 1;
+                if depth > max_depth {
+                    return false;
+                }
+            }
+            b'}' | b']' => {
+                depth = depth.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
 /// Subset of remote_accounts needed for inbox processing.
 struct RemoteAccountRow {
     id: i64,
@@ -84,6 +121,9 @@ async fn process_inbox(
     body: &[u8],
     request_path: &str,
 ) -> Result<(), AppError> {
+    if !check_json_depth(body, 50) {
+        return Err(AppError::bad_request("JSON nesting too deep"));
+    }
     let activity: Value = serde_json::from_slice(body)
         .map_err(|_| AppError::bad_request("invalid JSON"))?;
 
@@ -361,6 +401,23 @@ async fn verify_and_fetch_actor(
     actor_uri: &str,
     request_path: &str,
 ) -> Result<RemoteAccountRow, AppError> {
+    // Check Date header freshness (±5 minutes)
+    if let Some(date_val) = headers.get("date") {
+        if let Ok(date_str) = date_val.to_str() {
+            if let Ok(parsed) = chrono::DateTime::parse_from_rfc2822(date_str) {
+                let now = chrono::Utc::now();
+                let diff = (now - parsed.with_timezone(&chrono::Utc))
+                    .num_seconds()
+                    .abs();
+                if diff > 300 {
+                    return Err(AppError::unauthorized(
+                        "Date header too old or too far in future",
+                    ));
+                }
+            }
+        }
+    }
+
     let sig_header_val = headers
         .get("signature")
         .ok_or_else(|| AppError::unauthorized("missing Signature header"))?

@@ -27,6 +27,42 @@ pub struct RemoteActorData {
     pub bot: bool,
 }
 
+fn is_private_host(host: &str) -> bool {
+    if let Ok(addr) = host.parse::<std::net::IpAddr>() {
+        return match addr {
+            std::net::IpAddr::V4(ip) => {
+                ip.is_loopback()          // 127.0.0.0/8
+                || ip.is_private()        // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                || ip.is_link_local()     // 169.254.0.0/16
+                || ip.is_broadcast()
+                || ip.is_unspecified()
+                || ip.octets()[0] == 0    // 0.0.0.0/8
+                || (ip.octets()[0] == 100 && (ip.octets()[1] & 0xC0) == 64) // 100.64.0.0/10 (CGNAT)
+            }
+            std::net::IpAddr::V6(ip) => {
+                ip.is_loopback() || ip.is_unspecified()
+                || (ip.segments()[0] & 0xFE00) == 0xFC00  // ULA fc00::/7
+                || (ip.segments()[0] == 0xFE80)            // link-local
+            }
+        };
+    }
+    // Check hostnames
+    matches!(host, "localhost" | "localhost.localdomain")
+        || host.ends_with(".local")
+        || host.ends_with(".internal")
+}
+
+pub fn validate_outbound_url(url: &url::Url) -> Result<(), anyhow::Error> {
+    let host = url.host_str().ok_or_else(|| anyhow!("URL has no host"))?;
+    if is_private_host(host) {
+        bail!("refusing to connect to private/internal host: {host}");
+    }
+    if url.scheme() != "https" {
+        bail!("refusing non-HTTPS URL: {url}");
+    }
+    Ok(())
+}
+
 /// HTTP client for ActivityPub federation with HTTP Signature support.
 pub struct FederationClient {
     client: reqwest::Client,
@@ -137,6 +173,8 @@ impl FederationClient {
             .parse()
             .with_context(|| format!("invalid actor URI: {actor_uri}"))?;
 
+        validate_outbound_url(&url)?;
+
         let headers = Self::sign_get_headers(signing_key_pem, signing_key_id, &url)?;
 
         let resp = self
@@ -157,9 +195,14 @@ impl FederationClient {
             bail!("fetch actor {actor_uri}: HTTP {status}");
         }
 
-        let doc: Value = resp
-            .json()
+        let body_bytes = resp
+            .bytes()
             .await
+            .with_context(|| format!("read actor body from {actor_uri}"))?;
+        if body_bytes.len() > 1_048_576 {
+            bail!("response body exceeds 1MB limit");
+        }
+        let doc: Value = serde_json::from_slice(&body_bytes)
             .with_context(|| format!("parse actor JSON from {actor_uri}"))?;
 
         parse_actor_document(&doc, actor_uri)
@@ -172,10 +215,12 @@ impl FederationClient {
             .split_once('@')
             .ok_or_else(|| anyhow!("invalid acct URI, expected user@domain: {acct}"))?;
 
-        // ponytail: no SSRF check on domain beyond disabled redirects on the client
         let wf_url = format!(
             "https://{domain}/.well-known/webfinger?resource=acct:{acct}"
         );
+        let parsed_wf_url: url::Url = wf_url.parse()
+            .with_context(|| format!("invalid WebFinger URL: {wf_url}"))?;
+        validate_outbound_url(&parsed_wf_url)?;
 
         let resp = self
             .client
@@ -190,9 +235,14 @@ impl FederationClient {
             bail!("WebFinger {wf_url}: HTTP {status}");
         }
 
-        let doc: Value = resp
-            .json()
+        let body_bytes = resp
+            .bytes()
             .await
+            .with_context(|| format!("read WebFinger body from {wf_url}"))?;
+        if body_bytes.len() > 1_048_576 {
+            bail!("response body exceeds 1MB limit");
+        }
+        let doc: Value = serde_json::from_slice(&body_bytes)
             .with_context(|| format!("parse WebFinger JSON from {wf_url}"))?;
 
         let links = doc["links"]
@@ -221,6 +271,11 @@ impl FederationClient {
     }
 }
 
+/// Truncate a string to at most `max` characters (not bytes).
+fn cap_str(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
 /// Parse an ActivityPub actor JSON document into `RemoteActorData`.
 fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteActorData> {
     let id = doc["id"]
@@ -242,21 +297,28 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
         .ok_or_else(|| anyhow!("actor id URL has no host"))?
         .to_string();
 
-    let username = doc["preferredUsername"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
+    let username = cap_str(
+        doc["preferredUsername"].as_str().unwrap_or(""),
+        100,
+    );
     if username.is_empty() {
         bail!("actor document missing preferredUsername");
     }
 
-    let display_name = doc["name"]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .unwrap_or(&username)
-        .to_string();
+    let display_name = cap_str(
+        &ammonia::clean(
+            doc["name"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&username),
+        ),
+        200,
+    );
 
-    let bio_html = doc["summary"].as_str().unwrap_or("").to_string();
+    let bio_html = cap_str(
+        &ammonia::clean(doc["summary"].as_str().unwrap_or("")),
+        10000,
+    );
 
     let avatar_url = doc["icon"]["url"]
         .as_str()

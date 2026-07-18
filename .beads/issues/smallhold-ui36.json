@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-ui36",
+  "title": "H5: Token hash comparison not constant-time",
+  "description": "Bearer token lookup uses SQL WHERE equality on SHA-256 hash. Timing side-channel theoretically allows hash prefix brute-force. Use subtle::ConstantTimeEq after fetch.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.431973101Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.636634424Z",
+  "closed_at": "2026-07-18T17:01:03.636634424Z",
+  "close_reason": "Closed"
+}

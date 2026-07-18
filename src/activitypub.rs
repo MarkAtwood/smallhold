@@ -310,8 +310,8 @@ async fn profile_page(
         fields_html.push_str("<table class=\"fields\">");
         for f in &fields {
             let name = ammonia::clean(f["name"].as_str().unwrap_or(""));
-            let value = f["value"].as_str().unwrap_or("");
-            fields_html.push_str(&format!("<tr><th>{name}</th><td>{value}</td></tr>"));
+            let clean_value = ammonia::clean(f["value"].as_str().unwrap_or(""));
+            fields_html.push_str(&format!("<tr><th>{name}</th><td>{clean_value}</td></tr>"));
         }
         fields_html.push_str("</table>");
     }
@@ -383,6 +383,14 @@ async fn profile_page(
     Ok(Html(html))
 }
 
+/// Escape a string for use in HTML attributes (meta content, title, etc.).
+fn html_attr_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// GET /@{username}/{post_id} — individual post page.
 async fn post_page(
     State(state): State<Arc<AppState>>,
@@ -423,17 +431,22 @@ async fn post_page(
         plain_text
     };
 
+    let og_desc_escaped = html_attr_escape(&og_desc);
+    let og_desc_title_escaped = html_attr_escape(
+        &og_desc.chars().take(50).collect::<String>(),
+    );
+
     let html = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{display_name}: "{og_desc_title}" — @{username}@{domain}</title>
+<title>{display_name}: "{og_desc_title_escaped}" — @{username}@{domain}</title>
 <meta property="og:title" content="{display_name} (@{username}@{domain})">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://{domain}/@{username}/{post_id}">
-<meta property="og:description" content="{og_desc}">
+<meta property="og:description" content="{og_desc_escaped}">
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}/statuses/{post_id}">
 <style>{PAGE_CSS}</style>
 <style>{custom_css}</style>
@@ -450,7 +463,6 @@ async fn post_page(
 </body>
 </html>"#,
         content = post.content_html,
-        og_desc_title = og_desc.chars().take(50).collect::<String>(),
     );
     Ok(Html(html))
 }

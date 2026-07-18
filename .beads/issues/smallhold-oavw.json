@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-oavw",
+  "title": "C5: Auth code race — concurrent token exchange reuses code",
+  "description": "Auth code is deleted after token generation, allowing a race where two parallel requests both exchange the same code for tokens. Use atomic DELETE RETURNING.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.224242891Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.481302831Z",
+  "closed_at": "2026-07-18T17:01:03.481302831Z",
+  "close_reason": "Closed"
+}

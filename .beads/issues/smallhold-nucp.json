@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-nucp",
+  "title": "H1: No Date header freshness check on inbound signatures",
+  "description": "Inbox signature verification doesn't check Date header is within ±5 minutes. Allows indefinite replay of captured signed activities.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.293250922Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.535083679Z",
+  "closed_at": "2026-07-18T17:01:03.535083679Z",
+  "close_reason": "Closed"
+}

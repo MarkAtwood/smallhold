@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-vt0r",
+  "title": "H7: Unbounded recursive CTE in thread context",
+  "description": "Thread descendants query has no LIMIT in the recursive CTE. A deep reply chain (1000+ levels) causes slow query or OOM. Add LIMIT 200.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.505016903Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.683806132Z",
+  "closed_at": "2026-07-18T17:01:03.683806132Z",
+  "close_reason": "Closed"
+}

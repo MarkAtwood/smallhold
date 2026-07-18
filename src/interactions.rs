@@ -1293,12 +1293,13 @@ async fn search(
         }
 
         // Local account search by username/display_name
-        let like_pattern = format!("%{query}%");
+        let escaped_query = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let like_pattern = format!("%{escaped_query}%");
         let local_matches: Vec<AccountRow> = sqlx::query_as(
             "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, \
              bot, fields_json, created_at, last_status_at \
              FROM accounts \
-             WHERE username LIKE ? OR display_name LIKE ? \
+             WHERE username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' \
              LIMIT ?",
         )
         .bind(&like_pattern)
@@ -1311,12 +1312,12 @@ async fn search(
             result_accounts.push(account_to_json(row, domain));
         }
 
-        // Remote account search
+        // Remote account search (reuses escaped like_pattern from above)
         let remote_matches: Vec<(i64, String, String, String, String, bool, bool)> =
             sqlx::query_as(
                 "SELECT id, username, domain, display_name, bio_html, is_locked, bot \
                  FROM remote_accounts \
-                 WHERE username LIKE ? OR display_name LIKE ? \
+                 WHERE username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' \
                  LIMIT ?",
             )
             .bind(&like_pattern)
@@ -1359,10 +1360,11 @@ async fn search(
 
     if search_hashtags && !query.is_empty() {
         let tag_query = query.strip_prefix('#').unwrap_or(query).to_lowercase();
-        let like_pattern = format!("%{tag_query}%");
+        let escaped_tag = tag_query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let like_pattern = format!("%{escaped_tag}%");
 
         let tags: Vec<(String,)> = sqlx::query_as(
-            "SELECT DISTINCT tag FROM post_tags WHERE tag LIKE ? LIMIT ?",
+            "SELECT DISTINCT tag FROM post_tags WHERE tag LIKE ? ESCAPE '\\' LIMIT ?",
         )
         .bind(&like_pattern)
         .bind(limit)

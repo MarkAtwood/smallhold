@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-lp75",
+  "title": "H6: No OAuth scope enforcement",
+  "description": "Bearer auth returns scopes but no endpoint checks them. Write-scope-only endpoints should reject read-only tokens.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.468066665Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.658146299Z",
+  "closed_at": "2026-07-18T17:01:03.658146299Z",
+  "close_reason": "Closed"
+}

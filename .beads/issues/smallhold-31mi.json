@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-31mi",
+  "title": "C4: Open redirect — OAuth redirect_uri not validated",
+  "description": "The authorize flow doesn't check redirect_uri against the registered app's redirect_uri. Attacker can steal auth codes via redirect_uri=https://evil.com.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.190973119Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.453481438Z",
+  "closed_at": "2026-07-18T17:01:03.453481438Z",
+  "close_reason": "Closed"
+}

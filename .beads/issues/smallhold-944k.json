@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-944k",
+  "title": "C6: JSON depth DoS — no recursion limit on inbox JSON parsing",
+  "description": "serde_json::from_slice has no depth limit. Deeply nested JSON (10k levels) causes stack overflow. Use serde_json with recursion_limit or manual depth check.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T16:55:29.257115619Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:01:03.507016677Z",
+  "closed_at": "2026-07-18T17:01:03.507016677Z",
+  "close_reason": "Closed"
+}

@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     read_at        INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_account_created ON notifications(account_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup ON notifications(account_id, kind, COALESCE(from_account_id, 0), COALESCE(from_remote_account_id, 0), COALESCE(post_id, 0), COALESCE(remote_post_id, 0));
 
 CREATE TABLE IF NOT EXISTS oauth_apps (
     id            INTEGER PRIMARY KEY,

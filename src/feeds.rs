@@ -77,13 +77,16 @@ async fn rss_feed(
     let account_id = resolve_account_id(&state.pool, &username).await?;
     let posts = fetch_public_posts(&state.pool, account_id).await?;
 
+    let escaped_username = xml_escape(&username);
+    let escaped_domain = xml_escape(domain);
+
     let mut items = String::new();
     for p in &posts {
         items.push_str(&format!(
             "    <item>\n\
-             \x20     <title>Post by @{username}</title>\n\
-             \x20     <link>https://{domain}/@{username}/{id}</link>\n\
-             \x20     <guid isPermaLink=\"true\">https://{domain}/@{username}/{id}</guid>\n\
+             \x20     <title>Post by @{escaped_username}</title>\n\
+             \x20     <link>https://{escaped_domain}/@{escaped_username}/{id}</link>\n\
+             \x20     <guid isPermaLink=\"true\">https://{escaped_domain}/@{escaped_username}/{id}</guid>\n\
              \x20     <pubDate>{date}</pubDate>\n\
              \x20     <description>{content}</description>\n\
              \x20   </item>\n",
@@ -97,10 +100,10 @@ async fn rss_feed(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n\
          <channel>\n\
-         \x20 <title>@{username}@{domain}</title>\n\
-         \x20 <link>https://{domain}/@{username}</link>\n\
-         \x20 <description>Posts by @{username}</description>\n\
-         \x20 <atom:link href=\"https://{domain}/users/{username}/feed.rss\" rel=\"self\" type=\"application/rss+xml\"/>\n\
+         \x20 <title>@{escaped_username}@{escaped_domain}</title>\n\
+         \x20 <link>https://{escaped_domain}/@{escaped_username}</link>\n\
+         \x20 <description>Posts by @{escaped_username}</description>\n\
+         \x20 <atom:link href=\"https://{escaped_domain}/users/{escaped_username}/feed.rss\" rel=\"self\" type=\"application/rss+xml\"/>\n\
          {items}\
          </channel>\n\
          </rss>\n",
@@ -123,6 +126,9 @@ async fn atom_feed(
     let account_id = resolve_account_id(&state.pool, &username).await?;
     let posts = fetch_public_posts(&state.pool, account_id).await?;
 
+    let escaped_username = xml_escape(&username);
+    let escaped_domain = xml_escape(domain);
+
     let updated = posts
         .first()
         .map(|p| millis_to_rfc3339(p.created_at))
@@ -133,13 +139,13 @@ async fn atom_feed(
         let ts = millis_to_rfc3339(p.created_at);
         entries.push_str(&format!(
             "  <entry>\n\
-             \x20   <title>Post by @{username}</title>\n\
-             \x20   <link href=\"https://{domain}/@{username}/{id}\"/>\n\
-             \x20   <id>https://{domain}/users/{username}/statuses/{id}</id>\n\
+             \x20   <title>Post by @{escaped_username}</title>\n\
+             \x20   <link href=\"https://{escaped_domain}/@{escaped_username}/{id}\"/>\n\
+             \x20   <id>https://{escaped_domain}/users/{escaped_username}/statuses/{id}</id>\n\
              \x20   <published>{ts}</published>\n\
              \x20   <updated>{ts}</updated>\n\
              \x20   <content type=\"html\">{content}</content>\n\
-             \x20   <author><name>@{username}@{domain}</name></author>\n\
+             \x20   <author><name>@{escaped_username}@{escaped_domain}</name></author>\n\
              \x20 </entry>\n",
             id = p.id,
             content = xml_escape(&p.content_html),
@@ -149,10 +155,10 @@ async fn atom_feed(
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <feed xmlns=\"http://www.w3.org/2005/Atom\">\n\
-         \x20 <title>@{username}@{domain}</title>\n\
-         \x20 <link href=\"https://{domain}/@{username}\" rel=\"alternate\"/>\n\
-         \x20 <link href=\"https://{domain}/users/{username}/feed.atom\" rel=\"self\"/>\n\
-         \x20 <id>https://{domain}/users/{username}</id>\n\
+         \x20 <title>@{escaped_username}@{escaped_domain}</title>\n\
+         \x20 <link href=\"https://{escaped_domain}/@{escaped_username}\" rel=\"alternate\"/>\n\
+         \x20 <link href=\"https://{escaped_domain}/users/{escaped_username}/feed.atom\" rel=\"self\"/>\n\
+         \x20 <id>https://{escaped_domain}/users/{escaped_username}</id>\n\
          \x20 <updated>{updated}</updated>\n\
          {entries}\
          </feed>\n",
