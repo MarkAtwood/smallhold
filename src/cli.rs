@@ -250,10 +250,7 @@ async fn cmd_serve(config_path: &Path) -> Result<()> {
     });
 
     // Start delivery worker
-    tokio::spawn(crate::delivery::run_delivery_worker(
-        pool,
-        config.clone(),
-    ));
+    tokio::spawn(crate::delivery::run_delivery_worker(pool, config.clone()));
 
     let app = crate::server::create_router(state);
     let listener = tokio::net::TcpListener::bind(&config.server.listen).await?;
@@ -456,8 +453,10 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             use rand::RngCore;
             let mut token_bytes = [0u8; 64];
             rand::thread_rng().fill_bytes(&mut token_bytes);
-            let token =
-                base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, token_bytes);
+            let token = base64::Engine::encode(
+                &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+                token_bytes,
+            );
 
             use sha2::{Digest, Sha256};
             let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));

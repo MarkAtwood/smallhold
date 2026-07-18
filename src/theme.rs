@@ -21,7 +21,10 @@ fn declarations_from_group(group: &Value) -> String {
     };
     let mut decls = String::new();
     for (name, token) in obj {
-        if let (Some(var), Some(value)) = (token_to_css_var(name), token.get("$value").and_then(|v| v.as_str())) {
+        if let (Some(var), Some(value)) = (
+            token_to_css_var(name),
+            token.get("$value").and_then(|v| v.as_str()),
+        ) {
             decls.push_str(var);
             decls.push(':');
             decls.push_str(value);

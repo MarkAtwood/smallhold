@@ -1,42 +1,43 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-c8oq",
+  "title": "Lists (custom account groupings with timeline)",
+  "description": "## What\nImplement the Mastodon Lists feature: named groups of followed accounts with a dedicated filtered timeline and configurable replies_policy.\n\n## Why\nUsers want to organize their follows into topic-based groups and read focused timelines without noise from their full home feed.\n\n## Scope\n- DB schema: lists and list_accounts tables\n- CRUD endpoints for lists (/api/v1/lists)\n- Account membership endpoints (/api/v1/lists/:id/accounts)\n- List timeline endpoint (/api/v1/timelines/list/:id)\n- replies_policy enforcement\n- 50 lists per persona limit",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:18:59Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nImplement the Mastodon Lists feature: named groups of followed accounts with a dedicated filtered timeline and configurable replies_policy.\n\n## Why\nUsers want to organize their follows into topic-based groups and read focused timelines without noise from their full home feed.\n\n## Scope\n- DB schema: lists and list_accounts tables\n- CRUD endpoints for lists (/api/v1/lists)\n- Account membership endpoints (/api/v1/lists/:id/accounts)\n- List timeline endpoint (/api/v1/timelines/list/:id)\n- replies_policy enforcement\n- 50 lists per persona limit",
-  "ephemeral": false,
-  "id": "smallhold-c8oq",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T17:14:14.755885122Z",
+  "started_at": "2026-07-18T17:05:23.898860681Z",
+  "closed_at": "2026-07-18T17:14:14.755885122Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Lists (custom account groupings with timeline)",
-  "updated_at": "2026-04-23T04:18:59Z",
   "dependencies": [
     {
-      "created_at": "2026-04-22T21:19:56Z",
-      "created_by": "Mark Atwood",
+      "issue_id": "",
       "depends_on_id": "smallhold-0bwa",
-      "metadata": "{}",
-      "type": "relates-to"
-    },
-    {
+      "type": "relates-to",
       "created_at": "2026-04-22T21:19:56Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-llgi",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-llgi",
+      "type": "relates-to",
+      "created_at": "2026-04-22T21:19:56Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p2gj",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:19:57Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-p2gj",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

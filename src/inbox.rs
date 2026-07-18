@@ -95,11 +95,10 @@ async fn user_inbox(
     request: axum::extract::Request,
 ) -> Result<impl IntoResponse, AppError> {
     // Verify the target account exists.
-    let exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
-            .bind(&username)
-            .fetch_one(&state.pool)
-            .await?;
+    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
+        .bind(&username)
+        .fetch_one(&state.pool)
+        .await?;
     if exists.0 == 0 {
         return Err(AppError::not_found("Account not found"));
     }
@@ -124,8 +123,8 @@ async fn process_inbox(
     if !check_json_depth(body, 50) {
         return Err(AppError::bad_request("JSON nesting too deep"));
     }
-    let activity: Value = serde_json::from_slice(body)
-        .map_err(|_| AppError::bad_request("invalid JSON"))?;
+    let activity: Value =
+        serde_json::from_slice(body).map_err(|_| AppError::bad_request("invalid JSON"))?;
 
     let actor_uri = activity["actor"]
         .as_str()
@@ -198,7 +197,9 @@ fn parse_signature_header(header_val: &str) -> Result<SignatureParams, AppError>
 
         // Value is quoted
         if !remaining.starts_with('"') {
-            return Err(AppError::bad_request("malformed Signature header: unquoted value"));
+            return Err(AppError::bad_request(
+                "malformed Signature header: unquoted value",
+            ));
         }
         remaining = &remaining[1..]; // skip opening quote
         let close_quote = remaining
@@ -210,8 +211,12 @@ fn parse_signature_header(header_val: &str) -> Result<SignatureParams, AppError>
         match param_name {
             "keyId" => key_id = Some(value.to_string()),
             "headers" => {
-                headers_list =
-                    Some(value.split_whitespace().map(String::from).collect::<Vec<_>>());
+                headers_list = Some(
+                    value
+                        .split_whitespace()
+                        .map(String::from)
+                        .collect::<Vec<_>>(),
+                );
             }
             "signature" => {
                 let decoded = base64::engine::general_purpose::STANDARD
@@ -223,12 +228,11 @@ fn parse_signature_header(header_val: &str) -> Result<SignatureParams, AppError>
         }
     }
 
-    let key_id = key_id
-        .ok_or_else(|| AppError::bad_request("Signature header missing keyId"))?;
-    let headers_list = headers_list
-        .ok_or_else(|| AppError::bad_request("Signature header missing headers"))?;
-    let signature_bytes = signature_b64
-        .ok_or_else(|| AppError::bad_request("Signature header missing signature"))?;
+    let key_id = key_id.ok_or_else(|| AppError::bad_request("Signature header missing keyId"))?;
+    let headers_list =
+        headers_list.ok_or_else(|| AppError::bad_request("Signature header missing headers"))?;
+    let signature_bytes =
+        signature_b64.ok_or_else(|| AppError::bad_request("Signature header missing signature"))?;
 
     if key_id.len() > MAX_URI_LEN {
         return Err(AppError::bad_request("keyId too long"));
@@ -258,8 +262,7 @@ fn build_signed_string(
                 // If a Digest header is present, we verify it matches.
                 use sha2::Digest;
                 let computed_hash = sha2::Sha256::digest(body);
-                let computed_b64 =
-                    base64::engine::general_purpose::STANDARD.encode(computed_hash);
+                let computed_b64 = base64::engine::general_purpose::STANDARD.encode(computed_hash);
                 let computed_digest = format!("SHA-256={computed_b64}");
 
                 if let Some(header_val) = http_headers.get("digest") {
@@ -274,17 +277,11 @@ fn build_signed_string(
                 computed_digest
             }
             other => {
-                let hv = http_headers
-                    .get(other)
-                    .ok_or_else(|| {
-                        AppError::bad_request(format!(
-                            "Signature references missing header: {other}"
-                        ))
-                    })?;
+                let hv = http_headers.get(other).ok_or_else(|| {
+                    AppError::bad_request(format!("Signature references missing header: {other}"))
+                })?;
                 hv.to_str()
-                    .map_err(|_| {
-                        AppError::bad_request(format!("non-ASCII header value: {other}"))
-                    })?
+                    .map_err(|_| AppError::bad_request(format!("non-ASCII header value: {other}")))?
                     .to_string()
             }
         };
@@ -329,27 +326,24 @@ async fn lookup_by_key_id(
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|(id, actor_uri, public_key_pem, inbox_url, shared_inbox_url)| {
-        RemoteAccountRow {
+    Ok(row.map(
+        |(id, actor_uri, public_key_pem, inbox_url, shared_inbox_url)| RemoteAccountRow {
             id,
             actor_uri,
             public_key_pem,
             inbox_url,
             shared_inbox_url,
-        }
-    }))
+        },
+    ))
 }
 
 /// Get a local account's private key and key_id for signing outbound fetches.
 /// Uses the first local account found.
-async fn get_signing_credentials(
-    state: &AppState,
-) -> Result<(String, String), AppError> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT username, private_key_pem FROM accounts LIMIT 1",
-    )
-    .fetch_optional(&state.pool)
-    .await?;
+async fn get_signing_credentials(state: &AppState) -> Result<(String, String), AppError> {
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT username, private_key_pem FROM accounts LIMIT 1")
+            .fetch_optional(&state.pool)
+            .await?;
 
     let (username, private_key_pem) =
         row.ok_or_else(|| AppError::internal("no local accounts configured"))?;
@@ -428,7 +422,11 @@ async fn verify_and_fetch_actor(
 
     // The keyId typically looks like "https://remote.example/users/alice#main-key".
     // The actor URI should be the keyId minus the fragment.
-    let key_actor_uri = sig_params.key_id.split('#').next().unwrap_or(&sig_params.key_id);
+    let key_actor_uri = sig_params
+        .key_id
+        .split('#')
+        .next()
+        .unwrap_or(&sig_params.key_id);
 
     // Verify the key belongs to the claimed actor (anti-spoofing).
     if key_actor_uri != actor_uri {
@@ -437,8 +435,7 @@ async fn verify_and_fetch_actor(
         ));
     }
 
-    let signed_string =
-        build_signed_string(&sig_params.headers_list, headers, body, request_path)?;
+    let signed_string = build_signed_string(&sig_params.headers_list, headers, body, request_path)?;
 
     // Try cached key first.
     if let Some(cached) = lookup_by_key_id(&state.pool, &sig_params.key_id).await? {
@@ -563,19 +560,15 @@ async fn handle_follow(
     }
 
     let domain = &state.config.server.domain;
-    let (account_id, username, is_locked) =
-        resolve_local_account(&state.pool, domain, object_uri)
-            .await?
-            .ok_or_else(|| AppError::not_found("Follow target not found"))?;
+    let (account_id, username, is_locked) = resolve_local_account(&state.pool, domain, object_uri)
+        .await?
+        .ok_or_else(|| AppError::not_found("Follow target not found"))?;
 
     let now = chrono::Utc::now().timestamp();
 
     if is_locked {
         // Insert into follow_requests.
-        let ap_id = activity["id"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let ap_id = activity["id"].as_str().unwrap_or("").to_string();
         if ap_id.is_empty() {
             return Err(AppError::bad_request("Follow activity missing id"));
         }
@@ -680,16 +673,13 @@ async fn handle_undo_follow(
         .ok_or_else(|| AppError::bad_request("Undo Follow missing object"))?;
 
     let domain = &state.config.server.domain;
-    if let Some((account_id, _, _)) =
-        resolve_local_account(&state.pool, domain, object_uri).await?
+    if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
-        sqlx::query(
-            "DELETE FROM followers WHERE local_account_id = ? AND remote_account_id = ?",
-        )
-        .bind(account_id)
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
+        sqlx::query("DELETE FROM followers WHERE local_account_id = ? AND remote_account_id = ?")
+            .bind(account_id)
+            .bind(remote.id)
+            .execute(&state.pool)
+            .await?;
 
         // Also remove any pending follow request.
         sqlx::query(
@@ -720,12 +710,11 @@ async fn handle_undo_like(
     let liked_uri = object_id(&inner["object"]).unwrap_or("");
     if !liked_uri.is_empty() {
         // Find local post by ap_id, then delete the favourite notification.
-        let post_row: Option<(i64, i64)> = sqlx::query_as(
-            "SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1",
-        )
-        .bind(liked_uri)
-        .fetch_optional(&state.pool)
-        .await?;
+        let post_row: Option<(i64, i64)> =
+            sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+                .bind(liked_uri)
+                .fetch_optional(&state.pool)
+                .await?;
 
         if let Some((post_id, account_id)) = post_row {
             sqlx::query(
@@ -751,12 +740,11 @@ async fn handle_undo_announce(
 ) -> Result<(), AppError> {
     let boosted_uri = object_id(&inner["object"]).unwrap_or("");
     if !boosted_uri.is_empty() {
-        let post_row: Option<(i64, i64)> = sqlx::query_as(
-            "SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1",
-        )
-        .bind(boosted_uri)
-        .fetch_optional(&state.pool)
-        .await?;
+        let post_row: Option<(i64, i64)> =
+            sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+                .bind(boosted_uri)
+                .fetch_optional(&state.pool)
+                .await?;
 
         if let Some((post_id, account_id)) = post_row {
             sqlx::query(
@@ -961,10 +949,7 @@ async fn handle_create(
 fn determine_visibility(activity: &Value, object: &Value) -> String {
     let recipients = collect_recipients(activity);
     let obj_recipients = collect_recipients(object);
-    let all: Vec<&str> = recipients
-        .into_iter()
-        .chain(obj_recipients)
-        .collect();
+    let all: Vec<&str> = recipients.into_iter().chain(obj_recipients).collect();
 
     let has_public = all
         .iter()
@@ -1149,13 +1134,11 @@ async fn handle_delete(
     }
 
     // Otherwise, try to delete a post — only if owned by this actor.
-    let result = sqlx::query(
-        "DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?",
-    )
-    .bind(deleted_uri)
-    .bind(remote.id)
-    .execute(&state.pool)
-    .await?;
+    let result = sqlx::query("DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?")
+        .bind(deleted_uri)
+        .bind(remote.id)
+        .execute(&state.pool)
+        .await?;
 
     if result.rows_affected() > 0 {
         tracing::info!(
@@ -1186,12 +1169,11 @@ async fn handle_like(
     }
 
     // Look up the local post.
-    let post_row: Option<(i64, i64)> = sqlx::query_as(
-        "SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1",
-    )
-    .bind(liked_uri)
-    .fetch_optional(&state.pool)
-    .await?;
+    let post_row: Option<(i64, i64)> =
+        sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+            .bind(liked_uri)
+            .fetch_optional(&state.pool)
+            .await?;
 
     if let Some((post_id, account_id)) = post_row {
         let now = chrono::Utc::now().timestamp();
@@ -1231,12 +1213,11 @@ async fn handle_announce(
     }
 
     // Look up the local post being boosted.
-    let post_row: Option<(i64, i64)> = sqlx::query_as(
-        "SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1",
-    )
-    .bind(boosted_uri)
-    .fetch_optional(&state.pool)
-    .await?;
+    let post_row: Option<(i64, i64)> =
+        sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+            .bind(boosted_uri)
+            .fetch_optional(&state.pool)
+            .await?;
 
     if let Some((post_id, account_id)) = post_row {
         let now = chrono::Utc::now().timestamp();
@@ -1321,14 +1302,13 @@ async fn handle_move(
     let (signing_key_pem, signing_key_id) = get_signing_credentials(state).await?;
     // We need to fetch the NEW actor and check if the OLD actor lists the NEW actor
     // in alsoKnownAs. Fetch old actor's raw document.
-    let old_actor_url: url::Url = remote.actor_uri.parse()
+    let old_actor_url: url::Url = remote
+        .actor_uri
+        .parse()
         .map_err(|_| AppError::bad_request("invalid actor URI"))?;
-    let get_headers = FederationClient::sign_get_headers(
-        &signing_key_pem,
-        &signing_key_id,
-        &old_actor_url,
-    )
-    .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
+    let get_headers =
+        FederationClient::sign_get_headers(&signing_key_pem, &signing_key_id, &old_actor_url)
+            .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
 
     // ponytail: re-fetch the raw actor document to check alsoKnownAs.
     // This duplicates the fetch_actor call somewhat but we need the raw JSON.
@@ -1351,7 +1331,9 @@ async fn handle_move(
         .map_err(|e| AppError::internal(format!("fetch old actor: {e}")))?;
 
     if !resp.status().is_success() {
-        return Err(AppError::internal("failed to fetch old actor for Move verification"));
+        return Err(AppError::internal(
+            "failed to fetch old actor for Move verification",
+        ));
     }
 
     let old_doc: Value = resp
@@ -1425,8 +1407,7 @@ async fn handle_move(
             .as_deref()
             .unwrap_or(&new_account.inbox_url);
 
-        enqueue_activity(&state.pool, target_inbox, *local_id, &follow_activity)
-            .await?;
+        enqueue_activity(&state.pool, target_inbox, *local_id, &follow_activity).await?;
     }
 
     // Remove old follows.
@@ -1538,13 +1519,11 @@ async fn handle_reject(
     };
 
     // Remove the pending follow.
-    sqlx::query(
-        "DELETE FROM follows WHERE follower_id = ? AND followee_remote_id = ?",
-    )
-    .bind(local_id)
-    .bind(remote.id)
-    .execute(&state.pool)
-    .await?;
+    sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_remote_id = ?")
+        .bind(local_id)
+        .bind(remote.id)
+        .execute(&state.pool)
+        .await?;
 
     tracing::info!(
         local_account_id = local_id,

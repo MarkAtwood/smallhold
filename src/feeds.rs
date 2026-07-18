@@ -16,15 +16,11 @@ struct FeedPost {
 }
 
 /// Look up account_id by username, returning 404 if not found.
-async fn resolve_account_id(
-    pool: &sqlx::SqlitePool,
-    username: &str,
-) -> Result<i64, AppError> {
-    let row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
-            .bind(username)
-            .fetch_optional(pool)
-            .await?;
+async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
+    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        .bind(username)
+        .fetch_optional(pool)
+        .await?;
     row.map(|r| r.0)
         .ok_or_else(|| AppError::not_found("Account not found"))
 }

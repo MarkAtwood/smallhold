@@ -6,7 +6,7 @@ use axum::http::header::LOCATION;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use base64::Engine;
 use serde::Deserialize;
@@ -176,29 +176,24 @@ pub fn account_to_json_with_counts(
 }
 
 pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
-    let (followers,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM followers WHERE local_account_id = ?",
-    )
-    .bind(account_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or((0,));
+    let (followers,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE local_account_id = ?")
+            .bind(account_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or((0,));
 
-    let (following,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM follows WHERE follower_id = ?",
-    )
-    .bind(account_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or((0,));
+    let (following,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE follower_id = ?")
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or((0,));
 
-    let (statuses,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM posts WHERE account_id = ?",
-    )
-    .bind(account_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or((0,));
+    let (statuses,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ?")
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or((0,));
 
     (followers, following, statuses)
 }
@@ -354,11 +349,10 @@ async fn authorize_form(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AuthorizeQuery>,
 ) -> Result<Html<String>, AppError> {
-    let accounts: Vec<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, username, display_name FROM accounts ORDER BY username",
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    let accounts: Vec<(i64, String, String)> =
+        sqlx::query_as("SELECT id, username, display_name FROM accounts ORDER BY username")
+            .fetch_all(&state.pool)
+            .await?;
 
     let response_type = html_escape(params.response_type.as_deref().unwrap_or("code"));
     let client_id = html_escape(params.client_id.as_deref().unwrap_or(""));
@@ -459,11 +453,10 @@ async fn authorize_submit(
     verify_password(&form.password, &password_hash)?;
 
     // Verify account exists
-    let account_exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE id = ?")
-            .bind(form.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+    let account_exists: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE id = ?")
+        .bind(form.account_id)
+        .fetch_optional(&state.pool)
+        .await?;
     if account_exists.is_none() {
         return Err(AppError::bad_request("Account not found"));
     }
@@ -603,7 +596,9 @@ async fn token(
             app_row.ok_or_else(|| AppError::bad_request("Unknown client_id"))?;
 
         if found_app_id != app_id {
-            return Err(AppError::bad_request("client_id does not match authorization code"));
+            return Err(AppError::bad_request(
+                "client_id does not match authorization code",
+            ));
         }
 
         if let Some(ref cs) = form.client_secret {
@@ -659,11 +654,13 @@ async fn revoke(
     let token_hash = hex_encode(&Sha256::digest(form.token.as_bytes()));
     let now = now_millis();
 
-    sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL")
-        .bind(now)
-        .bind(&token_hash)
-        .execute(&state.pool)
-        .await?;
+    sqlx::query(
+        "UPDATE oauth_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+    )
+    .bind(now)
+    .bind(&token_hash)
+    .execute(&state.pool)
+    .await?;
 
     // Always return 200 per RFC 7009, even if token not found
     Ok(StatusCode::OK)
@@ -673,9 +670,7 @@ async fn revoke(
 // Instance metadata: GET /api/v1/instance
 // ---------------------------------------------------------------------------
 
-async fn instance_v1(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Value>, AppError> {
+async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
     let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
@@ -726,9 +721,7 @@ async fn instance_v1(
 // Instance metadata: GET /api/v2/instance
 // ---------------------------------------------------------------------------
 
-async fn instance_v2(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Value>, AppError> {
+async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
     let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
@@ -799,8 +792,7 @@ async fn verify_credentials(
 ) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
     let row = fetch_account_row(&state.pool, auth.account_id).await?;
-    let (followers, following, statuses) =
-        fetch_account_counts(&state.pool, auth.account_id).await;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, auth.account_id).await;
     let mut v = account_to_json_with_counts(&row, domain, followers, following, statuses);
     let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
     v["source"] = json!({
@@ -876,9 +868,10 @@ async fn account_statuses(
     let domain = &state.config.server.domain;
 
     // Build query with pagination
-    let statuses: Vec<StatusRow> =
-        if let Some(max_id) = params.get("max_id").and_then(|v| v.parse::<i64>().ok()) {
-            sqlx::query_as(
+    let statuses: Vec<StatusRow> = if let Some(max_id) =
+        params.get("max_id").and_then(|v| v.parse::<i64>().ok())
+    {
+        sqlx::query_as(
                 "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
             )
             .bind(account_id)
@@ -886,8 +879,8 @@ async fn account_statuses(
             .bind(limit)
             .fetch_all(&state.pool)
             .await?
-        } else if let Some(min_id) = params.get("min_id").and_then(|v| v.parse::<i64>().ok()) {
-            sqlx::query_as(
+    } else if let Some(min_id) = params.get("min_id").and_then(|v| v.parse::<i64>().ok()) {
+        sqlx::query_as(
                 "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
             )
             .bind(account_id)
@@ -895,15 +888,15 @@ async fn account_statuses(
             .bind(limit)
             .fetch_all(&state.pool)
             .await?
-        } else {
-            sqlx::query_as(
+    } else {
+        sqlx::query_as(
                 "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? ORDER BY id DESC LIMIT ?",
             )
             .bind(account_id)
             .bind(limit)
             .fetch_all(&state.pool)
             .await?
-        };
+    };
 
     let account_row = fetch_account_row(&state.pool, account_id).await?;
     let account_json = account_to_json(&account_row, domain);
@@ -963,8 +956,7 @@ async fn account_statuses(
 
     let body = serde_json::to_string(&items).map_err(|e| AppError::internal(e.to_string()))?;
 
-    let mut builder = Response::builder()
-        .header("Content-Type", "application/json; charset=utf-8");
+    let mut builder = Response::builder().header("Content-Type", "application/json; charset=utf-8");
 
     if !link_parts.is_empty() {
         builder = builder.header("Link", link_parts.join(", "));
@@ -1049,19 +1041,6 @@ async fn post_markers() -> Json<Value> {
     Json(json!({}))
 }
 
-async fn get_tag(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
-    let domain = &state.config.server.domain;
-    Json(json!({
-        "name": id,
-        "url": format!("https://{domain}/tags/{id}"),
-        "history": [],
-        "following": false
-    }))
-}
-
 /// GET /api/v1/apps/verify_credentials
 async fn verify_app_credentials(
     State(state): State<Arc<AppState>>,
@@ -1091,6 +1070,703 @@ async fn verify_app_credentials(
 }
 
 // ---------------------------------------------------------------------------
+// Lists
+// ---------------------------------------------------------------------------
+
+fn list_to_json(id: i64, title: &str, replies_policy: &str) -> Value {
+    json!({
+        "id": id.to_string(),
+        "title": title,
+        "replies_policy": replies_policy,
+        "exclusive": false,
+    })
+}
+
+/// GET /api/v1/lists
+async fn get_lists(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let rows: Vec<(i64, String, String)> = sqlx::query_as(
+        "SELECT id, title, replies_policy FROM lists WHERE account_id = ? ORDER BY id",
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let lists: Vec<Value> = rows
+        .iter()
+        .map(|(id, title, rp)| list_to_json(*id, title, rp))
+        .collect();
+
+    Ok(Json(json!(lists)))
+}
+
+#[derive(Deserialize)]
+struct CreateListRequest {
+    title: String,
+    #[serde(default = "default_replies_policy")]
+    replies_policy: String,
+}
+
+fn default_replies_policy() -> String {
+    "list".to_string()
+}
+
+/// POST /api/v1/lists
+async fn create_list(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Json(body): Json<CreateListRequest>,
+) -> Result<(StatusCode, Json<Value>), AppError> {
+    let valid_policies = ["followed", "list", "none"];
+    if !valid_policies.contains(&body.replies_policy.as_str()) {
+        return Err(AppError::unprocessable("Invalid replies_policy"));
+    }
+
+    let id = generate_id();
+    let now = now_millis();
+
+    sqlx::query(
+        "INSERT INTO lists (id, account_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(auth.account_id)
+    .bind(&body.title)
+    .bind(&body.replies_policy)
+    .bind(now)
+    .execute(&state.pool)
+    .await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(list_to_json(id, &body.title, &body.replies_policy)),
+    ))
+}
+
+/// GET /api/v1/lists/:id
+async fn get_list(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let row: Option<(i64, String, String)> = sqlx::query_as(
+        "SELECT id, title, replies_policy FROM lists WHERE id = ? AND account_id = ?",
+    )
+    .bind(list_id)
+    .bind(auth.account_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (id, title, rp) = row.ok_or_else(|| AppError::not_found("List not found"))?;
+    Ok(Json(list_to_json(id, &title, &rp)))
+}
+
+#[derive(Deserialize)]
+struct UpdateListRequest {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    replies_policy: Option<String>,
+}
+
+/// PUT /api/v1/lists/:id
+async fn update_list(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateListRequest>,
+) -> Result<Json<Value>, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let row: Option<(i64, String, String)> = sqlx::query_as(
+        "SELECT id, title, replies_policy FROM lists WHERE id = ? AND account_id = ?",
+    )
+    .bind(list_id)
+    .bind(auth.account_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (_, mut title, mut rp) = row.ok_or_else(|| AppError::not_found("List not found"))?;
+
+    if let Some(ref new_title) = body.title {
+        title = new_title.clone();
+    }
+    if let Some(ref new_rp) = body.replies_policy {
+        let valid_policies = ["followed", "list", "none"];
+        if !valid_policies.contains(&new_rp.as_str()) {
+            return Err(AppError::unprocessable("Invalid replies_policy"));
+        }
+        rp = new_rp.clone();
+    }
+
+    sqlx::query("UPDATE lists SET title = ?, replies_policy = ? WHERE id = ?")
+        .bind(&title)
+        .bind(&rp)
+        .bind(list_id)
+        .execute(&state.pool)
+        .await?;
+
+    Ok(Json(list_to_json(list_id, &title, &rp)))
+}
+
+/// DELETE /api/v1/lists/:id
+async fn delete_list(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let result = sqlx::query("DELETE FROM lists WHERE id = ? AND account_id = ?")
+        .bind(list_id)
+        .bind(auth.account_id)
+        .execute(&state.pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("List not found"));
+    }
+
+    Ok(StatusCode::OK)
+}
+
+/// GET /api/v1/lists/:id/accounts
+async fn get_list_accounts(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND account_id = ?")
+            .bind(list_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    if exists.is_none() {
+        return Err(AppError::not_found("List not found"));
+    }
+
+    let domain = &state.config.server.domain;
+    let account_rows: Vec<AccountRow> = sqlx::query_as(
+        "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
+         a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
+         FROM accounts a JOIN list_accounts la ON a.id = la.account_id \
+         WHERE la.list_id = ? ORDER BY a.id",
+    )
+    .bind(list_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let accounts: Vec<Value> = account_rows
+        .iter()
+        .map(|row| account_to_json(row, domain))
+        .collect();
+
+    Ok(Json(json!(accounts)))
+}
+
+#[derive(Deserialize)]
+struct ListAccountsRequest {
+    account_ids: Vec<String>,
+}
+
+/// POST /api/v1/lists/:id/accounts
+async fn add_list_accounts(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<ListAccountsRequest>,
+) -> Result<StatusCode, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND account_id = ?")
+            .bind(list_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    if exists.is_none() {
+        return Err(AppError::not_found("List not found"));
+    }
+
+    for aid_str in &body.account_ids {
+        let aid: i64 = aid_str
+            .parse()
+            .map_err(|_| AppError::unprocessable("Invalid account_id"))?;
+        sqlx::query("INSERT OR IGNORE INTO list_accounts (list_id, account_id) VALUES (?, ?)")
+            .bind(list_id)
+            .bind(aid)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    Ok(StatusCode::OK)
+}
+
+/// DELETE /api/v1/lists/:id/accounts
+async fn remove_list_accounts(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<ListAccountsRequest>,
+) -> Result<StatusCode, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND account_id = ?")
+            .bind(list_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    if exists.is_none() {
+        return Err(AppError::not_found("List not found"));
+    }
+
+    for aid_str in &body.account_ids {
+        let aid: i64 = aid_str
+            .parse()
+            .map_err(|_| AppError::unprocessable("Invalid account_id"))?;
+        sqlx::query("DELETE FROM list_accounts WHERE list_id = ? AND account_id = ?")
+            .bind(list_id)
+            .bind(aid)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    Ok(StatusCode::OK)
+}
+
+// ---------------------------------------------------------------------------
+// v2 Filters
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateFilterRequest {
+    title: String,
+    #[serde(default)]
+    context: Vec<String>,
+    #[serde(default = "default_filter_action")]
+    filter_action: String,
+    #[serde(default)]
+    expires_in: Option<i64>,
+    #[serde(default)]
+    keywords_attributes: Vec<KeywordAttribute>,
+}
+
+#[derive(Deserialize)]
+struct UpdateFilterRequest {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    context: Option<Vec<String>>,
+    #[serde(default)]
+    filter_action: Option<String>,
+    #[serde(default)]
+    expires_in: Option<i64>,
+    #[serde(default)]
+    keywords_attributes: Option<Vec<KeywordAttribute>>,
+}
+
+#[derive(Deserialize)]
+struct KeywordAttribute {
+    keyword: String,
+    #[serde(default = "default_true")]
+    whole_word: bool,
+}
+
+#[derive(Deserialize)]
+struct AddKeywordRequest {
+    keyword: String,
+    #[serde(default = "default_true")]
+    whole_word: bool,
+}
+
+fn default_filter_action() -> String {
+    "warn".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Build a v2 Filter JSON object with nested keywords.
+async fn filter_to_json(pool: &sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
+    let row: (i64, String, String, String, Option<i64>, i64) = sqlx::query_as(
+        "SELECT id, title, context, filter_action, expires_at, created_at \
+         FROM filters WHERE id = ?",
+    )
+    .bind(filter_id)
+    .fetch_one(pool)
+    .await?;
+
+    let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
+        "SELECT id, keyword, whole_word FROM filter_keywords \
+         WHERE filter_id = ? ORDER BY id",
+    )
+    .bind(filter_id)
+    .fetch_all(pool)
+    .await?;
+
+    let context: Vec<String> = serde_json::from_str(&row.2).unwrap_or_default();
+    let keyword_vals: Vec<Value> = keywords
+        .iter()
+        .map(|(id, kw, ww)| {
+            json!({
+                "id": id.to_string(),
+                "keyword": kw,
+                "whole_word": ww,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "id": row.0.to_string(),
+        "title": row.1,
+        "context": context,
+        "expires_at": row.4.map(millis_to_iso),
+        "filter_action": row.3,
+        "keywords": keyword_vals,
+        "statuses": [],
+    }))
+}
+
+/// GET /api/v2/filters
+async fn list_filters_v2(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let filter_ids: Vec<(i64,)> =
+        sqlx::query_as("SELECT id FROM filters WHERE account_id = ? ORDER BY id")
+            .bind(auth.account_id)
+            .fetch_all(&state.pool)
+            .await?;
+
+    let mut results = Vec::with_capacity(filter_ids.len());
+    for (fid,) in &filter_ids {
+        results.push(filter_to_json(&state.pool, *fid).await?);
+    }
+    Ok(Json(json!(results)))
+}
+
+/// POST /api/v2/filters
+async fn create_filter_v2(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Json(body): Json<CreateFilterRequest>,
+) -> Result<(StatusCode, Json<Value>), AppError> {
+    let id = generate_id();
+    let now = now_millis();
+    let context_json =
+        serde_json::to_string(&body.context).map_err(|e| AppError::internal(e.to_string()))?;
+    let expires_at = body.expires_in.map(|secs| now + secs * 1000);
+
+    sqlx::query(
+        "INSERT INTO filters \
+         (id, account_id, title, context, filter_action, expires_at, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(auth.account_id)
+    .bind(&body.title)
+    .bind(&context_json)
+    .bind(&body.filter_action)
+    .bind(expires_at)
+    .bind(now)
+    .execute(&state.pool)
+    .await?;
+
+    for kw in &body.keywords_attributes {
+        let kw_id = generate_id();
+        sqlx::query(
+            "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(kw_id)
+        .bind(id)
+        .bind(&kw.keyword)
+        .bind(kw.whole_word)
+        .execute(&state.pool)
+        .await?;
+    }
+
+    let result = filter_to_json(&state.pool, id).await?;
+    Ok((StatusCode::OK, Json(result)))
+}
+
+/// GET /api/v2/filters/:id
+async fn get_filter_v2(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let filter_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Filter not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND account_id = ?")
+            .bind(filter_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    if exists.is_none() {
+        return Err(AppError::not_found("Filter not found"));
+    }
+
+    Ok(Json(filter_to_json(&state.pool, filter_id).await?))
+}
+
+/// PUT /api/v2/filters/:id
+async fn update_filter_v2(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateFilterRequest>,
+) -> Result<Json<Value>, AppError> {
+    let filter_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Filter not found"))?;
+
+    let row: Option<(i64, String, String, String, Option<i64>)> = sqlx::query_as(
+        "SELECT id, title, context, filter_action, expires_at \
+         FROM filters WHERE id = ? AND account_id = ?",
+    )
+    .bind(filter_id)
+    .bind(auth.account_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    let (_fid, cur_title, cur_context, cur_action, cur_expires) =
+        row.ok_or_else(|| AppError::not_found("Filter not found"))?;
+
+    let title = body.title.as_deref().unwrap_or(&cur_title);
+    let filter_action = body.filter_action.as_deref().unwrap_or(&cur_action);
+    let context_json = match &body.context {
+        Some(ctx) => serde_json::to_string(ctx).map_err(|e| AppError::internal(e.to_string()))?,
+        None => cur_context,
+    };
+    let now = now_millis();
+    let expires_at = match body.expires_in {
+        Some(secs) => Some(now + secs * 1000),
+        None => cur_expires,
+    };
+
+    sqlx::query(
+        "UPDATE filters SET title = ?, context = ?, filter_action = ?, expires_at = ? \
+         WHERE id = ?",
+    )
+    .bind(title)
+    .bind(&context_json)
+    .bind(filter_action)
+    .bind(expires_at)
+    .bind(filter_id)
+    .execute(&state.pool)
+    .await?;
+
+    if let Some(kw_attrs) = &body.keywords_attributes {
+        sqlx::query("DELETE FROM filter_keywords WHERE filter_id = ?")
+            .bind(filter_id)
+            .execute(&state.pool)
+            .await?;
+        for kw in kw_attrs {
+            let kw_id = generate_id();
+            sqlx::query(
+                "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
+                 VALUES (?, ?, ?, ?)",
+            )
+            .bind(kw_id)
+            .bind(filter_id)
+            .bind(&kw.keyword)
+            .bind(kw.whole_word)
+            .execute(&state.pool)
+            .await?;
+        }
+    }
+
+    Ok(Json(filter_to_json(&state.pool, filter_id).await?))
+}
+
+/// DELETE /api/v2/filters/:id
+async fn delete_filter_v2(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let filter_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Filter not found"))?;
+
+    let result = sqlx::query("DELETE FROM filters WHERE id = ? AND account_id = ?")
+        .bind(filter_id)
+        .bind(auth.account_id)
+        .execute(&state.pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("Filter not found"));
+    }
+    Ok(StatusCode::OK)
+}
+
+/// GET /api/v2/filters/:id/keywords
+async fn list_filter_keywords(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let filter_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Filter not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND account_id = ?")
+            .bind(filter_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    if exists.is_none() {
+        return Err(AppError::not_found("Filter not found"));
+    }
+
+    let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
+        "SELECT id, keyword, whole_word FROM filter_keywords \
+         WHERE filter_id = ? ORDER BY id",
+    )
+    .bind(filter_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let vals: Vec<Value> = keywords
+        .iter()
+        .map(|(kid, kw, ww)| {
+            json!({
+                "id": kid.to_string(),
+                "keyword": kw,
+                "whole_word": ww,
+            })
+        })
+        .collect();
+    Ok(Json(json!(vals)))
+}
+
+/// POST /api/v2/filters/:id/keywords
+async fn add_filter_keyword(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<AddKeywordRequest>,
+) -> Result<Json<Value>, AppError> {
+    let filter_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Filter not found"))?;
+
+    let exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND account_id = ?")
+            .bind(filter_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    if exists.is_none() {
+        return Err(AppError::not_found("Filter not found"));
+    }
+
+    let kw_id = generate_id();
+    sqlx::query(
+        "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
+         VALUES (?, ?, ?, ?)",
+    )
+    .bind(kw_id)
+    .bind(filter_id)
+    .bind(&body.keyword)
+    .bind(body.whole_word)
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(json!({
+        "id": kw_id.to_string(),
+        "keyword": body.keyword,
+        "whole_word": body.whole_word,
+    })))
+}
+
+/// DELETE /api/v2/filters/keywords/:id
+async fn delete_filter_keyword(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let keyword_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Keyword not found"))?;
+
+    let result = sqlx::query(
+        "DELETE FROM filter_keywords WHERE id = ? AND filter_id IN \
+         (SELECT id FROM filters WHERE account_id = ?)",
+    )
+    .bind(keyword_id)
+    .bind(auth.account_id)
+    .execute(&state.pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("Keyword not found"));
+    }
+    Ok(StatusCode::OK)
+}
+
+/// GET /api/v1/filters — v1 compat: flat list, one entry per keyword
+async fn list_filters_v1(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let rows: Vec<(i64, String, String, bool, Option<i64>)> = sqlx::query_as(
+        "SELECT fk.id, fk.keyword, f.context, fk.whole_word, f.expires_at \
+         FROM filter_keywords fk \
+         JOIN filters f ON fk.filter_id = f.id \
+         WHERE f.account_id = ? \
+         ORDER BY fk.id",
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let results: Vec<Value> = rows
+        .iter()
+        .map(|(id, phrase, context_str, whole_word, expires_at)| {
+            let context: Vec<String> = serde_json::from_str(context_str).unwrap_or_default();
+            json!({
+                "id": id.to_string(),
+                "phrase": phrase,
+                "context": context,
+                "whole_word": whole_word,
+                "expires_at": expires_at.map(millis_to_iso),
+                "irreversible": false,
+            })
+        })
+        .collect();
+    Ok(Json(json!(results)))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -1116,17 +1792,45 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/accounts/relationships", get(relationships))
         .route("/api/v1/accounts/{id}", get(get_account))
         .route("/api/v1/accounts/{id}/statuses", get(account_statuses))
+        // Filters
+        .route("/api/v1/filters", get(list_filters_v1))
+        .route(
+            "/api/v2/filters",
+            get(list_filters_v2).post(create_filter_v2),
+        )
+        .route(
+            "/api/v2/filters/{id}",
+            get(get_filter_v2)
+                .put(update_filter_v2)
+                .delete(delete_filter_v2),
+        )
+        .route(
+            "/api/v2/filters/{id}/keywords",
+            get(list_filter_keywords).post(add_filter_keyword),
+        )
+        .route(
+            "/api/v2/filters/keywords/{id}",
+            delete(delete_filter_keyword),
+        )
+        // Lists
+        .route("/api/v1/lists", get(get_lists).post(create_list))
+        .route(
+            "/api/v1/lists/{id}",
+            get(get_list).put(update_list).delete(delete_list),
+        )
+        .route(
+            "/api/v1/lists/{id}/accounts",
+            get(get_list_accounts)
+                .post(add_list_accounts)
+                .delete(remove_list_accounts),
+        )
         // Stubs
         .route("/api/v1/custom_emojis", get(empty_array))
-        .route("/api/v1/filters", get(empty_array))
-        .route("/api/v2/filters", get(empty_array))
-        .route("/api/v1/lists", get(empty_array))
         .route("/api/v1/suggestions", get(empty_array))
         .route("/api/v1/trends/tags", get(empty_array))
         .route("/api/v1/trends/statuses", get(empty_array))
         .route("/api/v1/trends/links", get(empty_array))
         .route("/api/v1/announcements", get(empty_array))
-        .route("/api/v1/followed_tags", get(empty_array))
         .route("/api/v1/mutes", get(empty_array))
         .route("/api/v1/blocks", get(empty_array))
         .route("/api/v1/domain_blocks", get(empty_array_authed))
@@ -1136,17 +1840,11 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/featured_tags", get(empty_array))
         .route("/api/v1/endorsements", get(empty_array))
         .route("/api/v1/scheduled_statuses", get(empty_array))
-        .route("/api/v1/tags/{id}", get(get_tag))
-        .route("/api/v1/tags/{id}/follow", post(get_tag))
-        .route("/api/v1/tags/{id}/unfollow", post(get_tag))
         .route("/api/v1/instance/rules", get(empty_array))
         .route("/api/v1/instance/peers", get(empty_array))
         .route("/api/v1/instance/activity", get(empty_array))
         .route("/api/v1/preferences", get(preferences))
-        .route(
-            "/api/v1/markers",
-            get(get_markers).post(post_markers),
-        )
+        .route("/api/v1/markers", get(get_markers).post(post_markers))
         .route(
             "/api/v1/apps/verify_credentials",
             get(verify_app_credentials),

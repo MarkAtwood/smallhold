@@ -1,5 +1,6 @@
-use crate::api::{account_to_json, fetch_account_row, hex_encode, millis_to_iso, now_millis,
-                  AuthenticatedAccount};
+use crate::api::{
+    account_to_json, fetch_account_row, hex_encode, millis_to_iso, now_millis, AuthenticatedAccount,
+};
 use crate::delivery::{enqueue_delivery, enqueue_to_followers};
 use crate::error::AppError;
 use crate::id::generate_id;
@@ -18,6 +19,197 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
+// Keyword filter types and helpers
+// ---------------------------------------------------------------------------
+
+struct ActiveFilter {
+    id: i64,
+    title: String,
+    context_json: String,
+    filter_action: String,
+    keywords: Vec<ActiveKeyword>,
+}
+
+struct ActiveKeyword {
+    keyword: String,
+    whole_word: bool,
+}
+
+/// Load all active (non-expired) filters for the given account and context.
+async fn load_active_filters(
+    pool: &SqlitePool,
+    account_id: i64,
+    context: &str,
+) -> Result<Vec<ActiveFilter>, AppError> {
+    let now = now_millis();
+    // Fetch filters where context JSON array contains the requested context
+    // and the filter has not expired.
+    // ponytail: LIKE on JSON array is fine for small cardinality contexts
+    // (home, notifications, public, thread, account). Upgrade: json_each().
+    let pattern = format!("%\"{context}\"%");
+    let rows: Vec<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT id, title, context, filter_action FROM filters \
+         WHERE account_id = ? AND context LIKE ? \
+         AND (expires_at IS NULL OR expires_at > ?)",
+    )
+    .bind(account_id)
+    .bind(&pattern)
+    .bind(now)
+    .fetch_all(pool)
+    .await?;
+
+    let mut filters = Vec::with_capacity(rows.len());
+    for (fid, title, ctx, action) in rows {
+        let kw_rows: Vec<(String, bool)> =
+            sqlx::query_as("SELECT keyword, whole_word FROM filter_keywords WHERE filter_id = ?")
+                .bind(fid)
+                .fetch_all(pool)
+                .await?;
+
+        let keywords = kw_rows
+            .into_iter()
+            .map(|(keyword, whole_word)| ActiveKeyword {
+                keyword,
+                whole_word,
+            })
+            .collect();
+
+        filters.push(ActiveFilter {
+            id: fid,
+            title,
+            context_json: ctx,
+            filter_action: action,
+            keywords,
+        });
+    }
+    Ok(filters)
+}
+
+/// Check if a keyword matches the content. Case-insensitive.
+/// If whole_word is true, the keyword must appear at word boundaries.
+fn keyword_matches(content: &str, keyword: &str, whole_word: bool) -> bool {
+    let lower_content = content.to_lowercase();
+    let lower_keyword = keyword.to_lowercase();
+
+    if !whole_word {
+        return lower_content.contains(&lower_keyword);
+    }
+
+    // Word-boundary matching: keyword must be bounded by non-alphanumeric chars
+    // (or start/end of string).
+    let kw_len = lower_keyword.len();
+    let content_bytes = lower_content.as_bytes();
+    let kw_bytes = lower_keyword.as_bytes();
+
+    let mut start = 0;
+    while let Some(pos) = lower_content[start..].find(&lower_keyword) {
+        let abs_pos = start + pos;
+        let end_pos = abs_pos + kw_len;
+
+        let at_word_start = abs_pos == 0 || !content_bytes[abs_pos - 1].is_ascii_alphanumeric();
+        let at_word_end =
+            end_pos >= content_bytes.len() || !content_bytes[end_pos].is_ascii_alphanumeric();
+
+        if at_word_start && at_word_end {
+            return true;
+        }
+        start = abs_pos + 1;
+        if start >= lower_content.len() {
+            break;
+        }
+    }
+    let _ = kw_bytes; // suppress unused warning
+    false
+}
+
+/// Apply keyword filters to a list of status JSON values.
+/// Statuses matching a "hide" filter are removed. Statuses matching a "warn"
+/// filter get a `filtered` array appended.
+fn apply_filters(statuses: &mut Vec<Value>, filters: &[ActiveFilter]) {
+    if filters.is_empty() {
+        return;
+    }
+
+    statuses.retain_mut(|status| {
+        // Get plain-text-ish content by stripping HTML tags for matching
+        let content = status.get("content").and_then(|v| v.as_str()).unwrap_or("");
+        // ponytail: strip tags with a simple regex-free approach. Good enough
+        // for substring matching; upgrade to ammonia text extraction if needed.
+        let plain = strip_html_tags(content);
+
+        let mut matched_filters: Vec<Value> = Vec::new();
+        let mut should_hide = false;
+
+        for filter in filters {
+            let mut kw_matches: Vec<String> = Vec::new();
+            for kw in &filter.keywords {
+                if keyword_matches(&plain, &kw.keyword, kw.whole_word) {
+                    kw_matches.push(kw.keyword.clone());
+                }
+            }
+            if !kw_matches.is_empty() {
+                if filter.filter_action == "hide" {
+                    should_hide = true;
+                    break;
+                }
+                let context: Vec<String> =
+                    serde_json::from_str(&filter.context_json).unwrap_or_default();
+                let kw_vals: Vec<Value> = filter
+                    .keywords
+                    .iter()
+                    .map(|k| {
+                        json!({
+                            "id": "",
+                            "keyword": k.keyword,
+                            "whole_word": k.whole_word,
+                        })
+                    })
+                    .collect();
+                matched_filters.push(json!({
+                    "filter": {
+                        "id": filter.id.to_string(),
+                        "title": filter.title,
+                        "context": context,
+                        "filter_action": filter.filter_action,
+                        "keywords": kw_vals,
+                        "statuses": [],
+                    },
+                    "keyword_matches": kw_matches,
+                }));
+            }
+        }
+
+        if should_hide {
+            return false;
+        }
+
+        if !matched_filters.is_empty() {
+            if let Some(obj) = status.as_object_mut() {
+                obj.insert("filtered".to_string(), Value::Array(matched_filters));
+            }
+        }
+
+        true
+    });
+}
+
+/// Naive HTML tag stripper for filter matching purposes.
+fn strip_html_tags(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for ch in html.chars() {
+        if ch == '<' {
+            in_tag = true;
+        } else if ch == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
 // Content rendering
 // ---------------------------------------------------------------------------
 
@@ -25,14 +217,30 @@ use std::sync::Arc;
 fn html_sanitizer() -> ammonia::Builder<'static> {
     let mut builder = ammonia::Builder::new();
 
-    let allowed_tags: HashSet<&str> =
-        ["p", "br", "a", "span", "em", "strong", "del", "blockquote", "code", "pre", "ul", "ol", "li"]
-            .into_iter()
-            .collect();
+    let allowed_tags: HashSet<&str> = [
+        "p",
+        "br",
+        "a",
+        "span",
+        "em",
+        "strong",
+        "del",
+        "blockquote",
+        "code",
+        "pre",
+        "ul",
+        "ol",
+        "li",
+    ]
+    .into_iter()
+    .collect();
     builder.tags(allowed_tags);
 
     let mut tag_attrs = std::collections::HashMap::new();
-    tag_attrs.insert("a", ["href", "class"].into_iter().collect::<HashSet<&str>>());
+    tag_attrs.insert(
+        "a",
+        ["href", "class"].into_iter().collect::<HashSet<&str>>(),
+    );
     tag_attrs.insert("span", ["class"].into_iter().collect::<HashSet<&str>>());
     builder.tag_attributes(tag_attrs);
 
@@ -119,9 +327,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
 /// Find `@user@domain` and `@user` patterns in text.
 /// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_mentions(text: &str) -> Vec<ParsedMention> {
-    let re = regex::Regex::new(
-        r"(?:^|[\s>])@([a-zA-Z0-9_-]+)(?:@([a-zA-Z0-9.-]+))?"
-    ).unwrap();
+    let re = regex::Regex::new(r"(?:^|[\s>])@([a-zA-Z0-9_-]+)(?:@([a-zA-Z0-9.-]+))?").unwrap();
 
     let mut mentions = Vec::new();
     let mut seen = HashSet::new();
@@ -176,7 +382,11 @@ fn autolink_bare_urls(html: &str) -> String {
     let mut i = 0;
 
     while i < len {
-        if i + 2 < len && bytes[i] == b'<' && bytes[i + 1] == b'a' && (bytes[i + 2] == b' ' || bytes[i + 2] == b'>') {
+        if i + 2 < len
+            && bytes[i] == b'<'
+            && bytes[i + 1] == b'a'
+            && (bytes[i + 2] == b' ' || bytes[i + 2] == b'>')
+        {
             // We hit an <a> tag — copy everything up to here, linkifying it
             let segment = &html[last..i];
             result.push_str(&linkify_segment(segment, &url_re));
@@ -207,13 +417,15 @@ fn autolink_bare_urls(html: &str) -> String {
 }
 
 fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
-    url_re.replace_all(segment, |caps: &regex::Captures| {
-        let url = &caps[0];
-        format!(
-            r#"<a href="{url}" rel="nofollow noopener noreferrer" target="_blank">{url}</a>"#,
-            url = url,
-        )
-    }).into_owned()
+    url_re
+        .replace_all(segment, |caps: &regex::Captures| {
+            let url = &caps[0];
+            format!(
+                r#"<a href="{url}" rel="nofollow noopener noreferrer" target="_blank">{url}</a>"#,
+                url = url,
+            )
+        })
+        .into_owned()
 }
 
 // ---------------------------------------------------------------------------
@@ -237,8 +449,7 @@ struct PostRow {
     edited_at: Option<i64>,
 }
 
-const POST_COLUMNS: &str =
-    "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
+const POST_COLUMNS: &str = "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
 
 /// Build the Mastodon Status JSON for a local post.
@@ -266,9 +477,7 @@ fn serialize_status(
     let uri = format!("https://{domain}/users/{username}/statuses/{id_str}");
     let url = format!("https://{domain}/@{username}/{id_str}");
 
-    let in_reply_to_id = post
-        .in_reply_to_id
-        .map(|id| Value::String(id.to_string()));
+    let in_reply_to_id = post.in_reply_to_id.map(|id| Value::String(id.to_string()));
     // ponytail: in_reply_to_account_id requires a join; leave null for now
     let in_reply_to_account_id: Option<Value> = None;
 
@@ -384,14 +593,21 @@ async fn load_status(
     let account_json = account_to_json(&account, domain);
 
     // Fetch media attachments
-    let media: Vec<(i64, String, String, Option<i32>, Option<i32>, Option<String>, String)> =
-        sqlx::query_as(
-            "SELECT id, file_path, mime_type, width, height, blurhash, description
+    let media: Vec<(
+        i64,
+        String,
+        String,
+        Option<i32>,
+        Option<i32>,
+        Option<String>,
+        String,
+    )> = sqlx::query_as(
+        "SELECT id, file_path, mime_type, width, height, blurhash, description
              FROM media WHERE post_id = ? ORDER BY id",
-        )
-        .bind(post.id)
-        .fetch_all(pool)
-        .await?;
+    )
+    .bind(post.id)
+    .fetch_all(pool)
+    .await?;
 
     let media_values: Vec<Value> = media
         .iter()
@@ -417,11 +633,10 @@ async fn load_status(
         .collect();
 
     // Fetch tags
-    let tags: Vec<(String,)> =
-        sqlx::query_as("SELECT tag FROM post_tags WHERE post_id = ?")
-            .bind(post.id)
-            .fetch_all(pool)
-            .await?;
+    let tags: Vec<(String,)> = sqlx::query_as("SELECT tag FROM post_tags WHERE post_id = ?")
+        .bind(post.id)
+        .fetch_all(pool)
+        .await?;
     let tag_strings: Vec<String> = tags.into_iter().map(|(t,)| t).collect();
     let tag_vals = tag_values_for_post(&tag_strings, domain);
 
@@ -445,12 +660,11 @@ async fn load_status(
                 }));
             }
         } else if let Some(rid) = remote_id {
-            let remote: Option<(i64, String, String)> = sqlx::query_as(
-                "SELECT id, username, domain FROM remote_accounts WHERE id = ?",
-            )
-            .bind(rid)
-            .fetch_optional(pool)
-            .await?;
+            let remote: Option<(i64, String, String)> =
+                sqlx::query_as("SELECT id, username, domain FROM remote_accounts WHERE id = ?")
+                    .bind(rid)
+                    .fetch_optional(pool)
+                    .await?;
             if let Some((id, username, rdomain)) = remote {
                 mention_vals.push(json!({
                     "id": id.to_string(),
@@ -464,29 +678,26 @@ async fn load_status(
 
     // Check viewer interactions
     let (favourited, reblogged, bookmarked) = if let Some(viewer) = viewer_account_id {
-        let fav: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM favourites WHERE account_id = ? AND post_id = ?",
-        )
-        .bind(viewer)
-        .bind(post.id)
-        .fetch_one(pool)
-        .await?;
+        let fav: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM favourites WHERE account_id = ? AND post_id = ?")
+                .bind(viewer)
+                .bind(post.id)
+                .fetch_one(pool)
+                .await?;
 
-        let boost: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM posts WHERE account_id = ? AND boost_of_id = ?",
-        )
-        .bind(viewer)
-        .bind(post.id)
-        .fetch_one(pool)
-        .await?;
+        let boost: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ? AND boost_of_id = ?")
+                .bind(viewer)
+                .bind(post.id)
+                .fetch_one(pool)
+                .await?;
 
-        let bmark: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM bookmarks WHERE account_id = ? AND post_id = ?",
-        )
-        .bind(viewer)
-        .bind(post.id)
-        .fetch_one(pool)
-        .await?;
+        let bmark: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM bookmarks WHERE account_id = ? AND post_id = ?")
+                .bind(viewer)
+                .bind(post.id)
+                .fetch_one(pool)
+                .await?;
 
         (fav.0 > 0, boost.0 > 0, bmark.0 > 0)
     } else {
@@ -495,12 +706,11 @@ async fn load_status(
 
     // Handle reblog (boost_of_id)
     let reblog_value = if let Some(boost_id) = post.boost_of_id {
-        let boosted: Option<PostRow> = sqlx::query_as::<_, PostRow>(&format!(
-            "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-        ))
-        .bind(boost_id)
-        .fetch_optional(pool)
-        .await?;
+        let boosted: Option<PostRow> =
+            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+                .bind(boost_id)
+                .fetch_optional(pool)
+                .await?;
         if let Some(bp) = &boosted {
             Some(Box::pin(load_status(pool, bp, domain, viewer_account_id)).await?)
         } else {
@@ -645,10 +855,7 @@ async fn create_status(
     let domain = &state.config.server.domain;
 
     // Check idempotency key
-    if let Some(idem_key) = headers
-        .get("Idempotency-Key")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
         let existing: Option<(i64,)> = sqlx::query_as(
             "SELECT post_id FROM idempotency_keys WHERE key_hash = ? AND account_id = ?",
@@ -667,8 +874,7 @@ async fn create_status(
             .await?
             .ok_or_else(|| AppError::not_found("Post not found"))?;
 
-            let status =
-                load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+            let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
             return Ok((StatusCode::OK, Json(status)).into_response());
         }
     }
@@ -831,10 +1037,7 @@ async fn create_status(
     }
 
     // Store idempotency key
-    if let Some(idem_key) = headers
-        .get("Idempotency-Key")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
         sqlx::query(
             "INSERT OR IGNORE INTO idempotency_keys (key_hash, account_id, post_id, created_at) \
@@ -871,9 +1074,7 @@ async fn create_status(
                 let mut to_addrs: Vec<Value> = Vec::new();
                 for m in &rendered.mentions {
                     if m.domain.is_none() {
-                        to_addrs.push(json!(format!(
-                            "https://{domain}/users/{}", m.username
-                        )));
+                        to_addrs.push(json!(format!("https://{domain}/users/{}", m.username)));
                     }
                 }
                 (to_addrs, vec![])
@@ -902,35 +1103,43 @@ async fn create_status(
 
         // Query media attachments for the AP Note
         #[allow(clippy::type_complexity)]
-        let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
-            sqlx::query_as(
-                "SELECT file_path, mime_type, width, height, blurhash, description \
+        let ap_media: Vec<(
+            String,
+            String,
+            Option<i32>,
+            Option<i32>,
+            Option<String>,
+            String,
+        )> = sqlx::query_as(
+            "SELECT file_path, mime_type, width, height, blurhash, description \
                  FROM media WHERE post_id = ? ORDER BY id",
-            )
-            .bind(post_id)
-            .fetch_all(&state.pool)
-            .await?;
+        )
+        .bind(post_id)
+        .fetch_all(&state.pool)
+        .await?;
 
         let ap_attachments: Vec<Value> = ap_media
             .iter()
-            .map(|(file_path, mime_type, width, height, blurhash, description)| {
-                let mut doc = json!({
-                    "type": "Document",
-                    "mediaType": mime_type,
-                    "url": format!("https://{domain}/media/{file_path}"),
-                    "name": description
-                });
-                if let Some(bh) = blurhash {
-                    doc["blurhash"] = json!(bh);
-                }
-                if let Some(w) = width {
-                    doc["width"] = json!(w);
-                }
-                if let Some(h) = height {
-                    doc["height"] = json!(h);
-                }
-                doc
-            })
+            .map(
+                |(file_path, mime_type, width, height, blurhash, description)| {
+                    let mut doc = json!({
+                        "type": "Document",
+                        "mediaType": mime_type,
+                        "url": format!("https://{domain}/media/{file_path}"),
+                        "name": description
+                    });
+                    if let Some(bh) = blurhash {
+                        doc["blurhash"] = json!(bh);
+                    }
+                    if let Some(w) = width {
+                        doc["width"] = json!(w);
+                    }
+                    if let Some(h) = height {
+                        doc["height"] = json!(h);
+                    }
+                    doc
+                },
+            )
             .collect();
 
         let activity = json!({
@@ -958,23 +1167,19 @@ async fn create_status(
             }
         });
 
-        if let Err(e) =
-            enqueue_to_followers(&state.pool, auth.account_id, &activity).await
-        {
+        if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
             tracing::error!("Failed to enqueue Create activity: {e}");
         }
     }
 
     // Build response
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_one(&state.pool)
+            .await?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
 
     // Publish streaming events
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1009,21 +1214,19 @@ async fn delete_status(
 
     let domain = &state.config.server.domain;
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.account_id != auth.account_id {
         return Err(AppError::forbidden("You do not own this status"));
     }
 
     // Build response before deletion (Mastodon returns the deleted status)
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
 
     // Enqueue Delete activity for federation
     let ap_id = format!(
@@ -1042,9 +1245,7 @@ async fn delete_status(
         }
     });
 
-    if let Err(e) =
-        enqueue_to_followers(&state.pool, auth.account_id, &delete_activity).await
-    {
+    if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &delete_activity).await {
         tracing::error!("Failed to enqueue delete activity: {e}");
     }
 
@@ -1097,13 +1298,12 @@ async fn edit_status(
     let domain = &state.config.server.domain;
     let now = now_millis();
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.account_id != auth.account_id {
         return Err(AppError::forbidden("You do not own this status"));
@@ -1246,23 +1446,19 @@ async fn edit_status(
             }
         });
 
-        if let Err(e) =
-            enqueue_to_followers(&state.pool, auth.account_id, &activity).await
-        {
+        if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
             tracing::error!("Failed to enqueue Update activity: {e}");
         }
     }
 
     // Re-fetch the updated post and build response
-    let updated_post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let updated_post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_one(&state.pool)
+            .await?;
 
-    let status =
-        load_status(&state.pool, &updated_post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id)).await?;
 
     // Publish streaming status.update event
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1294,13 +1490,12 @@ async fn get_status(
 
     let domain = &state.config.server.domain;
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     let status = load_status(&state.pool, &post, domain, None).await?;
     Ok(Json(status))
@@ -1320,24 +1515,22 @@ async fn status_context(
 
     let domain = &state.config.server.domain;
 
-    let target = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let target =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Ancestors: walk up the reply chain
     let mut ancestors = Vec::new();
     let mut current_id = target.in_reply_to_id;
     while let Some(parent_id) = current_id {
-        let parent = sqlx::query_as::<_, PostRow>(&format!(
-            "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-        ))
-        .bind(parent_id)
-        .fetch_optional(&state.pool)
-        .await?;
+        let parent =
+            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+                .bind(parent_id)
+                .fetch_optional(&state.pool)
+                .await?;
 
         match parent {
             Some(p) => {
@@ -1394,13 +1587,12 @@ async fn favourite(
     let domain = &state.config.server.domain;
     let now = now_millis();
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     sqlx::query(
         "INSERT OR IGNORE INTO favourites (account_id, post_id, created_at) VALUES (?, ?, ?)",
@@ -1448,18 +1640,15 @@ async fn favourite(
         // Look up the post's AP ID — if it points to a remote server, deliver
         // the Like to that server's inbox. Local posts have local AP IDs so
         // this is a no-op for local-to-local interactions.
-        let ap_id: Option<(String,)> =
-            sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-                .bind(post_id)
-                .fetch_optional(&state.pool)
-                .await?;
+        let ap_id: Option<(String,)> = sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?;
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
                 // Remote post — extract the actor URI and find their inbox
-                let actor_uri = post_ap_id
-                    .rfind("/statuses/")
-                    .map(|i| &post_ap_id[..i]);
+                let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(actor) = actor_uri {
                     let inbox: Option<(String,)> = sqlx::query_as(
                         "SELECT COALESCE(shared_inbox_url, inbox_url) \
@@ -1469,10 +1658,9 @@ async fn favourite(
                     .fetch_optional(&state.pool)
                     .await?;
                     if let Some((inbox_url,)) = inbox {
-                        if let Err(e) = enqueue_delivery(
-                            &state.pool, &inbox_url, auth.account_id, &activity,
-                        )
-                        .await
+                        if let Err(e) =
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
+                                .await
                         {
                             tracing::error!("Failed to enqueue Like activity: {e}");
                         }
@@ -1482,8 +1670,7 @@ async fn favourite(
         }
     }
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1497,13 +1684,12 @@ async fn unfavourite(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     sqlx::query("DELETE FROM favourites WHERE account_id = ? AND post_id = ?")
         .bind(auth.account_id)
@@ -1534,17 +1720,14 @@ async fn unfavourite(
             }
         });
 
-        let ap_id: Option<(String,)> =
-            sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-                .bind(post_id)
-                .fetch_optional(&state.pool)
-                .await?;
+        let ap_id: Option<(String,)> = sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?;
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
-                let actor_uri = post_ap_id
-                    .rfind("/statuses/")
-                    .map(|i| &post_ap_id[..i]);
+                let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(remote_actor) = actor_uri {
                     let inbox: Option<(String,)> = sqlx::query_as(
                         "SELECT COALESCE(shared_inbox_url, inbox_url) \
@@ -1554,10 +1737,9 @@ async fn unfavourite(
                     .fetch_optional(&state.pool)
                     .await?;
                     if let Some((inbox_url,)) = inbox {
-                        if let Err(e) = enqueue_delivery(
-                            &state.pool, &inbox_url, auth.account_id, &activity,
-                        )
-                        .await
+                        if let Err(e) =
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
+                                .await
                         {
                             tracing::error!("Failed to enqueue Undo Like activity: {e}");
                         }
@@ -1567,8 +1749,7 @@ async fn unfavourite(
         }
     }
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1583,31 +1764,26 @@ async fn reblog(
     let domain = &state.config.server.domain;
     let now = now_millis();
 
-    let original = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let original =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Check for existing reblog
-    let existing: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM posts WHERE account_id = ? AND boost_of_id = ?",
-    )
-    .bind(auth.account_id)
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let existing: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM posts WHERE account_id = ? AND boost_of_id = ?")
+            .bind(auth.account_id)
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?;
 
     let boost_id = if let Some((eid,)) = existing {
         eid
     } else {
         let new_id = generate_id();
-        let ap_id = format!(
-            "https://{domain}/users/{}/statuses/{new_id}",
-            auth.username
-        );
+        let ap_id = format!("https://{domain}/users/{}/statuses/{new_id}", auth.username);
 
         sqlx::query(
             "INSERT INTO posts (id, account_id, ap_id, boost_of_id, content, content_html, \
@@ -1658,9 +1834,7 @@ async fn reblog(
             });
 
             // Deliver to followers
-            if let Err(e) =
-                enqueue_to_followers(&state.pool, auth.account_id, &activity).await
-            {
+            if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
                 tracing::error!("Failed to enqueue Announce activity to followers: {e}");
             }
 
@@ -1673,9 +1847,7 @@ async fn reblog(
             let local_prefix = format!("https://{domain}/");
             if let Some((ref post_ap_id,)) = ap_id_row {
                 if !post_ap_id.starts_with(&local_prefix) {
-                    let actor_uri = post_ap_id
-                        .rfind("/statuses/")
-                        .map(|i| &post_ap_id[..i]);
+                    let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                     if let Some(remote_actor) = actor_uri {
                         let inbox: Option<(String,)> = sqlx::query_as(
                             "SELECT COALESCE(shared_inbox_url, inbox_url) \
@@ -1686,7 +1858,10 @@ async fn reblog(
                         .await?;
                         if let Some((inbox_url,)) = inbox {
                             if let Err(e) = enqueue_delivery(
-                                &state.pool, &inbox_url, auth.account_id, &activity,
+                                &state.pool,
+                                &inbox_url,
+                                auth.account_id,
+                                &activity,
                             )
                             .await
                             {
@@ -1701,15 +1876,13 @@ async fn reblog(
         new_id
     };
 
-    let boost_post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(boost_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let boost_post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(boost_id)
+            .fetch_one(&state.pool)
+            .await?;
 
-    let status =
-        load_status(&state.pool, &boost_post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1723,13 +1896,12 @@ async fn unreblog(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let boost: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM posts WHERE account_id = ? AND boost_of_id = ?",
-    )
-    .bind(auth.account_id)
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let boost: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM posts WHERE account_id = ? AND boost_of_id = ?")
+            .bind(auth.account_id)
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?;
 
     if let Some((boost_id,)) = boost {
         // Enqueue outbound Undo{Announce} before deleting
@@ -1748,8 +1920,7 @@ async fn unreblog(
                     "https://{domain}/users/{}/statuses/{post_id}",
                     post_author.username
                 );
-                let announce_id =
-                    format!("https://{domain}/activities/announce-{boost_id}");
+                let announce_id = format!("https://{domain}/activities/announce-{boost_id}");
 
                 let activity = json!({
                     "@context": "https://www.w3.org/ns/activitystreams",
@@ -1765,26 +1936,22 @@ async fn unreblog(
                 });
 
                 // Deliver Undo to followers
-                if let Err(e) =
-                    enqueue_to_followers(&state.pool, auth.account_id, &activity).await
+                if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await
                 {
                     tracing::error!("Failed to enqueue Undo Announce to followers: {e}");
                 }
 
                 // Also deliver to the post author's inbox if remote
                 let local_prefix = format!("https://{domain}/");
-                if let Some(ref post_ap_id) = sqlx::query_as::<_, (String,)>(
-                    "SELECT ap_id FROM posts WHERE id = ?",
-                )
-                .bind(post_id)
-                .fetch_optional(&state.pool)
-                .await?
+                if let Some(ref post_ap_id) =
+                    sqlx::query_as::<_, (String,)>("SELECT ap_id FROM posts WHERE id = ?")
+                        .bind(post_id)
+                        .fetch_optional(&state.pool)
+                        .await?
                 {
                     if !post_ap_id.0.starts_with(&local_prefix) {
-                        let actor_uri = post_ap_id
-                            .0
-                            .rfind("/statuses/")
-                            .map(|i| &post_ap_id.0[..i]);
+                        let actor_uri =
+                            post_ap_id.0.rfind("/statuses/").map(|i| &post_ap_id.0[..i]);
                         if let Some(remote_actor) = actor_uri {
                             let inbox: Option<(String,)> = sqlx::query_as(
                                 "SELECT COALESCE(shared_inbox_url, inbox_url) \
@@ -1819,16 +1986,14 @@ async fn unreblog(
             .await?;
     }
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1843,13 +2008,12 @@ async fn bookmark(
     let domain = &state.config.server.domain;
     let now = now_millis();
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     sqlx::query(
         "INSERT OR IGNORE INTO bookmarks (account_id, post_id, created_at) VALUES (?, ?, ?)",
@@ -1860,8 +2024,7 @@ async fn bookmark(
     .execute(&state.pool)
     .await?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1875,13 +2038,12 @@ async fn unbookmark(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     sqlx::query("DELETE FROM bookmarks WHERE account_id = ? AND post_id = ?")
         .bind(auth.account_id)
@@ -1889,8 +2051,7 @@ async fn unbookmark(
         .execute(&state.pool)
         .await?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -1906,10 +2067,13 @@ async fn timeline_home(
     let domain = &state.config.server.domain;
 
     let base_where = "(account_id = ? OR account_id IN \
-        (SELECT followee_id FROM follows WHERE follower_id = ? AND followee_id IS NOT NULL))";
-    let base_binds = vec![auth.account_id, auth.account_id];
+        (SELECT followee_id FROM follows WHERE follower_id = ? AND followee_id IS NOT NULL) \
+        OR (visibility IN ('public', 'unlisted') AND id IN \
+        (SELECT pt.post_id FROM post_tags pt JOIN followed_tags ft \
+        ON pt.tag = ft.tag WHERE ft.account_id = ?)))";
+    let base_binds = vec![auth.account_id, auth.account_id, auth.account_id];
 
-    let statuses = fetch_paginated_statuses(
+    let mut statuses = fetch_paginated_statuses(
         &state.pool,
         base_where,
         &base_binds,
@@ -1920,12 +2084,13 @@ async fn timeline_home(
     )
     .await?;
 
+    let filters = load_active_filters(&state.pool, auth.account_id, "home").await?;
+    apply_filters(&mut statuses, &filters);
+
     let url_base = format!("https://{domain}/api/v1/timelines/home");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response
-            .headers_mut()
-            .insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().unwrap());
     }
     Ok(response)
 }
@@ -1953,9 +2118,7 @@ async fn timeline_public(
     let url_base = format!("https://{domain}/api/v1/timelines/public");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response
-            .headers_mut()
-            .insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().unwrap());
     }
     Ok(response)
 }
@@ -2006,9 +2169,80 @@ async fn timeline_tag(
     let url_base = format!("https://{domain}/api/v1/timelines/tag/{tag_lower}");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response
-            .headers_mut()
-            .insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().unwrap());
+    }
+    Ok(response)
+}
+
+/// GET /api/v1/timelines/list/:id
+async fn timeline_list(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Query(params): Query<PaginationParams>,
+) -> Result<Response, AppError> {
+    let list_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("List not found"))?;
+    let domain = &state.config.server.domain;
+
+    // Verify list ownership
+    let list_row: Option<(String,)> =
+        sqlx::query_as("SELECT replies_policy FROM lists WHERE id = ? AND account_id = ?")
+            .bind(list_id)
+            .bind(auth.account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    let (replies_policy,) = list_row.ok_or_else(|| AppError::not_found("List not found"))?;
+
+    // Build WHERE clause based on replies_policy:
+    // "list"     -> show replies only if the replied-to account is also in the list
+    // "followed" -> show replies only if the replied-to account is followed
+    // "none"     -> hide all replies
+    let base_where = match replies_policy.as_str() {
+        "none" => {
+            "account_id IN (SELECT account_id FROM list_accounts WHERE list_id = ?) \
+             AND in_reply_to_id IS NULL"
+        }
+        "followed" => {
+            "account_id IN (SELECT account_id FROM list_accounts WHERE list_id = ?) \
+             AND (in_reply_to_id IS NULL OR in_reply_to_id IN \
+               (SELECT p2.id FROM posts p2 \
+                JOIN follows f ON p2.account_id = f.followee_id \
+                WHERE f.follower_id = ?))"
+        }
+        // "list" (default)
+        _ => {
+            "account_id IN (SELECT account_id FROM list_accounts WHERE list_id = ?) \
+             AND (in_reply_to_id IS NULL OR in_reply_to_id IN \
+               (SELECT p2.id FROM posts p2 \
+                JOIN list_accounts la2 ON p2.account_id = la2.account_id \
+                WHERE la2.list_id = ?))"
+        }
+    };
+
+    let base_binds = match replies_policy.as_str() {
+        "none" => vec![list_id],
+        "followed" => vec![list_id, auth.account_id],
+        _ => vec![list_id, list_id],
+    };
+
+    let statuses = fetch_paginated_statuses(
+        &state.pool,
+        base_where,
+        &base_binds,
+        &params,
+        domain,
+        Some(auth.account_id),
+        false,
+    )
+    .await?;
+
+    let url_base = format!("https://{domain}/api/v1/timelines/list/{list_id}");
+    let mut response = Json(&statuses).into_response();
+    if let Some(link) = pagination_link_header(&url_base, &statuses) {
+        response.headers_mut().insert("Link", link.parse().unwrap());
     }
     Ok(response)
 }
@@ -2081,12 +2315,11 @@ async fn serialize_notification(
     };
 
     let status = if let Some(pid) = notif.post_id {
-        let post = sqlx::query_as::<_, PostRow>(&format!(
-            "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-        ))
-        .bind(pid)
-        .fetch_optional(pool)
-        .await?;
+        let post =
+            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+                .bind(pid)
+                .fetch_optional(pool)
+                .await?;
         if let Some(p) = &post {
             Some(load_status(pool, p, domain, Some(viewer_account_id)).await?)
         } else {
@@ -2138,8 +2371,7 @@ async fn get_notifications(
 
     let mut values = Vec::with_capacity(notifs.len());
     for n in &notifs {
-        let v =
-            serialize_notification(&state.pool, n, domain, auth.account_id).await?;
+        let v = serialize_notification(&state.pool, n, domain, auth.account_id).await?;
         values.push(v);
     }
 
@@ -2150,9 +2382,7 @@ async fn get_notifications(
     let url_base = format!("https://{domain}/api/v1/notifications");
     let mut response = Json(&values).into_response();
     if let Some(link) = pagination_link_header(&url_base, &values) {
-        response
-            .headers_mut()
-            .insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().unwrap());
     }
     Ok(response)
 }
@@ -2179,8 +2409,7 @@ async fn get_notification(
     .await?
     .ok_or_else(|| AppError::not_found("Notification not found"))?;
 
-    let value =
-        serialize_notification(&state.pool, &notif, domain, auth.account_id).await?;
+    let value = serialize_notification(&state.pool, &notif, domain, auth.account_id).await?;
     Ok(Json(value))
 }
 
@@ -2214,7 +2443,6 @@ async fn dismiss_notification(
     Ok(Json(json!({})))
 }
 
-
 // ---------------------------------------------------------------------------
 // Pin / Unpin
 // ---------------------------------------------------------------------------
@@ -2230,13 +2458,12 @@ async fn pin_status(
     let domain = &state.config.server.domain;
     let now = now_millis();
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.account_id != auth.account_id {
         return Err(AppError::forbidden("You do not own this status"));
@@ -2251,8 +2478,7 @@ async fn pin_status(
     .execute(&state.pool)
     .await?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2266,13 +2492,12 @@ async fn unpin_status(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Status not found"))?;
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.account_id != auth.account_id {
         return Err(AppError::forbidden("You do not own this status"));
@@ -2284,8 +2509,7 @@ async fn unpin_status(
         .execute(&state.pool)
         .await?;
 
-    let status =
-        load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 // ---------------------------------------------------------------------------
@@ -2314,6 +2538,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/timelines/home", get(timeline_home))
         .route("/api/v1/timelines/public", get(timeline_public))
         .route("/api/v1/timelines/tag/{tag}", get(timeline_tag))
+        .route("/api/v1/timelines/list/{id}", get(timeline_list))
         // Notifications
         .route("/api/v1/notifications", get(get_notifications))
         .route("/api/v1/notifications/{id}", get(get_notification))
@@ -2355,10 +2580,7 @@ mod tests {
         let result = render_content("Hello @bob@remote.example", "example.com");
         assert_eq!(result.mentions.len(), 1);
         assert_eq!(result.mentions[0].username, "bob");
-        assert_eq!(
-            result.mentions[0].domain.as_deref(),
-            Some("remote.example")
-        );
+        assert_eq!(result.mentions[0].domain.as_deref(), Some("remote.example"));
         assert!(result.html.contains("https://remote.example/@bob"));
     }
 
@@ -2458,8 +2680,7 @@ mod tests {
             json!({"id": "99"}),
             json!({"id": "98"}),
         ];
-        let link =
-            pagination_link_header("https://example.com/api", &items).unwrap();
+        let link = pagination_link_header("https://example.com/api", &items).unwrap();
         assert!(link.contains("max_id=98"));
         assert!(link.contains("min_id=100"));
         assert!(link.contains(r#"rel="next""#));

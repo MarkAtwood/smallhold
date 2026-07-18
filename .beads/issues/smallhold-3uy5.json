@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-3uy5",
+  "title": "Add pinned_at column to posts and pinned field to Status; GET statuses?pinned=true",
+  "description": "## What\nAdd `pinned_at INTEGER` (nullable) column to posts migration. Include `pinned: bool` field in all Status responses. Implement GET /api/v1/accounts/:id/statuses?pinned=true returning posts with pinned_at IS NOT NULL ordered by pinned_at DESC.\n\n## Why\nClients display pinned posts prominently on profile pages; without the pinned field and endpoint, profile views are incomplete.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/accounts/:id/statuses?pinned=true on a known account with pinned posts; document JSON shape, ordering, and how the pinned bool appears on individual Status objects in other endpoints\n- Spawn an Implementation subagent to: write the SQLite migration adding pinned_at column; update Status serializer to compute pinned bool as pinned_at IS NOT NULL; implement the ?pinned=true query path in the accounts statuses handler\n- Spawn a Test subagent to: write tests that pin a post, fetch profile statuses with pinned=true, assert only pinned posts returned in pinned_at DESC order; also assert pinned field is false on normal status fetches\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/accounts/:id/statuses?pinned=true — returns array of Status objects, each with pinned: true, ordered by pinned_at descending\n- Test approach: create multiple posts, pin two of them at different times, assert filtered endpoint returns only pinned posts in correct order\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- pinned_at is nullable — serializer must emit false (not null) for pinned bool when column is NULL\n- Migration must allow NULL (no DEFAULT) so existing rows are correctly treated as unpinned",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:17:37Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAdd `pinned_at INTEGER` (nullable) column to posts migration. Include `pinned: bool` field in all Status responses. Implement GET /api/v1/accounts/:id/statuses?pinned=true returning posts with pinned_at IS NOT NULL ordered by pinned_at DESC.\n\n## Why\nClients display pinned posts prominently on profile pages; without the pinned field and endpoint, profile views are incomplete.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/accounts/:id/statuses?pinned=true on a known account with pinned posts; document JSON shape, ordering, and how the pinned bool appears on individual Status objects in other endpoints\n- Spawn an Implementation subagent to: write the SQLite migration adding pinned_at column; update Status serializer to compute pinned bool as pinned_at IS NOT NULL; implement the ?pinned=true query path in the accounts statuses handler\n- Spawn a Test subagent to: write tests that pin a post, fetch profile statuses with pinned=true, assert only pinned posts returned in pinned_at DESC order; also assert pinned field is false on normal status fetches\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/accounts/:id/statuses?pinned=true — returns array of Status objects, each with pinned: true, ordered by pinned_at descending\n- Test approach: create multiple posts, pin two of them at different times, assert filtered endpoint returns only pinned posts in correct order\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- pinned_at is nullable — serializer must emit false (not null) for pinned bool when column is NULL\n- Migration must allow NULL (no DEFAULT) so existing rows are correctly treated as unpinned",
-  "ephemeral": false,
-  "id": "smallhold-3uy5",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:05:15.560792989Z",
+  "closed_at": "2026-07-18T17:05:15.560792989Z",
+  "close_reason": "Already implemented — pinned_posts table + Status pinned field",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Add pinned_at column to posts and pinned field to Status; GET statuses?pinned=true",
-  "updated_at": "2026-04-23T04:17:37Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ijui",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:17:50Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ijui",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

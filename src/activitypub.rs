@@ -76,10 +76,7 @@ struct AccountRow {
 }
 
 /// Looks up a local account by username, returning 404 if not found.
-async fn fetch_account(
-    pool: &sqlx::SqlitePool,
-    username: &str,
-) -> Result<AccountRow, AppError> {
+async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
     let row: AccountRow = sqlx::query_as(
         "SELECT username, display_name, bio_html, public_key_pem,
                 is_locked, discoverable, bot, fields_json, created_at
@@ -218,9 +215,7 @@ fn load_extra_css(config: &crate::config::Config) -> String {
 }
 
 /// GET / — root page listing personas.
-async fn index_page(
-    State(state): State<Arc<AppState>>,
-) -> Result<Html<String>, AppError> {
+async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
     let domain = &state.config.server.domain;
     let site_title = ammonia::clean(&state.config.branding.site_title);
     let site_desc = if state.config.branding.site_description.is_empty() {
@@ -230,11 +225,10 @@ async fn index_page(
     };
     let custom_css = load_extra_css(&state.config);
 
-    let accounts: Vec<(String, String)> = sqlx::query_as(
-        "SELECT username, display_name FROM accounts ORDER BY created_at",
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    let accounts: Vec<(String, String)> =
+        sqlx::query_as("SELECT username, display_name FROM accounts ORDER BY created_at")
+            .fetch_all(&state.pool)
+            .await?;
 
     let mut personas_html = String::new();
     for (username, display_name) in &accounts {
@@ -278,29 +272,24 @@ async fn profile_page(
     let custom_css = load_extra_css(&state.config);
 
     // Counts
-    let account_id: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM accounts WHERE username = ?",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await?;
+    let account_id: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+        .bind(&username)
+        .fetch_optional(&state.pool)
+        .await?;
     let aid = account_id.map(|r| r.0).unwrap_or(0);
 
-    let (post_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM posts WHERE account_id = ?",
-    )
-    .bind(aid)
-    .fetch_one(&state.pool)
-    .await
-    .unwrap_or((0,));
+    let (post_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ?")
+        .bind(aid)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or((0,));
 
-    let (follower_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM followers WHERE local_account_id = ?",
-    )
-    .bind(aid)
-    .fetch_one(&state.pool)
-    .await
-    .unwrap_or((0,));
+    let (follower_count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE local_account_id = ?")
+            .bind(aid)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or((0,));
 
     // Profile fields
     let fields: Vec<serde_json::Value> =
@@ -327,8 +316,7 @@ async fn profile_page(
 
     let mut posts_html = String::new();
     for post in &posts {
-        let dt = chrono::DateTime::from_timestamp_millis(post.created_at)
-            .unwrap_or_default();
+        let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
         let date = dt.format("%Y-%m-%d").to_string();
         let iso = dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         posts_html.push_str(&format!(
@@ -432,9 +420,7 @@ async fn post_page(
     };
 
     let og_desc_escaped = html_attr_escape(&og_desc);
-    let og_desc_title_escaped = html_attr_escape(
-        &og_desc.chars().take(50).collect::<String>(),
-    );
+    let og_desc_title_escaped = html_attr_escape(&og_desc.chars().take(50).collect::<String>());
 
     let html = format!(
         r#"<!DOCTYPE html>
@@ -486,18 +472,16 @@ async fn outbox(
             .fetch_optional(&state.pool)
             .await?;
 
-    let (account_id,) =
-        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let domain = &state.config.server.domain;
     let actor_uri = format!("https://{domain}/users/{username}");
 
-    let (total,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM posts WHERE account_id = ? AND visibility = 'public'",
-    )
-    .bind(account_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let (total,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ? AND visibility = 'public'")
+            .bind(account_id)
+            .fetch_one(&state.pool)
+            .await?;
 
     let posts: Vec<PostRow> = sqlx::query_as(
         "SELECT id, content_html, created_at \
@@ -548,22 +532,19 @@ async fn followers_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let account_row: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM accounts WHERE username = ? LIMIT 1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await?;
+    let account_row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await?;
 
-    let (account_id,) =
-        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let (count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM followers WHERE local_account_id = ?",
-    )
-    .bind(account_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE local_account_id = ?")
+            .bind(account_id)
+            .fetch_one(&state.pool)
+            .await?;
 
     let domain = &state.config.server.domain;
     Ok(ap_response(json!({
@@ -579,22 +560,18 @@ async fn following_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let account_row: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM accounts WHERE username = ? LIMIT 1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await?;
+    let account_row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await?;
 
-    let (account_id,) =
-        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let (count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM follows WHERE follower_id = ?",
-    )
-    .bind(account_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE follower_id = ?")
+        .bind(account_id)
+        .fetch_one(&state.pool)
+        .await?;
 
     let domain = &state.config.server.domain;
     Ok(ap_response(json!({
@@ -618,8 +595,7 @@ async fn featured(
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
-    let (account_id,) =
-        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let actor_uri = format!("https://{domain}/users/{username}");
 

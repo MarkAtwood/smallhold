@@ -57,11 +57,10 @@ async fn webfinger(
         return Err(AppError::not_found("unknown domain"));
     }
 
-    let exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
-            .bind(username)
-            .fetch_one(&state.pool)
-            .await?;
+    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
+        .bind(username)
+        .fetch_one(&state.pool)
+        .await?;
 
     if exists.0 == 0 {
         return Err(AppError::not_found("unknown user"));

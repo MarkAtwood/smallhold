@@ -25,12 +25,12 @@ const MAX_ATTEMPTS: i32 = 6;
 /// Exponential backoff schedule in milliseconds.
 fn retry_delay_ms(attempt: i32) -> i64 {
     match attempt {
-        0 => 60_000,       // 1 minute
-        1 => 300_000,      // 5 minutes
-        2 => 1_800_000,    // 30 minutes
-        3 => 7_200_000,    // 2 hours
-        4 => 28_800_000,   // 8 hours
-        _ => 86_400_000,   // 24 hours
+        0 => 60_000,     // 1 minute
+        1 => 300_000,    // 5 minutes
+        2 => 1_800_000,  // 30 minutes
+        3 => 7_200_000,  // 2 hours
+        4 => 28_800_000, // 8 hours
+        _ => 86_400_000, // 24 hours
     }
 }
 
@@ -221,12 +221,10 @@ async fn deliver_one(
     let key_id = format!("https://{domain}/users/{}#main-key", row.username);
     let body = row.activity_json.as_bytes();
 
-    let headers = FederationClient::sign_post_headers(&row.private_key_pem, &key_id, &target_url, body)?;
+    let headers =
+        FederationClient::sign_post_headers(&row.private_key_pem, &key_id, &target_url, body)?;
 
-    let target_domain = target_url
-        .host_str()
-        .unwrap_or("unknown")
-        .to_owned();
+    let target_domain = target_url.host_str().unwrap_or("unknown").to_owned();
 
     let result = client
         .post(target_url.as_str())

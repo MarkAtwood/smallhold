@@ -42,7 +42,7 @@ fn is_private_host(host: &str) -> bool {
             std::net::IpAddr::V6(ip) => {
                 ip.is_loopback() || ip.is_unspecified()
                 || (ip.segments()[0] & 0xFE00) == 0xFC00  // ULA fc00::/7
-                || (ip.segments()[0] == 0xFE80)            // link-local
+                || (ip.segments()[0] == 0xFE80) // link-local
             }
         };
     }
@@ -104,9 +104,7 @@ impl FederationClient {
             .ok_or_else(|| anyhow!("target URL has no host"))?;
         let path = target_url.path();
 
-        let signed_string = format!(
-            "(request-target): get {path}\nhost: {host}\ndate: {date}"
-        );
+        let signed_string = format!("(request-target): get {path}\nhost: {host}\ndate: {date}");
 
         let sig_b64 = rsa_sha256_sign(private_key_pem, signed_string.as_bytes())?;
 
@@ -215,10 +213,9 @@ impl FederationClient {
             .split_once('@')
             .ok_or_else(|| anyhow!("invalid acct URI, expected user@domain: {acct}"))?;
 
-        let wf_url = format!(
-            "https://{domain}/.well-known/webfinger?resource=acct:{acct}"
-        );
-        let parsed_wf_url: url::Url = wf_url.parse()
+        let wf_url = format!("https://{domain}/.well-known/webfinger?resource=acct:{acct}");
+        let parsed_wf_url: url::Url = wf_url
+            .parse()
             .with_context(|| format!("invalid WebFinger URL: {wf_url}"))?;
         validate_outbound_url(&parsed_wf_url)?;
 
@@ -284,9 +281,7 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
 
     // Verify the document's id matches what we requested (prevent spoofing)
     if id != actor_uri {
-        bail!(
-            "actor document id mismatch: requested {actor_uri}, got {id}"
-        );
+        bail!("actor document id mismatch: requested {actor_uri}, got {id}");
     }
 
     let parsed_url: url::Url = id
@@ -297,10 +292,7 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
         .ok_or_else(|| anyhow!("actor id URL has no host"))?
         .to_string();
 
-    let username = cap_str(
-        doc["preferredUsername"].as_str().unwrap_or(""),
-        100,
-    );
+    let username = cap_str(doc["preferredUsername"].as_str().unwrap_or(""), 100);
     if username.is_empty() {
         bail!("actor document missing preferredUsername");
     }
@@ -335,9 +327,7 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
         .ok_or_else(|| anyhow!("actor document missing inbox"))?
         .to_string();
 
-    let shared_inbox_url = doc["endpoints"]["sharedInbox"]
-        .as_str()
-        .map(String::from);
+    let shared_inbox_url = doc["endpoints"]["sharedInbox"].as_str().map(String::from);
 
     let followers_url = doc["followers"].as_str().map(String::from);
 
@@ -351,9 +341,7 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
         .ok_or_else(|| anyhow!("actor document missing publicKey.publicKeyPem"))?
         .to_string();
 
-    let is_locked = doc["manuallyApprovesFollowers"]
-        .as_bool()
-        .unwrap_or(false);
+    let is_locked = doc["manuallyApprovesFollowers"].as_bool().unwrap_or(false);
 
     // Service and Application types are conventionally bots
     let actor_type = doc["type"].as_str().unwrap_or("Person");
@@ -493,8 +481,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let url: url::Url = "https://remote.example/users/alice".parse().unwrap();
         let key_id = "https://local.example/users/writer#main-key";
 
-        let headers =
-            FederationClient::sign_get_headers(TEST_KEY_PEM, key_id, &url).unwrap();
+        let headers = FederationClient::sign_get_headers(TEST_KEY_PEM, key_id, &url).unwrap();
 
         assert!(headers.contains_key("Date"));
         assert!(headers.contains_key("Signature"));
@@ -536,8 +523,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let url: url::Url = "https://remote.example/users/alice".parse().unwrap();
         let key_id = "https://local.example/users/writer#main-key";
 
-        let headers =
-            FederationClient::sign_get_headers(TEST_KEY_PEM, key_id, &url).unwrap();
+        let headers = FederationClient::sign_get_headers(TEST_KEY_PEM, key_id, &url).unwrap();
 
         // Extract signature from header
         let sig_header = headers["Signature"].to_str().unwrap();
@@ -552,16 +538,14 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Reconstruct signed string
         let date = headers["Date"].to_str().unwrap();
-        let signed_string = format!(
-            "(request-target): get /users/alice\nhost: remote.example\ndate: {date}"
-        );
+        let signed_string =
+            format!("(request-target): get /users/alice\nhost: remote.example\ndate: {date}");
 
         // Verify with public key derived from the private key
         let private_key = RsaPrivateKey::from_pkcs8_pem(TEST_KEY_PEM).unwrap();
         let public_key = rsa::RsaPublicKey::from(&private_key);
         let verifying_key = rsa::pkcs1v15::VerifyingKey::<Sha256>::new(public_key);
-        let signature =
-            rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice()).unwrap();
+        let signature = rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice()).unwrap();
         verifying_key
             .verify(signed_string.as_bytes(), &signature)
             .expect("signature verification failed");
@@ -594,8 +578,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             "manuallyApprovesFollowers": true
         });
 
-        let data =
-            parse_actor_document(&doc, "https://remote.example/users/alice").unwrap();
+        let data = parse_actor_document(&doc, "https://remote.example/users/alice").unwrap();
 
         assert_eq!(data.actor_uri, "https://remote.example/users/alice");
         assert_eq!(data.username, "alice");
@@ -632,8 +615,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             }
         });
 
-        let data =
-            parse_actor_document(&doc, "https://remote.example/users/botacct").unwrap();
+        let data = parse_actor_document(&doc, "https://remote.example/users/botacct").unwrap();
 
         assert!(data.bot);
         // display_name falls back to username when name is absent
@@ -653,8 +635,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             }
         });
 
-        let err =
-            parse_actor_document(&doc, "https://remote.example/users/alice").unwrap_err();
+        let err = parse_actor_document(&doc, "https://remote.example/users/alice").unwrap_err();
         assert!(
             err.to_string().contains("mismatch"),
             "expected mismatch error, got: {err}"
@@ -673,8 +654,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             }
         });
 
-        let err =
-            parse_actor_document(&doc, "https://remote.example/users/x").unwrap_err();
+        let err = parse_actor_document(&doc, "https://remote.example/users/x").unwrap_err();
         assert!(err.to_string().contains("preferredUsername"));
     }
 
@@ -690,8 +670,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             bio_html: "<p>hi</p>".into(),
             avatar_url: None,
             header_url: None,
-            public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----"
-                .into(),
+            public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".into(),
             public_key_id: "https://remote.example/users/alice#main-key".into(),
             inbox_url: "https://remote.example/users/alice/inbox".into(),
             shared_inbox_url: Some("https://remote.example/inbox".into()),

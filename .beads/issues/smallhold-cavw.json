@@ -1,28 +1,27 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-cavw",
+  "title": "Extend home timeline query with followed-hashtag UNION branch",
+  "description": "## What\nExtend the home timeline SQL query to include a UNION branch that pulls in public posts containing hashtags the authenticated persona follows (via post_tags and followed_hashtags tables). Deduplicate posts that appear in both the followed-accounts branch and the hashtag branch. Apply normal since_id/max_id/limit pagination across the merged result set. Only `public` visibility posts qualify via hashtag following (not `unlisted`).\n\n## Why\nFollowing a hashtag is useless if those posts don't appear in the home timeline. The UNION approach keeps the query set-based and avoids application-side merging of two separate queries, which is error-prone for cursor-based pagination.\n\n## Agent team pattern\n- Spawn a Research subagent to: read the existing home timeline SQL query in this codebase to understand its current structure, join pattern, and pagination WHERE clauses; understand how post_tags is populated when a post is created (local posts) and when a remote post is ingested (inbox handling); check how mastodon.social implements hashtag timeline inclusion (inspect its source or documented behavior)\n- Spawn an Implementation subagent to: rewrite home timeline query as a UNION of (existing followed-account posts query) UNION ALL (hashtag posts query WHERE visibility='public' AND hashtag IN followed_hashtags for persona AND post NOT from muted/blocked account), then apply DISTINCT by post id, order by id DESC, apply since_id/max_id/limit; ensure pagination cursors work correctly across the merged set\n- Spawn a Test subagent to: follow hashtag 'testhashtag'; create a post from a non-followed account containing #testhashtag with public visibility; fetch home timeline and assert the post appears; create a post from same non-followed account with unlisted visibility and assert it does NOT appear; create a post from a followed account containing #testhashtag and assert it appears exactly once (no duplicate); mute an account and assert their hashtagged posts do not appear\n\n## Test discipline\n- Independent oracle: mastodon.social home timeline behavior with followed hashtags — a public post from a non-followed account containing a followed hashtag appears in the home timeline; this is the behavioral ground truth\n- Test approach: deterministic integration test with controlled accounts and posts; assert post presence/absence by id in timeline response; assert no duplicate ids in response; assert pagination cursors (since_id, max_id) correctly exclude/include posts at boundaries\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Only `public` visibility qualifies for hashtag-follow inclusion — not `unlisted`, not `followers_only`, not `direct`\n- Posts from muted or blocked accounts must not appear even if they contain a followed hashtag\n- UNION deduplication must be by snowflake id — two branches returning the same post_id must produce exactly one result row\n- Pagination (since_id/max_id) must apply after the UNION merge and ordering, not separately to each branch",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:20:36Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nExtend the home timeline SQL query to include a UNION branch that pulls in public posts containing hashtags the authenticated persona follows (via post_tags and followed_hashtags tables). Deduplicate posts that appear in both the followed-accounts branch and the hashtag branch. Apply normal since_id/max_id/limit pagination across the merged result set. Only `public` visibility posts qualify via hashtag following (not `unlisted`).\n\n## Why\nFollowing a hashtag is useless if those posts don't appear in the home timeline. The UNION approach keeps the query set-based and avoids application-side merging of two separate queries, which is error-prone for cursor-based pagination.\n\n## Agent team pattern\n- Spawn a Research subagent to: read the existing home timeline SQL query in this codebase to understand its current structure, join pattern, and pagination WHERE clauses; understand how post_tags is populated when a post is created (local posts) and when a remote post is ingested (inbox handling); check how mastodon.social implements hashtag timeline inclusion (inspect its source or documented behavior)\n- Spawn an Implementation subagent to: rewrite home timeline query as a UNION of (existing followed-account posts query) UNION ALL (hashtag posts query WHERE visibility='public' AND hashtag IN followed_hashtags for persona AND post NOT from muted/blocked account), then apply DISTINCT by post id, order by id DESC, apply since_id/max_id/limit; ensure pagination cursors work correctly across the merged set\n- Spawn a Test subagent to: follow hashtag 'testhashtag'; create a post from a non-followed account containing #testhashtag with public visibility; fetch home timeline and assert the post appears; create a post from same non-followed account with unlisted visibility and assert it does NOT appear; create a post from a followed account containing #testhashtag and assert it appears exactly once (no duplicate); mute an account and assert their hashtagged posts do not appear\n\n## Test discipline\n- Independent oracle: mastodon.social home timeline behavior with followed hashtags — a public post from a non-followed account containing a followed hashtag appears in the home timeline; this is the behavioral ground truth\n- Test approach: deterministic integration test with controlled accounts and posts; assert post presence/absence by id in timeline response; assert no duplicate ids in response; assert pagination cursors (since_id, max_id) correctly exclude/include posts at boundaries\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Only `public` visibility qualifies for hashtag-follow inclusion — not `unlisted`, not `followers_only`, not `direct`\n- Posts from muted or blocked accounts must not appear even if they contain a followed hashtag\n- UNION deduplication must be by snowflake id — two branches returning the same post_id must produce exactly one result row\n- Pagination (since_id/max_id) must apply after the UNION merge and ordering, not separately to each branch",
-  "ephemeral": false,
-  "id": "smallhold-cavw",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:14:14.739457587Z",
+  "started_at": "2026-07-18T17:05:23.852968933Z",
+  "closed_at": "2026-07-18T17:14:14.739457587Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Extend home timeline query with followed-hashtag UNION branch",
-  "updated_at": "2026-04-23T04:20:36Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-chxy",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:20:42Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-chxy",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

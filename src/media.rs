@@ -156,10 +156,9 @@ async fn process_upload(
                 file_data = Some(data.to_vec());
             }
             "description" => {
-                let text = field
-                    .text()
-                    .await
-                    .map_err(|e| AppError::bad_request(format!("Failed to read description: {e}")))?;
+                let text = field.text().await.map_err(|e| {
+                    AppError::bad_request(format!("Failed to read description: {e}"))
+                })?;
                 if !text.is_empty() {
                     let truncated: String = text.chars().take(MAX_DESCRIPTION_CHARS).collect();
                     description = Some(truncated);
@@ -195,9 +194,9 @@ async fn process_upload(
     let (width, height, blurhash, clean_data) = tokio::task::spawn_blocking({
         let data = data.clone();
         move || -> Result<(u32, u32, String, Vec<u8>), AppError> {
-            let mut reader =
-                image::ImageReader::new(std::io::Cursor::new(&data)).with_guessed_format()
-                    .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
+            let mut reader = image::ImageReader::new(std::io::Cursor::new(&data))
+                .with_guessed_format()
+                .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
             let mut limits = image::Limits::default();
             limits.max_alloc = Some(64 * 1024 * 1024); // 64MB decoded max
             reader.limits(limits);
@@ -238,8 +237,7 @@ async fn process_upload(
         }
     })
     .await
-    .map_err(|e| AppError::internal(format!("Image processing task failed: {e}")))?
-    ?;
+    .map_err(|e| AppError::internal(format!("Image processing task failed: {e}")))??;
 
     // Write the re-encoded (EXIF-stripped) image to disk
     tokio::fs::write(&abs_path, &clean_data)
@@ -285,7 +283,10 @@ async fn upload_media_v2(
 ) -> Result<(StatusCode, Json<Value>), AppError> {
     let row = process_upload(&state, &auth, multipart).await?;
     let domain = &state.config.server.domain;
-    Ok((StatusCode::ACCEPTED, Json(media_attachment_json(&row, domain))))
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(media_attachment_json(&row, domain)),
+    ))
 }
 
 /// POST /api/v1/media — sync upload, returns 200

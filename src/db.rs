@@ -289,6 +289,44 @@ CREATE TABLE IF NOT EXISTS pinned_posts (
     pinned_at  INTEGER NOT NULL,
     UNIQUE (account_id, post_id)
 );
+
+CREATE TABLE IF NOT EXISTS lists (
+    id             INTEGER PRIMARY KEY,
+    account_id     INTEGER NOT NULL REFERENCES accounts(id),
+    title          TEXT NOT NULL,
+    replies_policy TEXT NOT NULL DEFAULT 'list',
+    created_at     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS list_accounts (
+    list_id    INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    account_id INTEGER NOT NULL,
+    UNIQUE (list_id, account_id)
+);
+
+CREATE TABLE IF NOT EXISTS followed_tags (
+    account_id INTEGER NOT NULL REFERENCES accounts(id),
+    tag        TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (account_id, tag)
+);
+
+CREATE TABLE IF NOT EXISTS filters (
+    id            INTEGER PRIMARY KEY,
+    account_id    INTEGER NOT NULL REFERENCES accounts(id),
+    title         TEXT NOT NULL,
+    context       TEXT NOT NULL DEFAULT '[]',
+    filter_action TEXT NOT NULL DEFAULT 'warn',
+    expires_at    INTEGER,
+    created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS filter_keywords (
+    id         INTEGER PRIMARY KEY,
+    filter_id  INTEGER NOT NULL REFERENCES filters(id) ON DELETE CASCADE,
+    keyword    TEXT NOT NULL,
+    whole_word INTEGER NOT NULL DEFAULT 1
+);
 "#;
 
 #[cfg(test)]
@@ -299,10 +337,15 @@ mod tests {
     async fn test_create_pool() {
         let pool = create_pool("sqlite::memory:").await.unwrap();
         // Verify tables exist
-        let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert!(result.0 >= 15, "Expected at least 15 tables, got {}", result.0);
+        let result: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(
+            result.0 >= 19,
+            "Expected at least 19 tables, got {}",
+            result.0
+        );
     }
 }

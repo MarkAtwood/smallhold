@@ -1,28 +1,27 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-x4mh",
+  "title": "Schema and endpoints for GET/POST/DELETE /api/v1/followed_tags",
+  "description": "## What\nCreate `followed_hashtags` table via migration: (id PK snowflake, persona_id INTEGER NOT NULL REFERENCES personas(id), hashtag TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(persona_id, hashtag)). Implement three endpoints: GET /api/v1/followed_tags — return paginated list of followed Tag objects with `following: true`; POST /api/v1/followed_tags — body `{\"name\": \"rust\"}`, normalize tag (lowercase, strip leading #), insert row, return Tag with `following: true`; DELETE /api/v1/followed_tags/:name — unfollow by hashtag name, return 200 with Tag object.\n\n## Why\nClients need these endpoints to let users manage their followed hashtags list. The endpoint is /api/v1/followed_tags (not /api/v1/tags/:name/follow — that is a different, older pattern) — using the wrong path breaks client integration.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social GET /api/v1/followed_tags to capture exact Tag object shape with the `following` field; curl POST /api/v1/followed_tags to see request body format and response; curl DELETE /api/v1/followed_tags/:name to see response shape; note that the endpoint is /followed_tags not /tags/:name/follow\n- Spawn an Implementation subagent to: write migration for followed_hashtags table with UNIQUE constraint; implement GET handler with since_id/max_id/limit pagination via Link header; implement POST handler normalizing hashtag name (strip #, lowercase), inserting with IGNORE on conflict, returning Tag; implement DELETE handler removing row by persona_id+hashtag, returning Tag with following:false\n- Spawn a Test subagent to: POST follow 'rust', assert Tag response shape; GET /followed_tags and assert 'rust' appears; POST follow 'rust' again (duplicate) and assert 200 not 409; DELETE unfollow 'rust' and assert following:false; GET and assert list is empty; test 404 on DELETE of non-followed tag\n\n## Test discipline\n- Independent oracle: mastodon.social live /api/v1/followed_tags and /api/v1/followed_tags (POST) responses — capture exact Tag object shape including `following` boolean field, `name`, `url`, `history` array\n- Test approach: integration test full follow/list/unfollow lifecycle; assert Tag response fields match mastodon.social shape; assert UNIQUE constraint (duplicate follow is idempotent not error); assert pagination Link header on GET when multiple tags followed\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Normalize hashtag on POST: strip leading #, lowercase, trim whitespace; reject empty string with 422\n- Scope all queries to authenticated persona_id — never expose another persona's followed tags\n- UNIQUE(persona_id, hashtag) in DB prevents duplicates; handler should treat conflict as success (idempotent)\n- DELETE by name (not by id) — look up by persona_id + hashtag text",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:20:18Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nCreate `followed_hashtags` table via migration: (id PK snowflake, persona_id INTEGER NOT NULL REFERENCES personas(id), hashtag TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(persona_id, hashtag)). Implement three endpoints: GET /api/v1/followed_tags — return paginated list of followed Tag objects with `following: true`; POST /api/v1/followed_tags — body `{\"name\": \"rust\"}`, normalize tag (lowercase, strip leading #), insert row, return Tag with `following: true`; DELETE /api/v1/followed_tags/:name — unfollow by hashtag name, return 200 with Tag object.\n\n## Why\nClients need these endpoints to let users manage their followed hashtags list. The endpoint is /api/v1/followed_tags (not /api/v1/tags/:name/follow — that is a different, older pattern) — using the wrong path breaks client integration.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social GET /api/v1/followed_tags to capture exact Tag object shape with the `following` field; curl POST /api/v1/followed_tags to see request body format and response; curl DELETE /api/v1/followed_tags/:name to see response shape; note that the endpoint is /followed_tags not /tags/:name/follow\n- Spawn an Implementation subagent to: write migration for followed_hashtags table with UNIQUE constraint; implement GET handler with since_id/max_id/limit pagination via Link header; implement POST handler normalizing hashtag name (strip #, lowercase), inserting with IGNORE on conflict, returning Tag; implement DELETE handler removing row by persona_id+hashtag, returning Tag with following:false\n- Spawn a Test subagent to: POST follow 'rust', assert Tag response shape; GET /followed_tags and assert 'rust' appears; POST follow 'rust' again (duplicate) and assert 200 not 409; DELETE unfollow 'rust' and assert following:false; GET and assert list is empty; test 404 on DELETE of non-followed tag\n\n## Test discipline\n- Independent oracle: mastodon.social live /api/v1/followed_tags and /api/v1/followed_tags (POST) responses — capture exact Tag object shape including `following` boolean field, `name`, `url`, `history` array\n- Test approach: integration test full follow/list/unfollow lifecycle; assert Tag response fields match mastodon.social shape; assert UNIQUE constraint (duplicate follow is idempotent not error); assert pagination Link header on GET when multiple tags followed\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Normalize hashtag on POST: strip leading #, lowercase, trim whitespace; reject empty string with 422\n- Scope all queries to authenticated persona_id — never expose another persona's followed tags\n- UNIQUE(persona_id, hashtag) in DB prevents duplicates; handler should treat conflict as success (idempotent)\n- DELETE by name (not by id) — look up by persona_id + hashtag text",
-  "ephemeral": false,
-  "id": "smallhold-x4mh",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:14:14.721987214Z",
+  "started_at": "2026-07-18T17:05:23.807133872Z",
+  "closed_at": "2026-07-18T17:14:14.721987214Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Schema and endpoints for GET/POST/DELETE /api/v1/followed_tags",
-  "updated_at": "2026-04-23T04:20:18Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-chxy",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:20:38Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-chxy",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

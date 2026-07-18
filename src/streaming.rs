@@ -132,16 +132,12 @@ async fn streaming_sse_handler(
     let resolved = resolve_channel(&channel, &account, &params)?;
 
     let rx = STREAM_TX.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(move |msg| {
-        match msg {
-            Ok(ev) if ev.channel == resolved => {
-                let event = Event::default()
-                    .event(&ev.event_type)
-                    .data(&ev.payload);
-                Some(Ok(event))
-            }
-            _ => None,
+    let stream = BroadcastStream::new(rx).filter_map(move |msg| match msg {
+        Ok(ev) if ev.channel == resolved => {
+            let event = Event::default().event(&ev.event_type).data(&ev.payload);
+            Some(Ok(event))
         }
+        _ => None,
     });
 
     Ok(Sse::new(stream).keep_alive(

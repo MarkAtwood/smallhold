@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-aeck",
+  "title": "Link RSS/Atom feeds from actor document and WebFinger autodiscovery",
+  "description": "## What\nAdd RSS/Atom feed autodiscovery links to the actor document (`url` field area) and to the WebFinger response JRD `links` array so feed readers can discover feeds automatically. Specifically: add `\u003clink rel=\"alternate\" type=\"application/rss+xml\"\u003e` entries in the WebFinger JRD links array.\n\n## Why\nFeed reader autodiscovery (following RFC 5988 / WebFinger JRD conventions) allows clients to find the feed without knowing the feed URL in advance, making smallhold personas fully discoverable by standard feed aggregators.\n\n## Agent team pattern\n- Spawn a Research subagent to: check mastodon.social WebFinger JRD response for a real user to see how it exposes alternate feed links; check ActivityPub actor document conventions for linking to feeds; review RFC 5988 link relation types for `alternate`\n- Spawn an Implementation subagent to: modify WebFinger handler to include `{\"rel\": \"http://schemas.google.com/g/2005#feed\", \"type\": \"application/atom+xml\", \"href\": \"https://domain/users/:username/feed.atom\"}` and RSS equivalent in the JRD links array; update actor document serialization to include feed links if appropriate\n- Spawn a Test subagent to: fetch WebFinger response for a test persona, assert feed link entries are present with correct rel, type, and href values; fetch actor document and assert feed links present\n\n## Test discipline\n- Independent oracle: mastodon.social live WebFinger JRD at /.well-known/webfinger?resource=acct:user@mastodon.social — observe the actual link entries returned and replicate those rel/type values\n- Test approach: deserialize WebFinger JRD JSON in test, assert links array contains entries with type `application/rss+xml` and `application/atom+xml` pointing to correct persona-scoped URLs\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Feed URLs in JRD must use the server's canonical domain from config — never hardcode\n- WebFinger must still return correct JRD for non-feed resources; adding feed links must not break existing WebFinger behavior",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:18:03Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAdd RSS/Atom feed autodiscovery links to the actor document (`url` field area) and to the WebFinger response JRD `links` array so feed readers can discover feeds automatically. Specifically: add `<link rel=\"alternate\" type=\"application/rss+xml\">` entries in the WebFinger JRD links array.\n\n## Why\nFeed reader autodiscovery (following RFC 5988 / WebFinger JRD conventions) allows clients to find the feed without knowing the feed URL in advance, making smallhold personas fully discoverable by standard feed aggregators.\n\n## Agent team pattern\n- Spawn a Research subagent to: check mastodon.social WebFinger JRD response for a real user to see how it exposes alternate feed links; check ActivityPub actor document conventions for linking to feeds; review RFC 5988 link relation types for `alternate`\n- Spawn an Implementation subagent to: modify WebFinger handler to include `{\"rel\": \"http://schemas.google.com/g/2005#feed\", \"type\": \"application/atom+xml\", \"href\": \"https://domain/users/:username/feed.atom\"}` and RSS equivalent in the JRD links array; update actor document serialization to include feed links if appropriate\n- Spawn a Test subagent to: fetch WebFinger response for a test persona, assert feed link entries are present with correct rel, type, and href values; fetch actor document and assert feed links present\n\n## Test discipline\n- Independent oracle: mastodon.social live WebFinger JRD at /.well-known/webfinger?resource=acct:user@mastodon.social — observe the actual link entries returned and replicate those rel/type values\n- Test approach: deserialize WebFinger JRD JSON in test, assert links array contains entries with type `application/rss+xml` and `application/atom+xml` pointing to correct persona-scoped URLs\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Feed URLs in JRD must use the server's canonical domain from config — never hardcode\n- WebFinger must still return correct JRD for non-feed resources; adding feed links must not break existing WebFinger behavior",
-  "ephemeral": false,
-  "id": "smallhold-aeck",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:05:15.393471753Z",
+  "closed_at": "2026-07-18T17:05:15.393471753Z",
+  "close_reason": "RSS/Atom feeds already in feeds.rs with autodiscovery in profile page",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Link RSS/Atom feeds from actor document and WebFinger autodiscovery",
-  "updated_at": "2026-04-23T04:18:03Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ymt9",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:18:06Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ymt9",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

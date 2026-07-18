@@ -1,35 +1,35 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-chxy",
+  "title": "Hashtag following",
+  "description": "## What\nAllow personas to follow hashtags so that public posts containing those tags appear in the home timeline. Includes followed_hashtags schema, follow/unfollow endpoints, and home timeline query extension.\n\n## Why\nHashtag following is a first-class Mastodon feature (added in 4.x) and expected by Ivory, Elk, and other modern clients. Without it, the hashtag follow UI in those clients silently does nothing.\n\n## Phases covered\n- followed_hashtags schema + GET/POST/DELETE /api/v1/followed_tags endpoints\n- Home timeline UNION branch for posts containing followed hashtags",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:20:00Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAllow personas to follow hashtags so that public posts containing those tags appear in the home timeline. Includes followed_hashtags schema, follow/unfollow endpoints, and home timeline query extension.\n\n## Why\nHashtag following is a first-class Mastodon feature (added in 4.x) and expected by Ivory, Elk, and other modern clients. Without it, the hashtag follow UI in those clients silently does nothing.\n\n## Phases covered\n- followed_hashtags schema + GET/POST/DELETE /api/v1/followed_tags endpoints\n- Home timeline UNION branch for posts containing followed hashtags",
-  "ephemeral": false,
-  "id": "smallhold-chxy",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T17:14:14.704605099Z",
+  "started_at": "2026-07-18T17:05:23.760066992Z",
+  "closed_at": "2026-07-18T17:14:14.704605099Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Hashtag following",
-  "updated_at": "2026-04-23T04:20:00Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-cavw",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:20:42Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-cavw",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-x4mh",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:20:38Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-x4mh",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }
