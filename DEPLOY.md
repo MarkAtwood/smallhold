@@ -14,9 +14,11 @@ git clone https://github.com/yourname/smallhold && cd smallhold
 export SMALLHOLD_DOMAIN=yourdomain.example
 
 # 2. Initialize data directory
-mkdir -p data
+mkdir -p data && sudo chown 999:999 data
 docker compose run --rm smallhold init --config /data/config.toml
-# Edit data/config.toml — set domain, check paths
+# Edit data/config.toml:
+#   - Set domain to your domain
+#   - Set listen to "0.0.0.0:8080" (required for Docker networking)
 
 # 3. Create persona and set password
 docker compose run --rm smallhold persona create writer --display-name="Your Name" --config /data/config.toml
