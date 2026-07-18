@@ -1,0 +1,9 @@
+target/
+data/
+.git/
+.beads/
+*.db
+*.db-wal
+*.db-shm
+media/
+SESSION_STATE.md

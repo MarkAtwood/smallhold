@@ -6,7 +6,33 @@
 - A domain name with DNS pointing at the server
 - Nothing else. No Redis, no PostgreSQL, no Docker.
 
-## Build
+## Docker (fastest path)
+
+```bash
+# 1. Clone and set your domain
+git clone https://github.com/yourname/smallhold && cd smallhold
+export SMALLHOLD_DOMAIN=yourdomain.example
+
+# 2. Initialize data directory
+mkdir -p data
+docker compose run --rm smallhold init --config /data/config.toml
+# Edit data/config.toml — set domain, check paths
+
+# 3. Create persona and set password
+docker compose run --rm smallhold persona create writer --display-name="Your Name" --config /data/config.toml
+echo "yourpassword" | docker compose run --rm -T smallhold admin set-password --config /data/config.toml
+
+# 4. Start
+docker compose up -d
+```
+
+Caddy handles TLS automatically. Your instance is live at `https://yourdomain.example`.
+
+Data lives in `./data/` (SQLite database, media files, config). Back up this directory.
+
+## Bare metal (no Docker)
+
+### Build
 
 ```bash
 cargo build --release
