@@ -2,6 +2,8 @@
 
 A single-binary, SQLite-backed Rust server for the fediverse. Speaks the Mastodon Client API well enough that Phanpy, Ivory, Elk, Tusky, and Tuba work against it without modification.
 
+**Live instance:** [social.reviewcommit.com](https://social.reviewcommit.com)
+
 **One binary. One config file. One SQLite database. No Redis. No sidecars. No signup flow.**
 
 Designed for a solo operator running a few dozen personas under one domain. Federation volume in the thousands of activities per day, not millions. Cold start under two seconds, steady-state memory under 150 MB.
