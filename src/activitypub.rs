@@ -261,7 +261,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
 <h1>{site_title}</h1>
 <p class="handle">{site_desc}</p>
 <ul>{personas_html}</ul>
-<footer class="site">Powered by smallhold</footer>
+<footer class="site">Powered by <a href="https://github.com/MarkAtwood/smallhold">smallhold</a></footer>
 </main>
 </body>
 </html>"#,
