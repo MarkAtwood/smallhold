@@ -10,7 +10,7 @@ use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
@@ -38,6 +38,7 @@ fn retry_delay_ms(attempt: i32) -> i64 {
 
 // -- Circuit breaker (per-domain) --
 
+#[derive(Debug)]
 struct CircuitState {
     consecutive_failures: u32,
     /// Unix timestamp (ms) until which the circuit is open; `None` = closed.
@@ -417,6 +418,31 @@ async fn create_scheduled_post(
     .execute(pool)
     .await?;
 
+    // Attach media
+    let media_ids: Vec<i64> = params
+        .get("media_ids")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    v.as_str()
+                        .and_then(|s| s.parse().ok())
+                        .or_else(|| v.as_i64())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    for mid in &media_ids {
+        sqlx::query(
+            "UPDATE media SET post_id = ? WHERE id = ? AND account_id = ? AND post_id IS NULL",
+        )
+        .bind(post_id)
+        .bind(mid)
+        .bind(account_id)
+        .execute(pool)
+        .await?;
+    }
+
     // Insert tags
     for tag in &rendered.tags {
         sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
@@ -475,6 +501,40 @@ async fn create_scheduled_post(
         .execute(pool)
         .await?;
 
+    // Query media attachments for the AP Note
+    #[allow(clippy::type_complexity)]
+    let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
+        sqlx::query_as(
+            "SELECT file_path, mime_type, width, height, blurhash, description \
+             FROM media WHERE post_id = ? ORDER BY id",
+        )
+        .bind(post_id)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+    let ap_attachments: Vec<serde_json::Value> = ap_media
+        .iter()
+        .map(|(file_path, mime_type, width, height, blurhash, description)| {
+            let mut doc = serde_json::json!({
+                "type": "Document",
+                "mediaType": mime_type,
+                "url": format!("https://{domain}/media/{file_path}"),
+                "name": description,
+            });
+            if let Some(bh) = blurhash {
+                doc["blurhash"] = serde_json::json!(bh);
+            }
+            if let Some(w) = width {
+                doc["width"] = serde_json::json!(w);
+            }
+            if let Some(h) = height {
+                doc["height"] = serde_json::json!(h);
+            }
+            doc
+        })
+        .collect();
+
     // Enqueue federation Create{Note}
     let actor = format!("https://{domain}/users/{username}");
     let note_id = format!("{actor}/statuses/{post_id}");
@@ -520,6 +580,7 @@ async fn create_scheduled_post(
             "published": &published,
             "sensitive": sensitive,
             "summary": if spoiler_text.is_empty() { None } else { Some(spoiler_text) },
+            "attachment": &ap_attachments,
         }
     });
 

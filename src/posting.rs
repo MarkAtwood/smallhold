@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 // ---------------------------------------------------------------------------
 // Keyword filter types and helpers
@@ -213,40 +213,26 @@ fn strip_html_tags(html: &str) -> String {
 // Content rendering
 // ---------------------------------------------------------------------------
 
+static SANITIZER_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    ["p", "br", "a", "span", "em", "strong", "del", "blockquote", "code", "pre", "ul", "ol", "li"]
+        .into_iter()
+        .collect()
+});
+
+static SANITIZER_TAG_ATTRS: LazyLock<std::collections::HashMap<&'static str, HashSet<&'static str>>> =
+    LazyLock::new(|| {
+        let mut m = std::collections::HashMap::new();
+        m.insert("a", ["href", "class"].into_iter().collect());
+        m.insert("span", ["class"].into_iter().collect());
+        m
+    });
+
 /// Build a restrictive ammonia sanitizer for Mastodon-compatible HTML.
 fn html_sanitizer() -> ammonia::Builder<'static> {
     let mut builder = ammonia::Builder::new();
-
-    let allowed_tags: HashSet<&str> = [
-        "p",
-        "br",
-        "a",
-        "span",
-        "em",
-        "strong",
-        "del",
-        "blockquote",
-        "code",
-        "pre",
-        "ul",
-        "ol",
-        "li",
-    ]
-    .into_iter()
-    .collect();
-    builder.tags(allowed_tags);
-
-    let mut tag_attrs = std::collections::HashMap::new();
-    tag_attrs.insert(
-        "a",
-        ["href", "class"].into_iter().collect::<HashSet<&str>>(),
-    );
-    tag_attrs.insert("span", ["class"].into_iter().collect::<HashSet<&str>>());
-    builder.tag_attributes(tag_attrs);
-
-    // ammonia manages rel on <a> separately via link_rel
+    builder.tags(SANITIZER_TAGS.clone());
+    builder.tag_attributes(SANITIZER_TAG_ATTRS.clone());
     builder.link_rel(Some("nofollow noopener noreferrer"));
-
     builder
 }
 
@@ -288,7 +274,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
             href = href,
             user = m.username,
         );
-        html = html.replace(&full_match, &link);
+        html = html.replacen(&full_match, &link, 1);
     }
 
     // Replace hashtag patterns in the HTML
@@ -300,7 +286,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
             lower = tag.to_lowercase(),
             tag = tag,
         );
-        html = html.replace(&pattern, &link);
+        html = html.replacen(&pattern, &link, 1);
     }
 
     // Auto-link bare URLs not already inside <a> tags
@@ -432,7 +418,7 @@ fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
 // Status serialization
 // ---------------------------------------------------------------------------
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct PostRow {
     id: i64,
     account_id: i64,

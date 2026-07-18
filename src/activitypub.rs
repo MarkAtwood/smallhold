@@ -201,6 +201,13 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 }
 "#;
 
+/// Strip any `</style>` sequences (case-insensitive) to prevent style tag breakout
+/// when CSS is injected into a `<style>` block.
+fn sanitize_css_for_style_tag(css: &mut String) {
+    let re = regex::Regex::new(r"(?i)</\s*style").unwrap();
+    *css = re.replace_all(css, "").to_string();
+}
+
 /// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
 fn load_extra_css(config: &crate::config::Config) -> String {
     let mut css = crate::theme::load_theme_css(config);
@@ -211,6 +218,7 @@ fn load_extra_css(config: &crate::config::Config) -> String {
             Err(e) => tracing::warn!(path = custom_path, "failed to load custom CSS: {e}"),
         }
     }
+    sanitize_css_for_style_tag(&mut css);
     css
 }
 
@@ -413,8 +421,9 @@ async fn post_page(
         .tags(std::collections::HashSet::new())
         .clean(&post.content_html)
         .to_string();
-    let og_desc = if plain_text.len() > 200 {
-        format!("{}...", &plain_text[..197])
+    let og_desc = if plain_text.chars().count() > 200 {
+        let truncated: String = plain_text.chars().take(197).collect();
+        format!("{truncated}...")
     } else {
         plain_text
     };

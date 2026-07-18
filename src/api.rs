@@ -567,8 +567,19 @@ struct TokenRequest {
 
 async fn token(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     axum::Form(form): axum::Form<TokenRequest>,
 ) -> Result<Json<Value>, AppError> {
+    // Rate limit token exchange to prevent auth code brute-force
+    let ip = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown");
+    if !check_login_rate_limit(ip) {
+        return Err(AppError::rate_limited());
+    }
+
     if form.grant_type != "authorization_code" {
         return Err(AppError::bad_request("Unsupported grant_type"));
     }
@@ -619,7 +630,8 @@ async fn token(
         }
 
         if let Some(ref cs) = form.client_secret {
-            if *cs != stored_secret {
+            use subtle::ConstantTimeEq;
+            if cs.as_bytes().ct_eq(stored_secret.as_bytes()).unwrap_u8() != 1 {
                 return Err(AppError::unauthorized("Invalid client_secret"));
             }
         }

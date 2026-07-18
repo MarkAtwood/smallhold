@@ -80,5 +80,10 @@ pub fn load_theme_css(config: &crate::config::Config) -> String {
         }
     }
 
+    // Defense in depth: strip </style> sequences even though token values come from
+    // an operator-controlled JSON file. This CSS ends up inside a <style> tag.
+    let re = regex::Regex::new(r"(?i)</\s*style").unwrap();
+    css = re.replace_all(&css, "").to_string();
+
     css
 }

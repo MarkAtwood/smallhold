@@ -52,6 +52,11 @@ fn is_private_host(host: &str) -> bool {
         || host.ends_with(".internal")
 }
 
+// ponytail: DNS rebinding is not mitigated. To fully prevent it, we'd need
+// to pin DNS responses or use a custom resolver that validates IPs after
+// resolution. The SSRF check on URL parsing catches direct IP literals and
+// known hostnames but not DNS rebinding attacks. Acceptable risk for a
+// single-operator server.
 pub fn validate_outbound_url(url: &url::Url) -> Result<(), anyhow::Error> {
     let host = url.host_str().ok_or_else(|| anyhow!("URL has no host"))?;
     if is_private_host(host) {
@@ -193,6 +198,11 @@ impl FederationClient {
             bail!("fetch actor {actor_uri}: HTTP {status}");
         }
 
+        if let Some(len) = resp.content_length() {
+            if len > 1_048_576 {
+                bail!("response body exceeds 1MB (Content-Length: {len})");
+            }
+        }
         let body_bytes = resp
             .bytes()
             .await
@@ -232,6 +242,11 @@ impl FederationClient {
             bail!("WebFinger {wf_url}: HTTP {status}");
         }
 
+        if let Some(len) = resp.content_length() {
+            if len > 1_048_576 {
+                bail!("response body exceeds 1MB (Content-Length: {len})");
+            }
+        }
         let body_bytes = resp
             .bytes()
             .await

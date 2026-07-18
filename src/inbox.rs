@@ -59,6 +59,7 @@ fn check_json_depth(bytes: &[u8], max_depth: usize) -> bool {
 }
 
 /// Subset of remote_accounts needed for inbox processing.
+#[derive(Debug)]
 struct RemoteAccountRow {
     id: i64,
     actor_uri: String,
@@ -169,6 +170,7 @@ async fn process_inbox(
 // ---------------------------------------------------------------------------
 
 /// Parsed components of a draft-cavage HTTP Signature header.
+#[derive(Debug)]
 struct SignatureParams {
     key_id: String,
     headers_list: Vec<String>,
@@ -396,18 +398,19 @@ async fn verify_and_fetch_actor(
     request_path: &str,
 ) -> Result<RemoteAccountRow, AppError> {
     // Check Date header freshness (±5 minutes)
-    if let Some(date_val) = headers.get("date") {
-        if let Ok(date_str) = date_val.to_str() {
-            if let Ok(parsed) = chrono::DateTime::parse_from_rfc2822(date_str) {
-                let now = chrono::Utc::now();
-                let diff = (now - parsed.with_timezone(&chrono::Utc))
-                    .num_seconds()
-                    .abs();
-                if diff > 300 {
-                    return Err(AppError::unauthorized(
-                        "Date header too old or too far in future",
-                    ));
-                }
+    let date_val = headers
+        .get("date")
+        .ok_or_else(|| AppError::unauthorized("Missing Date header"))?;
+    if let Ok(date_str) = date_val.to_str() {
+        if let Ok(parsed) = chrono::DateTime::parse_from_rfc2822(date_str) {
+            let now = chrono::Utc::now();
+            let diff = (now - parsed.with_timezone(&chrono::Utc))
+                .num_seconds()
+                .abs();
+            if diff > 300 {
+                return Err(AppError::unauthorized(
+                    "Date header too old or too far in future",
+                ));
             }
         }
     }
@@ -419,6 +422,14 @@ async fn verify_and_fetch_actor(
         .map_err(|_| AppError::bad_request("non-ASCII Signature header"))?;
 
     let sig_params = parse_signature_header(sig_header_val)?;
+
+    if !sig_params.headers_list.iter().any(|h| h == "digest") {
+        return Err(AppError::unauthorized("Signature must include digest header"));
+    }
+
+    if !sig_params.headers_list.iter().any(|h| h == "date") {
+        return Err(AppError::unauthorized("Signature must include date header"));
+    }
 
     // The keyId typically looks like "https://remote.example/users/alice#main-key".
     // The actor URI should be the keyId minus the fragment.

@@ -28,8 +28,21 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::posting::routes())
         .merge(crate::streaming::routes())
         .route("/health", get(health))
+        .layer(axum::middleware::from_fn(security_headers))
         .layer(cors)
         .with_state(state)
+}
+
+async fn security_headers(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+    headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+    headers.insert("Referrer-Policy", "same-origin".parse().unwrap());
+    response
 }
 
 async fn health() -> Json<serde_json::Value> {

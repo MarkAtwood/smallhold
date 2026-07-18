@@ -10,7 +10,7 @@ pub fn generate_id() -> i64 {
         .as_millis() as u64;
 
     loop {
-        let prev = STATE.load(Ordering::Relaxed);
+        let prev = STATE.load(Ordering::Acquire);
         let prev_ms = prev >> 16;
         let prev_seq = prev & 0xFFFF;
 
@@ -27,7 +27,7 @@ pub fn generate_id() -> i64 {
 
         let new_state = (ms << 16) | seq;
         if STATE
-            .compare_exchange(prev, new_state, Ordering::Relaxed, Ordering::Relaxed)
+            .compare_exchange(prev, new_state, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
             return ((ms << 16) | seq) as i64;

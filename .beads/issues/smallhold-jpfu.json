@@ -2,13 +2,17 @@
   "id": "smallhold-jpfu",
   "title": "client_secret compared with == instead of constant-time",
   "description": "src/api.rs:621-623 — client_secret compared with != (standard string equality). Should use constant-time comparison to prevent timing attacks.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T18:25:23.294018156Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T18:25:23.294018156Z",
+  "updated_at": "2026-07-18T18:34:10.186923067Z",
+  "started_at": "2026-07-18T18:30:49.412849114Z",
+  "closed_at": "2026-07-18T18:34:10.186923067Z",
+  "close_reason": "Closed",
   "labels": [
     "codereview"
   ]

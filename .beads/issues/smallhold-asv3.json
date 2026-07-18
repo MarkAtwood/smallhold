@@ -2,13 +2,17 @@
   "id": "smallhold-asv3",
   "title": "html_sanitizer rebuilds allowlists on every call",
   "description": "src/posting.rs:217-251 — html_sanitizer() rebuilds HashSet allowlists on every call instead of using LazyLock.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T18:25:23.539607571Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T18:25:23.539607571Z",
+  "updated_at": "2026-07-18T18:34:10.556909258Z",
+  "started_at": "2026-07-18T18:30:49.700797427Z",
+  "closed_at": "2026-07-18T18:34:10.556909258Z",
+  "close_reason": "Closed",
   "labels": [
     "codereview"
   ]

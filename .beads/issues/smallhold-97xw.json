@@ -2,13 +2,17 @@
   "id": "smallhold-97xw",
   "title": "DNS rebinding bypasses SSRF checks",
   "description": "is_private_host() in federation.rs only checks hostname strings and parsed IP literals from the URL, but never resolves DNS and checks the resulting IP. An attacker-controlled domain that resolves to 127.0.0.1 or 169.254.x.x bypasses validate_outbound_url(). Affects fetch_actor(), resolve_webfinger(), and all outbound delivery in deliver_one(). Fix: resolve the hostname to IP(s) and re-check is_private_host() on each resolved address before connecting, or use a custom reqwest DNS resolver that rejects private IPs.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T18:23:31.242694829Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T18:23:31.242694829Z",
+  "updated_at": "2026-07-18T18:34:10.126518473Z",
+  "started_at": "2026-07-18T18:30:49.365595561Z",
+  "closed_at": "2026-07-18T18:34:10.126518473Z",
+  "close_reason": "Closed",
   "labels": [
     "codereview"
   ]
