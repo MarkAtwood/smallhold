@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-qmyt",
+  "title": "instance.contact_account in API response",
+  "description": "GET /api/v1/instance and /api/v2/instance return contact_account: null. Should return the first persona (or a configured contact persona) as a full Account object. Some clients display this in the About page.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T21:55:22.712422023Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T21:55:22.712422023Z"
+}

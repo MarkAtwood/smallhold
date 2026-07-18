@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-fpji",
+  "title": "Polls support (GET/POST /api/v1/polls)",
+  "description": "Spec says skip in v1, but Ivory and Phanpy show poll UI and some clients fail ungracefully if poll endpoints 404. At minimum: accept poll params on post creation, store in a polls table, render in Status JSON, allow voting via POST /api/v1/polls/:id/votes. Remote polls from federation should display read-only.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T21:55:22.710072637Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T21:55:22.710072637Z"
+}
