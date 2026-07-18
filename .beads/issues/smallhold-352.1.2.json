@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-352.1.2",
+  "title": "Federation fixture corpus",
+  "description": "## What\nCapture live HTTP responses from mastodon.social and store them as JSON fixtures in `tests/fixtures/mastodon/`. Fixtures needed: WebFinger lookup response, actor document (Person), and inbox POST bodies for Follow, Create Note, Announce, Like, Delete, and Undo activity types. Write replay tests that feed each fixture into the smallhold inbox handler and assert correct resulting DB state.\n\n## Why\nLive federation tests are slow, fragile, and require network access. A fixture corpus lets CI run fast, offline, and deterministically. It also documents exactly what mastodon.social actually sends, which is the authoritative ground truth for protocol behavior.\n\n## Agent team pattern\n- Spawn a Research subagent to: use `curl` against mastodon.social to capture real WebFinger, actor, and inbox activity bodies; document any mastodon.social-specific fields (e.g., `\"sensitive\"`, `\"@context\"` extensions, `\"attributedTo\"` shapes); note any edge cases like Follow with object as URI vs. full object.\n- Spawn an Implementation subagent to: save captured responses as pretty-printed JSON files in `tests/fixtures/mastodon/`; write `tests/federation_replay.rs` that loads each fixture, POSTs it to the inbox handler via the test harness from issue 9-A-1, and queries the DB to assert the correct row was inserted or updated.\n- Spawn a Test subagent to: validate each fixture file is valid JSON; verify that the replay test DB assertions are independent of the production code paths (i.e., assert on DB column values, not on objects returned from the same code that inserted them).\n\n## Test discipline\n- Independent oracle: real mastodon.social responses captured via `curl -H 'Accept: application/activity+json'`; fixture files committed to the repo are the oracle — tests assert the handler produces correct DB state given these known-good inputs.\n- Test approach: POST each fixture to the inbox endpoint via the integration test harness; query SQLite directly to assert DB state (e.g., `SELECT COUNT(*) FROM follows WHERE ...`).\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- Inbox handler must not 500 on unknown activity types — must return 202 Accepted and log at WARN.\n- Inbox handler must ignore Delete activities for posts that don't exist locally (no 500).\n- HTTP signature verification must be bypassable in test mode via a test-only flag or fixture-level override (production must never bypass).\n- Fixture files must be committed as static assets, not generated at test runtime from network calls.\n",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:49:41Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nCapture live HTTP responses from mastodon.social and store them as JSON fixtures in `tests/fixtures/mastodon/`. Fixtures needed: WebFinger lookup response, actor document (Person), and inbox POST bodies for Follow, Create Note, Announce, Like, Delete, and Undo activity types. Write replay tests that feed each fixture into the smallhold inbox handler and assert correct resulting DB state.\n\n## Why\nLive federation tests are slow, fragile, and require network access. A fixture corpus lets CI run fast, offline, and deterministically. It also documents exactly what mastodon.social actually sends, which is the authoritative ground truth for protocol behavior.\n\n## Agent team pattern\n- Spawn a Research subagent to: use `curl` against mastodon.social to capture real WebFinger, actor, and inbox activity bodies; document any mastodon.social-specific fields (e.g., `\"sensitive\"`, `\"@context\"` extensions, `\"attributedTo\"` shapes); note any edge cases like Follow with object as URI vs. full object.\n- Spawn an Implementation subagent to: save captured responses as pretty-printed JSON files in `tests/fixtures/mastodon/`; write `tests/federation_replay.rs` that loads each fixture, POSTs it to the inbox handler via the test harness from issue 9-A-1, and queries the DB to assert the correct row was inserted or updated.\n- Spawn a Test subagent to: validate each fixture file is valid JSON; verify that the replay test DB assertions are independent of the production code paths (i.e., assert on DB column values, not on objects returned from the same code that inserted them).\n\n## Test discipline\n- Independent oracle: real mastodon.social responses captured via `curl -H 'Accept: application/activity+json'`; fixture files committed to the repo are the oracle — tests assert the handler produces correct DB state given these known-good inputs.\n- Test approach: POST each fixture to the inbox endpoint via the integration test harness; query SQLite directly to assert DB state (e.g., `SELECT COUNT(*) FROM follows WHERE ...`).\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- Inbox handler must not 500 on unknown activity types — must return 202 Accepted and log at WARN.\n- Inbox handler must ignore Delete activities for posts that don't exist locally (no 500).\n- HTTP signature verification must be bypassable in test mode via a test-only flag or fixture-level override (production must never bypass).\n- Fixture files must be committed as static assets, not generated at test runtime from network calls.\n",
-  "ephemeral": false,
-  "id": "smallhold-352.1.2",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T19:09:36.882250058Z",
+  "closed_at": "2026-07-18T19:09:36.882250058Z",
+  "close_reason": "Using Fediverse Pasture test vectors instead of custom corpus",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 1,
-  "status": "open",
-  "title": "Federation fixture corpus",
-  "updated_at": "2026-04-23T00:49:41Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352.1",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:49:41Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-352.1",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

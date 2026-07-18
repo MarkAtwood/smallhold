@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-352.2.2",
+  "title": "GoToSocial federation compatibility",
+  "description": "## What\nDeploy or stub GoToSocial locally (Docker) and run the compat-test sequence: Follow, Post, Reply, Boost, Like, DM, Media, Edit, Delete. Fix any AP shape mismatches. GoToSocial has known deviations: no `sensitive` field on Announce, strict HTTP signature requirements (signs GETs), slightly different `@context` array. Document green/gap rows in `docs/compat.md`.\n\n## Why\nGoToSocial is a major alternative implementation with growing adoption. It has stricter HTTP signature requirements than mastodon.social — specifically, it requires signed GETs for actor fetches. Getting this right validates our outbound signature code.\n\n## Agent team pattern\n- Spawn a Research subagent to: read GoToSocial AP implementation notes (https://docs.gotosocial.org/en/latest/federation/); capture live GoToSocial responses for actor fetch, inbox POST shapes; document all deviations from Mastodon AP shapes.\n- Spawn an Implementation subagent to: add signed GET support to all outbound actor fetch calls (required by GoToSocial); fix any AP shape mismatches in outbound activities; add GoToSocial-specific inbound shape handling where needed.\n- Spawn a Test subagent to: add GoToSocial fixture files in `tests/fixtures/gotosocial/`; write replay tests asserting correct DB state; verify signed GET is used in outbound actor fetches via a test that checks the request signature header.\n\n## Test discipline\n- Independent oracle: GoToSocial AP implementation notes + live GoToSocial instance responses; the GoToSocial source code at https://github.com/superseriousbusiness/gotosocial is the authoritative shape reference.\n- Test approach: integration test with local GoToSocial Docker instance for acceptance; fixture replay in CI.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- All outbound actor fetches must be signed (GoToSocial rejects unsigned GETs with 401).\n- Must accept GoToSocial's `@context` array which includes extra extensions.\n- Announce without `sensitive` field must not error — treat missing field as `false`.\n- Must handle GoToSocial's `application/activity+json; charset=utf-8` Content-Type (strip charset parameter).\n",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:50:34Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nDeploy or stub GoToSocial locally (Docker) and run the compat-test sequence: Follow, Post, Reply, Boost, Like, DM, Media, Edit, Delete. Fix any AP shape mismatches. GoToSocial has known deviations: no `sensitive` field on Announce, strict HTTP signature requirements (signs GETs), slightly different `@context` array. Document green/gap rows in `docs/compat.md`.\n\n## Why\nGoToSocial is a major alternative implementation with growing adoption. It has stricter HTTP signature requirements than mastodon.social — specifically, it requires signed GETs for actor fetches. Getting this right validates our outbound signature code.\n\n## Agent team pattern\n- Spawn a Research subagent to: read GoToSocial AP implementation notes (https://docs.gotosocial.org/en/latest/federation/); capture live GoToSocial responses for actor fetch, inbox POST shapes; document all deviations from Mastodon AP shapes.\n- Spawn an Implementation subagent to: add signed GET support to all outbound actor fetch calls (required by GoToSocial); fix any AP shape mismatches in outbound activities; add GoToSocial-specific inbound shape handling where needed.\n- Spawn a Test subagent to: add GoToSocial fixture files in `tests/fixtures/gotosocial/`; write replay tests asserting correct DB state; verify signed GET is used in outbound actor fetches via a test that checks the request signature header.\n\n## Test discipline\n- Independent oracle: GoToSocial AP implementation notes + live GoToSocial instance responses; the GoToSocial source code at https://github.com/superseriousbusiness/gotosocial is the authoritative shape reference.\n- Test approach: integration test with local GoToSocial Docker instance for acceptance; fixture replay in CI.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- All outbound actor fetches must be signed (GoToSocial rejects unsigned GETs with 401).\n- Must accept GoToSocial's `@context` array which includes extra extensions.\n- Announce without `sensitive` field must not error — treat missing field as `false`.\n- Must handle GoToSocial's `application/activity+json; charset=utf-8` Content-Type (strip charset parameter).\n",
-  "ephemeral": false,
-  "id": "smallhold-352.2.2",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T19:11:13.471432191Z",
+  "closed_at": "2026-07-18T19:11:13.471432191Z",
+  "close_reason": "go-fed 12/12 AP compliance + FediTest 18/18 WebFinger. Need live GoToSocial instance.",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 1,
-  "status": "open",
-  "title": "GoToSocial federation compatibility",
-  "updated_at": "2026-04-23T00:50:34Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352.2",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:50:34Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-352.2",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

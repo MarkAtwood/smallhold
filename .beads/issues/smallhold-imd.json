@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "compat-test runs all probes and prints PASS/FAIL per step; test Note is actually delivered to target inbox; Follow/Accept roundtrip completes; test cleans up after itself (sends Unfollow, Delete); works against mastodon.social with a real persona",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:14:06Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-imd",
+  "title": "smallhold compat-test CLI subcommand",
   "description": "Implement 'smallhold compat-test --target=mastodon.social --persona=writer' that runs a canned suite of interoperability probes against a live remote server. Probes: WebFinger lookup, actor fetch, send Follow, wait for Accept, post a test Note and verify delivery, send Delete. Report pass/fail per probe. Useful for regression testing after changes.",
   "design": "Implement as a CLI subcommand that talks directly to SQLite (server must be running for HTTP listening). Probes are sequential with timeouts. Print structured output: [PASS] WebFinger lookup, [FAIL] Activity delivery (timeout after 30s). Use reqwest for outbound probes.",
-  "ephemeral": false,
-  "id": "smallhold-imd",
-  "is_template": false,
-  "issue_type": "task",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "compat-test runs all probes and prints PASS/FAIL per step; test Note is actually delivered to target inbox; Follow/Accept roundtrip completes; test cleans up after itself (sends Unfollow, Delete); works against mastodon.social with a real persona",
+  "status": "closed",
   "priority": 1,
-  "status": "open",
-  "title": "smallhold compat-test CLI subcommand",
-  "updated_at": "2026-04-23T00:14:06Z",
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:14:06Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T19:09:37.069661966Z",
+  "closed_at": "2026-07-18T19:09:37.069661966Z",
+  "close_reason": "Using FediTest CLI",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:14:11Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-352",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

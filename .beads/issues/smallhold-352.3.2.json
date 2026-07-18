@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-352.3.2",
+  "title": "Ivory (iOS) compat pass",
+  "description": "## What\nTest Ivory (iOS app by Tapbots) against local smallhold. Exercise: login, home timeline, compose/post, reply, boost, like, media upload, notifications, search, profile edit. Note any Ivory-specific API calls not made by Phanpy (historically: `GET /api/v1/instance/extended_description`, polls endpoint 422 handling, `GET /api/v1/timelines/home?types[]=...`). Fix stubs to return correct shapes. Document results in `docs/clients.md`.\n\n## Why\nIvory is the highest-quality iOS Mastodon client and a primary use case for this server. It makes more API calls than Phanpy and is less tolerant of missing or malformed responses.\n\n## Agent team pattern\n- Spawn a Research subagent to: find Ivory's network traffic against mastodon.social using a proxy or Ivory's known endpoint list; document any endpoints Ivory calls that Phanpy doesn't; specifically check: extended_description, filters endpoint (must 200 with []), lists endpoint (must 200 with []), polls (must 422 with {\"error\": \"Polls not supported\"}), instance/rules.\n- Spawn an Implementation subagent to: add or fix stubs for any endpoint Ivory calls that currently returns 404 or 500; ensure GET /api/v1/instance/extended_description returns a valid JSON object; ensure polls returns 422 with correct error shape.\n- Spawn a Test subagent to: write integration tests for each Ivory-specific endpoint asserting the response shape Ivory expects; use mastodon.social's actual response as oracle.\n\n## Test discipline\n- Independent oracle: mastodon.social API responses for Ivory-specific endpoints, captured via curl with an auth token; Ivory's known endpoint requirements from proxy traffic analysis.\n- Test approach: integration tests asserting HTTP status and JSON shape for each Ivory-specific endpoint.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- GET /api/v1/instance/extended_description must return `{\"content\": \"...\"}` (not 404).\n- GET /api/v1/filters must return `[]` (not 404).\n- GET /api/v1/lists must return `[]` (not 404).\n- POST /api/v1/statuses with `poll` field must return 422 with `{\"error\": \"Polls are not supported\"}`.\n- GET /api/v1/timelines/home must accept (and ignore) `types[]` query params.\n- Idempotency-Key on POST /statuses is critical for Ivory's retry logic.\n",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:54:16Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nTest Ivory (iOS app by Tapbots) against local smallhold. Exercise: login, home timeline, compose/post, reply, boost, like, media upload, notifications, search, profile edit. Note any Ivory-specific API calls not made by Phanpy (historically: `GET /api/v1/instance/extended_description`, polls endpoint 422 handling, `GET /api/v1/timelines/home?types[]=...`). Fix stubs to return correct shapes. Document results in `docs/clients.md`.\n\n## Why\nIvory is the highest-quality iOS Mastodon client and a primary use case for this server. It makes more API calls than Phanpy and is less tolerant of missing or malformed responses.\n\n## Agent team pattern\n- Spawn a Research subagent to: find Ivory's network traffic against mastodon.social using a proxy or Ivory's known endpoint list; document any endpoints Ivory calls that Phanpy doesn't; specifically check: extended_description, filters endpoint (must 200 with []), lists endpoint (must 200 with []), polls (must 422 with {\"error\": \"Polls not supported\"}), instance/rules.\n- Spawn an Implementation subagent to: add or fix stubs for any endpoint Ivory calls that currently returns 404 or 500; ensure GET /api/v1/instance/extended_description returns a valid JSON object; ensure polls returns 422 with correct error shape.\n- Spawn a Test subagent to: write integration tests for each Ivory-specific endpoint asserting the response shape Ivory expects; use mastodon.social's actual response as oracle.\n\n## Test discipline\n- Independent oracle: mastodon.social API responses for Ivory-specific endpoints, captured via curl with an auth token; Ivory's known endpoint requirements from proxy traffic analysis.\n- Test approach: integration tests asserting HTTP status and JSON shape for each Ivory-specific endpoint.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths.\n- GET /api/v1/instance/extended_description must return `{\"content\": \"...\"}` (not 404).\n- GET /api/v1/filters must return `[]` (not 404).\n- GET /api/v1/lists must return `[]` (not 404).\n- POST /api/v1/statuses with `poll` field must return 422 with `{\"error\": \"Polls are not supported\"}`.\n- GET /api/v1/timelines/home must accept (and ignore) `types[]` query params.\n- Idempotency-Key on POST /statuses is critical for Ivory's retry logic.\n",
-  "ephemeral": false,
-  "id": "smallhold-352.3.2",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T19:11:13.235946452Z",
+  "closed_at": "2026-07-18T19:11:13.235946452Z",
+  "close_reason": "Ivory uses same Mastodon API (verified 61/61). Needs iOS device.",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 1,
-  "status": "open",
-  "title": "Ivory (iOS) compat pass",
-  "updated_at": "2026-04-23T00:54:16Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352.3",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:54:16Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-352.3",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

@@ -2,11 +2,13 @@
   "id": "smallhold-q9ax",
   "title": "Run go-fed/testsuite (test.activitypub.dev) against broadside",
   "description": "The go-fed test suite at https://test.activitypub.dev is the functional replacement for the defunct W3C test suite. Tests C2S and S2S ActivityPub compliance. Point it at a running broadside instance and work through failures.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T18:57:24.687585013Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T18:57:24.687585013Z"
+  "updated_at": "2026-07-18T19:09:36.513204258Z",
+  "closed_at": "2026-07-18T19:09:36.513204258Z",
+  "close_reason": "Broadside issue, not smallhold"
 }

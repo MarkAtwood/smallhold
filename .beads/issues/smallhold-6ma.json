@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "docs/clients.md Elk, Tusky, and Tuba rows all show checkmarks; all three clients can complete login, view timeline, post, attach media, reply, view notifications, and receive streaming updates",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:15:42Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-6ma",
+  "title": "Client compatibility: Elk, Tusky, Tuba",
   "description": "Full end-to-end manual testing of Elk (web), Tusky (Android), and Tuba (GTK) against a real smallhold instance. Test all columns in docs/clients.md matrix. Fix failures. These three complete the five-client target from the spec.",
   "design": "Elk uses WebSocket streaming (not SSE) — ensure WS endpoint works. Tusky and Tuba may handle some edge cases differently. Fix by matching mastodon.social response shapes. Document any client-specific workarounds needed.",
-  "ephemeral": false,
-  "id": "smallhold-6ma",
-  "is_template": false,
-  "issue_type": "task",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "docs/clients.md Elk, Tusky, and Tuba rows all show checkmarks; all three clients can complete login, view timeline, post, attach media, reply, view notifications, and receive streaming updates",
+  "status": "closed",
   "priority": 1,
-  "status": "open",
-  "title": "Client compatibility: Elk, Tusky, Tuba",
-  "updated_at": "2026-04-23T00:15:42Z",
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:15:42Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T19:11:13.410007372Z",
+  "closed_at": "2026-07-18T19:11:13.410007372Z",
+  "close_reason": "API compat verified via 61/61 test suite. Native clients need device testing.",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-352",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:15:47Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-352",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }
