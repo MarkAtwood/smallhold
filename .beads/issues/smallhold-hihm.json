@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-hihm",
+  "title": "Fix (request-target) in signature verification: use actual request path",
+  "description": "build_signed_string hardcodes '(request-target)' as 'post /inbox' but deliveries arrive at /users/{username}/inbox. Need to pass the actual request path.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T06:15:33.465793017Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T06:20:17.167899427Z",
+  "closed_at": "2026-07-18T06:20:17.167899427Z",
+  "close_reason": "Closed"
+}

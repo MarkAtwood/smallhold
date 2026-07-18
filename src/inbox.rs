@@ -1,4 +1,3 @@
-use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -40,10 +39,15 @@ pub fn routes() -> Router<Arc<AppState>> {
 /// POST /inbox — shared inbox, dispatches to all relevant local actors.
 async fn shared_inbox(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    body: Bytes,
+    request: axum::extract::Request,
 ) -> Result<impl IntoResponse, AppError> {
-    process_inbox(&state, &headers, &body).await?;
+    let (parts, body) = request.into_parts();
+    let path = parts.uri.path().to_string();
+    let headers = parts.headers;
+    let body = axum::body::to_bytes(body, 10 * 1024 * 1024)
+        .await
+        .map_err(|_| AppError::bad_request("request body too large"))?;
+    process_inbox(&state, &headers, &body, &path).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -51,8 +55,7 @@ async fn shared_inbox(
 async fn user_inbox(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
-    headers: HeaderMap,
-    body: Bytes,
+    request: axum::extract::Request,
 ) -> Result<impl IntoResponse, AppError> {
     // Verify the target account exists.
     let exists: (i64,) =
@@ -64,7 +67,13 @@ async fn user_inbox(
         return Err(AppError::not_found("Account not found"));
     }
 
-    process_inbox(&state, &headers, &body).await?;
+    let (parts, body) = request.into_parts();
+    let path = parts.uri.path().to_string();
+    let headers = parts.headers;
+    let body = axum::body::to_bytes(body, 10 * 1024 * 1024)
+        .await
+        .map_err(|_| AppError::bad_request("request body too large"))?;
+    process_inbox(&state, &headers, &body, &path).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -73,6 +82,7 @@ async fn process_inbox(
     state: &AppState,
     headers: &HeaderMap,
     body: &[u8],
+    request_path: &str,
 ) -> Result<(), AppError> {
     let activity: Value = serde_json::from_slice(body)
         .map_err(|_| AppError::bad_request("invalid JSON"))?;
@@ -86,7 +96,7 @@ async fn process_inbox(
     }
 
     let remote_account =
-        verify_and_fetch_actor(state, headers, body, actor_uri).await?;
+        verify_and_fetch_actor(state, headers, body, actor_uri, request_path).await?;
 
     let activity_type = activity["type"].as_str().unwrap_or("");
     tracing::info!(
@@ -196,12 +206,13 @@ fn build_signed_string(
     headers_list: &[String],
     http_headers: &HeaderMap,
     body: &[u8],
+    request_path: &str,
 ) -> Result<String, AppError> {
     let mut parts = Vec::with_capacity(headers_list.len());
 
     for header_name in headers_list {
         let value = match header_name.as_str() {
-            "(request-target)" => "post /inbox".to_string(),
+            "(request-target)" => format!("post {request_path}"),
             "digest" => {
                 // Recompute the digest from the body and use that.
                 // If a Digest header is present, we verify it matches.
@@ -348,6 +359,7 @@ async fn verify_and_fetch_actor(
     headers: &HeaderMap,
     body: &[u8],
     actor_uri: &str,
+    request_path: &str,
 ) -> Result<RemoteAccountRow, AppError> {
     let sig_header_val = headers
         .get("signature")
@@ -368,7 +380,8 @@ async fn verify_and_fetch_actor(
         ));
     }
 
-    let signed_string = build_signed_string(&sig_params.headers_list, headers, body)?;
+    let signed_string =
+        build_signed_string(&sig_params.headers_list, headers, body, request_path)?;
 
     // Try cached key first.
     if let Some(cached) = lookup_by_key_id(&state.pool, &sig_params.key_id).await? {
