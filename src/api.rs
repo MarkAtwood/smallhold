@@ -2100,7 +2100,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/domain_blocks", get(empty_array_authed))
         .route("/api/v1/bookmarks", get(empty_array))
         .route("/api/v1/favourites", get(empty_array))
-        .route("/api/v1/conversations", get(empty_array))
+        // conversations moved to posting.rs
         .route("/api/v1/featured_tags", get(empty_array))
         .route("/api/v1/endorsements", get(empty_array))
         .route("/api/v1/instance/rules", get(empty_array))

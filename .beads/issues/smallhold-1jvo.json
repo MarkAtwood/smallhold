@@ -2,11 +2,15 @@
   "id": "smallhold-1jvo",
   "title": "Conversations endpoint with real DM threads",
   "description": "GET /api/v1/conversations currently returns []. Should return actual DM threads grouped by participants. Each conversation has id, unread flag, last_status, and accounts array. POST /api/v1/conversations/:id/read marks as read.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "feature",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T21:55:22.710642195Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T21:55:22.710642195Z"
+  "updated_at": "2026-07-18T22:26:20.353781606Z",
+  "started_at": "2026-07-18T22:20:43.025499624Z",
+  "closed_at": "2026-07-18T22:26:20.353781606Z",
+  "close_reason": "Closed"
 }

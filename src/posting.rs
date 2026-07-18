@@ -9,7 +9,7 @@ use crate::streaming::{publish, StreamEvent};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -2799,6 +2799,275 @@ async fn delete_scheduled_status(
 }
 
 // ---------------------------------------------------------------------------
+// Conversations
+// ---------------------------------------------------------------------------
+
+async fn list_conversations(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Query(params): Query<PaginationParams>,
+) -> Result<Response, AppError> {
+    let domain = &state.config.server.domain;
+    let limit = params.limit.unwrap_or(20).clamp(1, 40);
+
+    // Find direct-visibility posts where the authenticated user is the author
+    // or is mentioned, excluding hidden conversations.
+    // Each direct post is treated as its own conversation entry (clients group by reply chain).
+    let (page_clause, page_binds) = pagination_clause(&params);
+
+    let order = if params.min_id.is_some() {
+        "ASC"
+    } else {
+        "DESC"
+    };
+
+    let sql = format!(
+        "SELECT {POST_COLUMNS} FROM posts \
+         WHERE visibility = 'direct' \
+         AND (account_id = ? OR id IN (SELECT post_id FROM mentions WHERE mentioned_account_id = ?)) \
+         AND id NOT IN (SELECT post_id FROM conversation_hidden WHERE account_id = ?)\
+         {page_clause} \
+         ORDER BY id {order} LIMIT ?",
+    );
+
+    let mut query = sqlx::query_as::<_, PostRow>(&sql);
+    query = query.bind(auth.account_id);
+    query = query.bind(auth.account_id);
+    query = query.bind(auth.account_id);
+    for b in &page_binds {
+        query = query.bind(b);
+    }
+    query = query.bind(limit);
+
+    let posts: Vec<PostRow> = query.fetch_all(&state.pool).await?;
+
+    let mut conversations = Vec::with_capacity(posts.len());
+    for p in &posts {
+        let status = load_status(&state.pool, p, domain, Some(auth.account_id)).await?;
+
+        // Determine unread: not in conversation_read_markers
+        let (read_count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM conversation_read_markers WHERE account_id = ? AND post_id = ?",
+        )
+        .bind(auth.account_id)
+        .bind(p.id)
+        .fetch_one(&state.pool)
+        .await?;
+        let unread = read_count == 0 && p.account_id != auth.account_id;
+
+        // Build accounts array: participants other than the current user.
+        // Use mention data from the status JSON plus the post author.
+        let mut accounts = Vec::new();
+        if p.account_id != auth.account_id {
+            // Post author is a participant
+            let author = fetch_account_row(&state.pool, p.account_id).await?;
+            accounts.push(account_to_json(&author, domain));
+        }
+        // Add mentioned accounts (excluding current user)
+        let mention_rows: Vec<(Option<i64>, Option<i64>)> = sqlx::query_as(
+            "SELECT mentioned_account_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
+        )
+        .bind(p.id)
+        .fetch_all(&state.pool)
+        .await?;
+        for (local_id, remote_id) in &mention_rows {
+            if let Some(aid) = local_id {
+                if *aid != auth.account_id {
+                    if let Ok(a) = fetch_account_row(&state.pool, *aid).await {
+                        accounts.push(account_to_json(&a, domain));
+                    }
+                }
+            } else if let Some(rid) = remote_id {
+                let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
+                    "SELECT id, username, domain, display_name, bio_html \
+                     FROM remote_accounts WHERE id = ?",
+                )
+                .bind(rid)
+                .fetch_optional(&state.pool)
+                .await?;
+                if let Some((id, username, rdomain, display_name, bio_html)) = remote {
+                    accounts.push(json!({
+                        "id": id.to_string(),
+                        "username": username,
+                        "acct": format!("{username}@{rdomain}"),
+                        "display_name": display_name,
+                        "locked": false,
+                        "bot": false,
+                        "discoverable": true,
+                        "group": false,
+                        "created_at": "1970-01-01T00:00:00.000Z",
+                        "note": bio_html,
+                        "url": format!("https://{rdomain}/@{username}"),
+                        "uri": format!("https://{rdomain}/users/{username}"),
+                        "avatar": "",
+                        "avatar_static": "",
+                        "header": "",
+                        "header_static": "",
+                        "followers_count": 0,
+                        "following_count": 0,
+                        "statuses_count": 0,
+                        "last_status_at": null,
+                        "noindex": false,
+                        "emojis": [],
+                        "roles": [],
+                        "fields": []
+                    }));
+                }
+            }
+        }
+
+        conversations.push(json!({
+            "id": p.id.to_string(),
+            "unread": unread,
+            "accounts": accounts,
+            "last_status": status
+        }));
+    }
+
+    if params.min_id.is_some() {
+        conversations.reverse();
+    }
+
+    let url_base = format!("https://{domain}/api/v1/conversations");
+    let mut response = Json(&conversations).into_response();
+    if let Some(link) = pagination_link_header(&url_base, &conversations) {
+        response.headers_mut().insert("Link", link.parse().unwrap());
+    }
+    Ok(response)
+}
+
+async fn mark_conversation_read(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Conversation not found"))?;
+
+    let domain = &state.config.server.domain;
+
+    // Verify the post exists, is direct, and the user is involved
+    let post = sqlx::query_as::<_, PostRow>(&format!(
+        "SELECT {POST_COLUMNS} FROM posts WHERE id = ? AND visibility = 'direct'"
+    ))
+    .bind(post_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Conversation not found"))?;
+
+    let is_involved = post.account_id == auth.account_id || {
+        let (cnt,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM mentions WHERE post_id = ? AND mentioned_account_id = ?",
+        )
+        .bind(post_id)
+        .bind(auth.account_id)
+        .fetch_one(&state.pool)
+        .await?;
+        cnt > 0
+    };
+
+    if !is_involved {
+        return Err(AppError::not_found("Conversation not found"));
+    }
+
+    // Mark as read
+    sqlx::query(
+        "INSERT OR IGNORE INTO conversation_read_markers (account_id, post_id) VALUES (?, ?)",
+    )
+    .bind(auth.account_id)
+    .bind(post_id)
+    .execute(&state.pool)
+    .await?;
+
+    // Return the updated conversation object
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+
+    let mut accounts = Vec::new();
+    if post.account_id != auth.account_id {
+        let author = fetch_account_row(&state.pool, post.account_id).await?;
+        accounts.push(account_to_json(&author, domain));
+    }
+    let mention_rows: Vec<(Option<i64>, Option<i64>)> = sqlx::query_as(
+        "SELECT mentioned_account_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
+    )
+    .bind(post_id)
+    .fetch_all(&state.pool)
+    .await?;
+    for (local_id, remote_id) in &mention_rows {
+        if let Some(aid) = local_id {
+            if *aid != auth.account_id {
+                if let Ok(a) = fetch_account_row(&state.pool, *aid).await {
+                    accounts.push(account_to_json(&a, domain));
+                }
+            }
+        } else if let Some(rid) = remote_id {
+            let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
+                "SELECT id, username, domain, display_name, bio_html \
+                 FROM remote_accounts WHERE id = ?",
+            )
+            .bind(rid)
+            .fetch_optional(&state.pool)
+            .await?;
+            if let Some((id, username, rdomain, display_name, bio_html)) = remote {
+                accounts.push(json!({
+                    "id": id.to_string(),
+                    "username": username,
+                    "acct": format!("{username}@{rdomain}"),
+                    "display_name": display_name,
+                    "locked": false,
+                    "bot": false,
+                    "discoverable": true,
+                    "group": false,
+                    "created_at": "1970-01-01T00:00:00.000Z",
+                    "note": bio_html,
+                    "url": format!("https://{rdomain}/@{username}"),
+                    "uri": format!("https://{rdomain}/users/{username}"),
+                    "avatar": "",
+                    "avatar_static": "",
+                    "header": "",
+                    "header_static": "",
+                    "followers_count": 0,
+                    "following_count": 0,
+                    "statuses_count": 0,
+                    "last_status_at": null,
+                    "noindex": false,
+                    "emojis": [],
+                    "roles": [],
+                    "fields": []
+                }));
+            }
+        }
+    }
+
+    Ok(Json(json!({
+        "id": post.id.to_string(),
+        "unread": false,
+        "accounts": accounts,
+        "last_status": status
+    })))
+}
+
+async fn delete_conversation(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Conversation not found"))?;
+
+    // Mark as hidden for this user (don't delete the actual post)
+    sqlx::query("INSERT OR IGNORE INTO conversation_hidden (account_id, post_id) VALUES (?, ?)")
+        .bind(auth.account_id)
+        .bind(post_id)
+        .execute(&state.pool)
+        .await?;
+
+    Ok(Json(json!({})))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -2840,6 +3109,16 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route(
             "/api/v1/notifications/{id}/dismiss",
             post(dismiss_notification),
+        )
+        // Conversations
+        .route("/api/v1/conversations", get(list_conversations))
+        .route(
+            "/api/v1/conversations/{id}",
+            delete(delete_conversation),
+        )
+        .route(
+            "/api/v1/conversations/{id}/read",
+            post(mark_conversation_read),
         )
 }
 

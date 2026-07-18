@@ -370,6 +370,18 @@ CREATE TABLE IF NOT EXISTS vapid_keys (
     private_key_pem TEXT NOT NULL,
     public_key_base64 TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS conversation_read_markers (
+    account_id      INTEGER NOT NULL REFERENCES accounts(id),
+    post_id         INTEGER NOT NULL REFERENCES posts(id),
+    UNIQUE (account_id, post_id)
+);
+
+CREATE TABLE IF NOT EXISTS conversation_hidden (
+    account_id      INTEGER NOT NULL REFERENCES accounts(id),
+    post_id         INTEGER NOT NULL REFERENCES posts(id),
+    UNIQUE (account_id, post_id)
+);
 "#;
 
 #[cfg(test)]
