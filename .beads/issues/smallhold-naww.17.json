@@ -2,13 +2,15 @@
   "id": "smallhold-naww.17",
   "title": "Well-structured push encryption implementation",
   "description": "File: src/push.rs:encrypt_payload. The RFC 8291 implementation is cleanly separated into logical steps (ECDH, key derivation, encryption, header assembly) with comments identifying each RFC section. The record_size calculation and padding are correct. Worth defending against attempts to 'simplify' by pulling in a higher-level web-push crate — this gives full control with no extra dependencies beyond what's already used for VAPID.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "decision",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T22:40:21.153473679Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T22:40:21.153473679Z",
+  "updated_at": "2026-07-18T23:02:44.294949271Z",
+  "closed_at": "2026-07-18T23:02:44.294949271Z",
+  "close_reason": "Positive review finding — well-done, defend it",
   "labels": [
     "review"
   ],

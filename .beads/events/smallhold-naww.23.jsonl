@@ -1,3 +1,4 @@
 {"id":"019f7763-79f3-78c4-8bf5-c447f663206a","issue_id":"smallhold-naww.23","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-18T22:40:35.827575049Z"}
 {"id":"019f7763-79f8-744c-b9ab-43419e8ed3d5","issue_id":"smallhold-naww.23","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: elegance","created_at":"2026-07-18T22:40:35.832282513Z"}
 {"id":"019f7763-79fc-7c75-9933-9467af2e166b","issue_id":"smallhold-naww.23","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-18T22:40:35.836816748Z"}
+{"id":"019f7777-c011-7592-8e7f-84d20c2d0a05","issue_id":"smallhold-naww.23","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"By design: don't spam census on every restart during dev","created_at":"2026-07-18T23:02:44.49736563Z"}

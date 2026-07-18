@@ -2,13 +2,15 @@
   "id": "smallhold-naww.21",
   "title": "Clean challenge management with TTL-based expiry",
   "description": "File: src/webauthn.rs:store_challenge, consume_challenge. Using the DB for challenge storage (rather than in-memory) means challenges survive restarts. The TTL cleanup piggybacks on store_challenge (amortized cleanup). The DELETE...RETURNING pattern for consume_challenge is atomic and prevents replay. Good design that should be kept.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "decision",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T22:40:32.864972373Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T22:40:32.864972373Z",
+  "updated_at": "2026-07-18T23:02:44.364553481Z",
+  "closed_at": "2026-07-18T23:02:44.364553481Z",
+  "close_reason": "Positive review finding — well-done, defend it",
   "labels": [
     "review"
   ],

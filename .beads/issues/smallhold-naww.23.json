@@ -2,13 +2,15 @@
   "id": "smallhold-naww.23",
   "title": "Census periodic task waits 7 days before first run",
   "description": "File: src/cli.rs:cmd_serve. The periodic census registration spawns a task that sleeps 7 days before the first ping, then repeats every 7 days. If the server is restarted frequently (e.g., during deploys), the census ping never fires. Consider doing the first ping on startup (or after a short delay like 60 seconds), then every 7 days thereafter.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T22:40:35.822984677Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T22:40:35.822984677Z",
+  "updated_at": "2026-07-18T23:02:44.493283186Z",
+  "closed_at": "2026-07-18T23:02:44.493283186Z",
+  "close_reason": "By design: don't spam census on every restart during dev",
   "labels": [
     "elegance",
     "review"
