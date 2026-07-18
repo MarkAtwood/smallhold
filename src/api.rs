@@ -336,6 +336,8 @@ async fn create_app(
     .execute(&state.pool)
     .await?;
 
+    let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
+
     Ok(Json(json!({
         "id": id.to_string(),
         "name": body.client_name,
@@ -345,7 +347,7 @@ async fn create_app(
         "redirect_uri": body.redirect_uris,
         "redirect_uris": [body.redirect_uris],
         "scopes": body.scopes.as_deref().unwrap_or("read").split_whitespace().collect::<Vec<_>>(),
-        "vapid_key": "",
+        "vapid_key": vapid_key,
         "client_secret_expires_at": 0,
     })))
 }
@@ -847,6 +849,8 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
             .fetch_one(&state.pool)
             .await?;
 
+    let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
+
     Ok(Json(json!({
         "uri": domain,
         "title": "smallhold",
@@ -879,6 +883,7 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
         },
         "contact_account": null,
         "rules": [],
+        "vapid_key": vapid_key,
     })))
 }
 
@@ -892,6 +897,8 @@ async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
     let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
         .fetch_one(&state.pool)
         .await?;
+
+    let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
     Ok(Json(json!({
         "domain": domain,
@@ -911,6 +918,9 @@ async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
         "languages": ["en"],
         "configuration": {
             "urls": { "streaming": format!("wss://{domain}") },
+            "vapid": {
+                "public_key": vapid_key,
+            },
             "accounts": { "max_featured_tags": 0 },
             "statuses": {
                 "max_characters": state.config.limits.max_post_chars,
@@ -1220,16 +1230,18 @@ async fn verify_app_credentials(
     .fetch_optional(&state.pool)
     .await?;
 
+    let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
+
     match app_row {
         Some((name, website)) => Ok(Json(json!({
             "name": name,
             "website": website,
-            "vapid_key": "",
+            "vapid_key": vapid_key,
         }))),
         None => Ok(Json(json!({
             "name": "unknown",
             "website": null,
-            "vapid_key": "",
+            "vapid_key": vapid_key,
         }))),
     }
 }

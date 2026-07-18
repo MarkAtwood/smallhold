@@ -222,7 +222,7 @@ async fn cmd_census(config_path: &Path) -> Result<()> {
     }
 
     // FediDB — just ping, their crawler does the rest
-    let url = format!("https://fedidb.org/software/smallhold");
+    let url = "https://fedidb.org/software/smallhold".to_string();
     match client.get(&url).send().await {
         Ok(resp) => eprintln!("  fedidb.org: {} (crawler will pick up NodeInfo)", resp.status()),
         Err(e) => eprintln!("  fedidb.org: FAILED ({e})"),

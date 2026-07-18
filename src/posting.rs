@@ -1058,6 +1058,16 @@ async fn create_status(
                     .bind(now)
                     .execute(&state.pool)
                     .await?;
+
+                    // Fire-and-forget push notification
+                    let pool = state.pool.clone();
+                    let from_user = auth.username.clone();
+                    tokio::spawn(async move {
+                        crate::push::send_push_notification(
+                            &pool, aid, "mention",
+                            "New mention", &from_user, None,
+                        ).await;
+                    });
                 }
             }
             Some(mention_domain) => {
@@ -1687,6 +1697,17 @@ async fn favourite(
         .bind(now)
         .execute(&state.pool)
         .await?;
+
+        // Fire-and-forget push notification
+        let pool = state.pool.clone();
+        let target = post.account_id;
+        let from_user = auth.username.clone();
+        tokio::spawn(async move {
+            crate::push::send_push_notification(
+                &pool, target, "favourite",
+                "New favourite", &from_user, None,
+            ).await;
+        });
     }
 
     // Enqueue outbound Like activity
@@ -1881,6 +1902,17 @@ async fn reblog(
             .bind(now)
             .execute(&state.pool)
             .await?;
+
+            // Fire-and-forget push notification
+            let pool = state.pool.clone();
+            let target = original.account_id;
+            let from_user = auth.username.clone();
+            tokio::spawn(async move {
+                crate::push::send_push_notification(
+                    &pool, target, "reblog",
+                    "New boost", &from_user, None,
+                ).await;
+            });
         }
 
         // Enqueue outbound Announce activity

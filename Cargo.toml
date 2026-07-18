@@ -41,6 +41,9 @@ tempfile = "3"
 url = "2"
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 webauthn-rs-proto = "0.5"
+p256 = { version = "0.13.2", features = ["ecdh", "ecdsa", "pem"] }
+aes-gcm = "0.10.3"
+hkdf = "0.12.4"
 
 [dev-dependencies]
 axum-test = "16"

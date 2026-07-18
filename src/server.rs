@@ -27,6 +27,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::feeds::routes())
         .merge(crate::posting::routes())
         .merge(crate::streaming::routes())
+        .merge(crate::push::routes())
         .merge(crate::webauthn::routes())
         .route("/health", get(health))
         .layer(axum::middleware::from_fn(security_headers))

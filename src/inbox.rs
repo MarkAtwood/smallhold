@@ -629,6 +629,16 @@ async fn handle_follow(
         .execute(&state.pool)
         .await?;
 
+        // Fire-and-forget push notification
+        let pool = state.pool.clone();
+        let actor = remote.actor_uri.clone();
+        tokio::spawn(async move {
+            crate::push::send_push_notification(
+                &pool, account_id, "follow",
+                "New follower", &actor, None,
+            ).await;
+        });
+
         // Send Accept back.
         let accept_id = generate_id();
         let accept_activity = serde_json::json!({
@@ -899,6 +909,16 @@ async fn handle_create(
                     payload: notif_id.to_string(),
                     channel: format!("user:{}", local_account_id),
                 });
+
+                // Fire-and-forget push notification
+                let pool = state.pool.clone();
+                let actor = remote.actor_uri.clone();
+                tokio::spawn(async move {
+                    crate::push::send_push_notification(
+                        &pool, local_account_id, "mention",
+                        "New mention", &actor, None,
+                    ).await;
+                });
             }
         }
     }
@@ -949,6 +969,16 @@ async fn handle_create(
                         event_type: "notification".into(),
                         payload: notif_id.to_string(),
                         channel: format!("user:{}", local_account_id),
+                    });
+
+                    // Fire-and-forget push notification
+                    let pool = state.pool.clone();
+                    let actor = remote.actor_uri.clone();
+                    tokio::spawn(async move {
+                        crate::push::send_push_notification(
+                            &pool, local_account_id, "mention",
+                            "New mention", &actor, None,
+                        ).await;
                     });
                 }
             }
@@ -1204,6 +1234,16 @@ async fn handle_like(
         .execute(&state.pool)
         .await?;
 
+        // Fire-and-forget push notification
+        let pool = state.pool.clone();
+        let actor = remote.actor_uri.clone();
+        tokio::spawn(async move {
+            crate::push::send_push_notification(
+                &pool, account_id, "favourite",
+                "New favourite", &actor, None,
+            ).await;
+        });
+
         tracing::info!(
             actor = %remote.actor_uri,
             post_id,
@@ -1247,6 +1287,16 @@ async fn handle_announce(
         .bind(now)
         .execute(&state.pool)
         .await?;
+
+        // Fire-and-forget push notification
+        let pool = state.pool.clone();
+        let actor = remote.actor_uri.clone();
+        tokio::spawn(async move {
+            crate::push::send_push_notification(
+                &pool, account_id, "reblog",
+                "New boost", &actor, None,
+            ).await;
+        });
 
         tracing::info!(
             actor = %remote.actor_uri,

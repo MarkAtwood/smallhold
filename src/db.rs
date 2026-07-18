@@ -348,6 +348,28 @@ CREATE TABLE IF NOT EXISTS webauthn_challenges (
     state_json      TEXT NOT NULL,
     created_at      INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id              INTEGER PRIMARY KEY,
+    account_id      INTEGER NOT NULL REFERENCES accounts(id),
+    endpoint        TEXT NOT NULL,
+    key_p256dh      TEXT NOT NULL,
+    key_auth        TEXT NOT NULL,
+    alerts_mention  INTEGER NOT NULL DEFAULT 1,
+    alerts_favourite INTEGER NOT NULL DEFAULT 1,
+    alerts_reblog   INTEGER NOT NULL DEFAULT 1,
+    alerts_follow   INTEGER NOT NULL DEFAULT 1,
+    alerts_poll     INTEGER NOT NULL DEFAULT 0,
+    policy          TEXT NOT NULL DEFAULT 'all',
+    created_at      INTEGER NOT NULL,
+    UNIQUE (account_id)
+);
+
+CREATE TABLE IF NOT EXISTS vapid_keys (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    private_key_pem TEXT NOT NULL,
+    public_key_base64 TEXT NOT NULL
+);
 "#;
 
 #[cfg(test)]
