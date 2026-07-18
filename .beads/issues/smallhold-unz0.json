@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-unz0",
+  "title": "Persona bio HTML rendering — pulldown-cmark + ammonia XSS sanitization",
+  "description": "## What\nAt update_credentials time, render the raw bio (markdown or plain text) through pulldown-cmark to produce HTML, then sanitize the HTML through ammonia using its default tag/attribute allowlist. Store rendered HTML in bio_html column. Ensure no XSS vectors survive. Specifically test script injection, javascript: href, data: URI, and event handler attributes.\n\n## Why\nBios are rendered as HTML in clients. Unsanitized HTML is an XSS vector. pulldown-cmark + ammonia is the correct pipeline: render markdown to HTML, then strip unsafe tags/attrs. Part of sub-epic 8-D.\n\n## Agent team pattern\n- Spawn a Research subagent to: read ammonia crate README to document the default allowed tags and attributes (the exact allowlist is the oracle); check pulldown-cmark's handling of raw HTML blocks in markdown input; verify that ammonia strips script tags, on* event attributes, javascript: href, data: href, and style attributes by default.\n- Spawn an Implementation subagent to: add pulldown-cmark and ammonia as dependencies if not already present; implement render_bio(input: \u0026str) -\u003e String function that runs input through pulldown-cmark::html::push_html then ammonia::clean; store result in accounts.bio_html; return bio_html in the Account.note field (not the raw markdown); also return raw markdown in the source field if Mastodon does (check mastodon.source.note field).\n- Spawn a Test subagent to: write unit tests for render_bio with the following independent-oracle test vectors: input scalpel test vectors from the ammonia crate's own test suite (not from the code under test); test: plain text roundtrips; markdown bold/italic renders; script tag stripped; javascript: href stripped; data: href stripped; onerror= attribute stripped; style= attribute stripped; img src remains for allowed domains; relative links not mangled.\n\n## Test discipline\n- Independent oracle: ammonia crate's own test suite test vectors (github.com/nickel-lang/ammonia/tests); these are authoritative for what ammonia strips and allows. Do NOT derive expected outputs by running ammonia in the test — compute expected HTML by reading the ammonia allowlist spec.\n- Test approach: pure unit tests (no DB needed); render_bio is a pure function; test each XSS vector independently; for markdown rendering, use pulldown-cmark directly in the test as the oracle (both the test and implementation use same crate — acceptable here because the oracle is the spec not the impl).\n\n## Defensive programming checklist\n- Use ammonia::clean (default allowlist) not ammonia::clean_text (which strips all HTML)\n- Never store unsanitized HTML in bio_html\n- bio_html column is NOT NULL; if bio is empty string, store empty string not NULL\n- pulldown-cmark raw HTML pass-through: if input contains raw HTML blocks, they are sanitized by ammonia afterward — this is correct behavior\n- No .unwrap() anywhere\n- render_bio must not panic on any Unicode input including emoji, RTL text, or null bytes (strip null bytes before processing)",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:55:02Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAt update_credentials time, render the raw bio (markdown or plain text) through pulldown-cmark to produce HTML, then sanitize the HTML through ammonia using its default tag/attribute allowlist. Store rendered HTML in bio_html column. Ensure no XSS vectors survive. Specifically test script injection, javascript: href, data: URI, and event handler attributes.\n\n## Why\nBios are rendered as HTML in clients. Unsanitized HTML is an XSS vector. pulldown-cmark + ammonia is the correct pipeline: render markdown to HTML, then strip unsafe tags/attrs. Part of sub-epic 8-D.\n\n## Agent team pattern\n- Spawn a Research subagent to: read ammonia crate README to document the default allowed tags and attributes (the exact allowlist is the oracle); check pulldown-cmark's handling of raw HTML blocks in markdown input; verify that ammonia strips script tags, on* event attributes, javascript: href, data: href, and style attributes by default.\n- Spawn an Implementation subagent to: add pulldown-cmark and ammonia as dependencies if not already present; implement render_bio(input: &str) -> String function that runs input through pulldown-cmark::html::push_html then ammonia::clean; store result in accounts.bio_html; return bio_html in the Account.note field (not the raw markdown); also return raw markdown in the source field if Mastodon does (check mastodon.source.note field).\n- Spawn a Test subagent to: write unit tests for render_bio with the following independent-oracle test vectors: input scalpel test vectors from the ammonia crate's own test suite (not from the code under test); test: plain text roundtrips; markdown bold/italic renders; script tag stripped; javascript: href stripped; data: href stripped; onerror= attribute stripped; style= attribute stripped; img src remains for allowed domains; relative links not mangled.\n\n## Test discipline\n- Independent oracle: ammonia crate's own test suite test vectors (github.com/nickel-lang/ammonia/tests); these are authoritative for what ammonia strips and allows. Do NOT derive expected outputs by running ammonia in the test — compute expected HTML by reading the ammonia allowlist spec.\n- Test approach: pure unit tests (no DB needed); render_bio is a pure function; test each XSS vector independently; for markdown rendering, use pulldown-cmark directly in the test as the oracle (both the test and implementation use same crate — acceptable here because the oracle is the spec not the impl).\n\n## Defensive programming checklist\n- Use ammonia::clean (default allowlist) not ammonia::clean_text (which strips all HTML)\n- Never store unsanitized HTML in bio_html\n- bio_html column is NOT NULL; if bio is empty string, store empty string not NULL\n- pulldown-cmark raw HTML pass-through: if input contains raw HTML blocks, they are sanitized by ammonia afterward — this is correct behavior\n- No .unwrap() anywhere\n- render_bio must not panic on any Unicode input including emoji, RTL text, or null bytes (strip null bytes before processing)",
-  "ephemeral": false,
-  "id": "smallhold-unz0",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:59.161992899Z",
+  "closed_at": "2026-07-18T17:20:59.161992899Z",
+  "close_reason": "Already implemented",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "Persona bio HTML rendering — pulldown-cmark + ammonia XSS sanitization",
-  "updated_at": "2026-04-23T00:55:02Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-664l",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:55:04Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-664l",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

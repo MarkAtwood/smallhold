@@ -1,72 +1,75 @@
 {
+  "id": "smallhold-leu",
+  "title": "Phase 6: Media Handling",
+  "description": "Implement media upload, processing, and serving. Mastodon clients expect a blurhash on every media attachment and an async upload flow (POST returns 202, client polls GET). Image processing uses the 'image' crate. Video is rejected with 422. Files are stored on disk under media/ and served with immutable cache headers.",
+  "design": "Async processing via tokio::spawn. Storage path: media/\u003cfirst_2_chars_of_id\u003e/\u003cid\u003e.\u003cext\u003e. Thumbnail: max 400x400 preserving aspect, JPEG quality 85. Blurhash: compute from 32x32 downscale. Max upload: 40MB (configurable). Accept: JPEG, PNG, WebP, GIF, HEIC. Serve via GET /media/\u003cpath\u003e with Cache-Control: public, max-age=31536000, immutable.",
   "acceptance_criteria": "POST /api/v2/media returns 202 with status URL; GET /api/v1/media/:id returns processing status then attachment object; blurhash present on every attachment; thumbnail generated at max 400x400; HEIC converted to JPEG; video upload returns 422; media served by reverse proxy with 1-year cache",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-22T23:55:39Z",
   "created_by": "Mark Atwood",
-  "description": "Implement media upload, processing, and serving. Mastodon clients expect a blurhash on every media attachment and an async upload flow (POST returns 202, client polls GET). Image processing uses the 'image' crate. Video is rejected with 422. Files are stored on disk under media/ and served with immutable cache headers.",
-  "design": "Async processing via tokio::spawn. Storage path: media/<first_2_chars_of_id>/<id>.<ext>. Thumbnail: max 400x400 preserving aspect, JPEG quality 85. Blurhash: compute from 32x32 downscale. Max upload: 40MB (configurable). Accept: JPEG, PNG, WebP, GIF, HEIC. Serve via GET /media/<path> with Cache-Control: public, max-age=31536000, immutable.",
-  "ephemeral": false,
-  "id": "smallhold-leu",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T17:20:59.021147918Z",
+  "closed_at": "2026-07-18T17:20:59.021147918Z",
+  "close_reason": "Already implemented",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Phase 6: Media Handling",
-  "updated_at": "2026-04-22T23:55:39Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-aav",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:31:40Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-aav",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-e7b",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:03:46Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-e7b",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ky8",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:03:33Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ky8",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-l2h",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:31:39Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-l2h",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-p3i",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:04Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-p3i",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-uq2",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:15Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-uq2",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-vhb",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:27Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-vhb",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-31es",
+  "title": "Avatar and header upload via update_credentials",
+  "description": "## What\nAdd avatar and header image upload support to PATCH /api/v1/accounts/update_credentials. Accept multipart form-data with avatar and header file fields. Use magic byte MIME detection (not Content-Type header). Accept JPEG, PNG, WebP, GIF; convert HEIC to JPEG via the `image` crate. Enforce 2MB max for avatars. Generate thumbnail. Write atomically. Return updated Account with avatar/header URLs.\n\n## Why\nProfile images are the most visible part of any account. Without this, local personas appear as default grey silhouettes in all clients. Required for sub-epic 8-A completeness.\n\n## Agent team pattern\n- Spawn a Research subagent to: read activitypub-federation crate docs for actor document publicKey/image fields; read `image` crate docs for HEIC decode support and format detection; fetch mastodon.social live response for Account.avatar and Account.avatar_static fields including URL structure; document Mastodon's avatar size limits (2MB per their source).\n- Spawn an Implementation subagent to: extend the update_credentials handler to accept multipart; detect MIME type from magic bytes (first 12 bytes: JPEG=FFD8FF, PNG=89504E47, WebP=52494646...57454250, GIF=47494638); reject unsupported types with 422; decode HEIC via `image` crate and re-encode as JPEG; resize avatar to 400x400 max using fast_image_resize; resize header to 1500x500 max; write file atomically (write to temp path, rename); insert media row with null post_id; update accounts.avatar_media_id or header_media_id; compute blurhash.\n- Spawn a Test subagent to: write integration tests using real PNG/JPEG/WebP test fixtures (generated via `image` crate, not from the handler); verify MIME detection rejects a file with wrong bytes; verify 2MB limit is enforced; verify dimensions after resize; verify account avatar_url points to accessible path; verify atomic write (temp file gone after success).\n\n## Test discipline\n- Independent oracle: `image` crate docs for format magic bytes (independent of handler code); mastodon.social live Account fixture showing avatar/header URL structure; reference path: encode a known PNG via `image` crate outside the handler, compare dimensions.\n- Test approach: integration test with real in-memory SQLite and temp filesystem dir; happy paths: JPEG upload, PNG upload, WebP upload; edge cases: file too large (\u003e2MB) → 422, unsupported type (SVG magic bytes) → 422, HEIC → JPEG conversion.\n\n## Defensive programming checklist\n- Detect MIME from magic bytes, not Content-Type header (clients lie)\n- Enforce 2MB max before reading full body to avoid memory exhaustion\n- Atomic write: write to temp path in same dir, then rename (same filesystem)\n- No `.unwrap()` in handler paths\n- If `image` crate cannot decode HEIC (feature not compiled in), return 422 with clear message\n- Do not store the original unprocessed file — only the resized output",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:49:21Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAdd avatar and header image upload support to PATCH /api/v1/accounts/update_credentials. Accept multipart form-data with avatar and header file fields. Use magic byte MIME detection (not Content-Type header). Accept JPEG, PNG, WebP, GIF; convert HEIC to JPEG via the `image` crate. Enforce 2MB max for avatars. Generate thumbnail. Write atomically. Return updated Account with avatar/header URLs.\n\n## Why\nProfile images are the most visible part of any account. Without this, local personas appear as default grey silhouettes in all clients. Required for sub-epic 8-A completeness.\n\n## Agent team pattern\n- Spawn a Research subagent to: read activitypub-federation crate docs for actor document publicKey/image fields; read `image` crate docs for HEIC decode support and format detection; fetch mastodon.social live response for Account.avatar and Account.avatar_static fields including URL structure; document Mastodon's avatar size limits (2MB per their source).\n- Spawn an Implementation subagent to: extend the update_credentials handler to accept multipart; detect MIME type from magic bytes (first 12 bytes: JPEG=FFD8FF, PNG=89504E47, WebP=52494646...57454250, GIF=47494638); reject unsupported types with 422; decode HEIC via `image` crate and re-encode as JPEG; resize avatar to 400x400 max using fast_image_resize; resize header to 1500x500 max; write file atomically (write to temp path, rename); insert media row with null post_id; update accounts.avatar_media_id or header_media_id; compute blurhash.\n- Spawn a Test subagent to: write integration tests using real PNG/JPEG/WebP test fixtures (generated via `image` crate, not from the handler); verify MIME detection rejects a file with wrong bytes; verify 2MB limit is enforced; verify dimensions after resize; verify account avatar_url points to accessible path; verify atomic write (temp file gone after success).\n\n## Test discipline\n- Independent oracle: `image` crate docs for format magic bytes (independent of handler code); mastodon.social live Account fixture showing avatar/header URL structure; reference path: encode a known PNG via `image` crate outside the handler, compare dimensions.\n- Test approach: integration test with real in-memory SQLite and temp filesystem dir; happy paths: JPEG upload, PNG upload, WebP upload; edge cases: file too large (>2MB) → 422, unsupported type (SVG magic bytes) → 422, HEIC → JPEG conversion.\n\n## Defensive programming checklist\n- Detect MIME from magic bytes, not Content-Type header (clients lie)\n- Enforce 2MB max before reading full body to avoid memory exhaustion\n- Atomic write: write to temp path in same dir, then rename (same filesystem)\n- No `.unwrap()` in handler paths\n- If `image` crate cannot decode HEIC (feature not compiled in), return 422 with clear message\n- Do not store the original unprocessed file — only the resized output",
-  "ephemeral": false,
-  "id": "smallhold-31es",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:21:30.549093405Z",
+  "closed_at": "2026-07-18T17:21:30.549093405Z",
+  "close_reason": "Avatar/header upload via media.rs + interactions.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "Avatar and header upload via update_credentials",
-  "updated_at": "2026-04-23T00:49:21Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-bb7s",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:49:24Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-bb7s",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

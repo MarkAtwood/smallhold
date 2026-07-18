@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Status with image shows media_attachments array with full MediaAttachment objects; Status without image shows media_attachments=[] not null; posting with invalid media_id returns 422; posting with another account's media_id returns 422",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:04:12Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-uq2",
+  "title": "Status serialization with media_attachments",
   "description": "Update the Status serialization layer to include media_attachments. When a post has associated media (via post_id FK in media table), include the full MediaAttachment objects in Status.media_attachments. The array must always be present (empty array if no media, never null). Validate that media_ids in POST /api/v1/statuses belong to the authed account and are not already attached to another post.",
   "design": "When creating post with media_ids: verify each media row belongs to authed account and post_id is null. On post creation: UPDATE media SET post_id=? WHERE id IN (?...). On Status read: SELECT media WHERE post_id=?.",
-  "ephemeral": false,
-  "id": "smallhold-uq2",
-  "is_template": false,
-  "issue_type": "task",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Status with image shows media_attachments array with full MediaAttachment objects; Status without image shows media_attachments=[] not null; posting with invalid media_id returns 422; posting with another account's media_id returns 422",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "Status serialization with media_attachments",
-  "updated_at": "2026-04-23T00:04:12Z",
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:04:12Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:58.691356958Z",
+  "closed_at": "2026-07-18T17:20:58.691356958Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-leu",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:15Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-leu",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

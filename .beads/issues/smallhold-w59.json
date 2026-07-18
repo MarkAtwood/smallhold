@@ -1,107 +1,115 @@
 {
-  "acceptance_criteria": "Can favourite/unfavourite and remote server sees the Like activity; can boost and remote server sees Announce; home timeline shows posts from followed accounts in correct order; thread context returns ancestors oldest-first and descendants oldest-first; follow request flow works for locked accounts",
-  "compaction_level": 0,
-  "created_at": "2026-04-22T23:55:30Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-w59",
+  "title": "Phase 5: Interactions and Timelines",
   "description": "Implement the social layer: favourites, boosts, follows, and the timeline queries that pull it together. The home timeline is a SQL read query — no fanout, no cache. Thread context reconstruction (ancestors/descendants) has historically been buggy across implementations; test it explicitly with nested threads.",
   "design": "Home timeline: SQL join across follows + posts + remote_posts, paginated by snowflake ID. Public timeline: local-only and federated variants. Thread context: recursive CTE or iterative query up the in_reply_to chain for ancestors; BFS/DFS down for descendants. Status.reblog is null for normal posts, full nested Status object for boosts — the outer wrapper has empty content.",
-  "ephemeral": false,
-  "id": "smallhold-w59",
-  "is_template": false,
-  "issue_type": "epic",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Can favourite/unfavourite and remote server sees the Like activity; can boost and remote server sees Announce; home timeline shows posts from followed accounts in correct order; thread context returns ancestors oldest-first and descendants oldest-first; follow request flow works for locked accounts",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "Phase 5: Interactions and Timelines",
-  "updated_at": "2026-04-22T23:55:30Z",
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:55:30Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:59.093802872Z",
+  "closed_at": "2026-07-18T17:20:59.093802872Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-06f",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:06:51Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-06f",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-5b3",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:57Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-5b3",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-93z",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:59:21Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-93z",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-95u",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:59:24Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-95u",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-9q0",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:06:10Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-9q0",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-csh",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:15Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-csh",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ek0",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:59:28Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ek0",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-h1h",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:56Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-h1h",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-jf7",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:06:25Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-jf7",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-nyk",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:06:38Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-nyk",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-t1j",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:43Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-t1j",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-x8a",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:29Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-x8a",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

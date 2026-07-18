@@ -1,49 +1,49 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-aav",
+  "title": "Phase 6-B: Media retrieval, update, and attachment to posts",
+  "description": "Sub-epic covering media retrieval endpoints, static file serving with cache headers, and attaching media attachments to statuses.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:31:32Z",
   "created_by": "Mark Atwood",
-  "description": "Sub-epic covering media retrieval endpoints, static file serving with cache headers, and attaching media attachments to statuses.",
-  "ephemeral": false,
-  "id": "smallhold-aav",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T17:20:57.617500275Z",
+  "closed_at": "2026-07-18T17:20:57.617500275Z",
+  "close_reason": "Already implemented",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Phase 6-B: Media retrieval, update, and attachment to posts",
-  "updated_at": "2026-04-23T00:31:32Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-ah5",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:33:31Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-ah5",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-flj",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:33:33Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-flj",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-leu",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:31:40Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-leu",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-vsbn",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:33:36Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-vsbn",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

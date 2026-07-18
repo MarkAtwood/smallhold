@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-jp6k",
+  "title": "Emit notification streaming events on notification create",
+  "description": "When a notification row is created (mention, favourite, reblog, follow, follow_request), emit a 'notification' event on the User(account_id) streaming channel for the notified account. The event payload is the full Notification JSON object.\n\nTEST DISCIPLINE:\n- Create a mention → 'notification' event on User(mentioned_account_id) channel\n- Favourite a post → 'notification' event on User(post_author_id) channel\n- New follower → 'notification' event on User(followed_account_id) channel\n- Notification to account with no active SSE/WS connection → event sent to channel (no error even if no subscribers)\n\nDEFENSIVE PROGRAMMING:\n- tokio::broadcast::Sender::send() returns Err if no receivers — this is normal, not an error, do not log at WARN",
   "acceptance_criteria": "All notification kinds emit events on correct User channel; no error when no subscribers; notifications emitted within 100ms of creation",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:34:39Z",
   "created_by": "Mark Atwood",
-  "description": "When a notification row is created (mention, favourite, reblog, follow, follow_request), emit a 'notification' event on the User(account_id) streaming channel for the notified account. The event payload is the full Notification JSON object.\n\nTEST DISCIPLINE:\n- Create a mention → 'notification' event on User(mentioned_account_id) channel\n- Favourite a post → 'notification' event on User(post_author_id) channel\n- New follower → 'notification' event on User(followed_account_id) channel\n- Notification to account with no active SSE/WS connection → event sent to channel (no error even if no subscribers)\n\nDEFENSIVE PROGRAMMING:\n- tokio::broadcast::Sender::send() returns Err if no receivers — this is normal, not an error, do not log at WARN",
-  "ephemeral": false,
-  "id": "smallhold-jp6k",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:40.840375634Z",
+  "closed_at": "2026-07-18T17:20:40.840375634Z",
+  "close_reason": "Streaming notification events already wired in posting.rs/inbox.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Emit notification streaming events on notification create",
-  "updated_at": "2026-04-23T00:34:39Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3vt",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:34:55Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-3vt",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

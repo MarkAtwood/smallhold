@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Inbound Follow to locked account creates follow_request row; GET /api/v1/follow_requests shows it; authorize creates followers row and sends Accept; reject sends Reject activity; authorizing non-existent request returns 404",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:12:49Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-cqe",
+  "title": "Follow request management endpoints",
   "description": "Implement follow request endpoints for locked accounts. GET /api/v1/follow_requests returns pending inbound follow requests. POST /api/v1/follow_requests/:id/authorize accepts the request (creates followers row, sends Accept activity). POST /api/v1/follow_requests/:id/reject sends Reject activity and removes request.",
   "design": "Accept activity: {type:Accept, actor:local_actor_uri, object:{original_follow_activity_ap_id}}. Reject activity: {type:Reject, actor:..., object:{...}}. Remove from follow_requests after authorize/reject. Deliver Accept/Reject to requester's inbox.",
-  "ephemeral": false,
-  "id": "smallhold-cqe",
-  "is_template": false,
-  "issue_type": "feature",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Inbound Follow to locked account creates follow_request row; GET /api/v1/follow_requests shows it; authorize creates followers row and sends Accept; reject sends Reject activity; authorizing non-existent request returns 404",
+  "status": "closed",
   "priority": 3,
-  "status": "open",
-  "title": "Follow request management endpoints",
-  "updated_at": "2026-04-23T00:12:49Z",
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:12:49Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:21:30.800648498Z",
+  "closed_at": "2026-07-18T17:21:30.800648498Z",
+  "close_reason": "Follow requests already in interactions.rs",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-s70",
+      "type": "parent-child",
       "created_at": "2026-04-22T17:12:54Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-s70",
-      "metadata": "{}",
-      "type": "parent-child"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-jijx",
+  "title": "StreamEvent: all event types with correct Mastodon wire format",
+  "description": "Define the StreamEvent enum and wire serialization. Event types: update (new status), notification, delete (status ID string), status.update (edited status), conversation (DM). Wire format for SSE: 'event: update\\ndata: {json}\\n\\n'. Wire format for WebSocket: JSON object {stream: ['user'], event: 'update', payload: '{json}'} (payload is a JSON-encoded string, not nested JSON).\n\nAGENT WORKFLOW: Spawn a research subagent to connect to mastodon.social's streaming endpoint (SSE) and capture real event payloads for each event type. Use these as oracle.\n\nTEST DISCIPLINE:\n- Serialize update event → SSE format matches mastodon.social oracle exactly\n- Serialize delete event → payload is just the status ID string\n- Serialize for WebSocket → payload field is a JSON-encoded string (double-encoded)\n- Each event type tested against mastodon.social oracle\n- delete event payload must be a bare string ID, NOT a Status object\n\nDEFENSIVE PROGRAMMING:\n- WebSocket payload double-encoding is intentional and required for compatibility — document clearly with a comment and a test\n- Event serialization must never include private key material or auth tokens",
   "acceptance_criteria": "SSE format matches mastodon.social wire format; WebSocket payload is double-encoded JSON string; delete event is string ID; all event types tested against oracle",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:33:59Z",
   "created_by": "Mark Atwood",
-  "description": "Define the StreamEvent enum and wire serialization. Event types: update (new status), notification, delete (status ID string), status.update (edited status), conversation (DM). Wire format for SSE: 'event: update\\ndata: {json}\\n\\n'. Wire format for WebSocket: JSON object {stream: ['user'], event: 'update', payload: '{json}'} (payload is a JSON-encoded string, not nested JSON).\n\nAGENT WORKFLOW: Spawn a research subagent to connect to mastodon.social's streaming endpoint (SSE) and capture real event payloads for each event type. Use these as oracle.\n\nTEST DISCIPLINE:\n- Serialize update event → SSE format matches mastodon.social oracle exactly\n- Serialize delete event → payload is just the status ID string\n- Serialize for WebSocket → payload field is a JSON-encoded string (double-encoded)\n- Each event type tested against mastodon.social oracle\n- delete event payload must be a bare string ID, NOT a Status object\n\nDEFENSIVE PROGRAMMING:\n- WebSocket payload double-encoding is intentional and required for compatibility — document clearly with a comment and a test\n- Event serialization must never include private key material or auth tokens",
-  "ephemeral": false,
-  "id": "smallhold-jijx",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:41.09563314Z",
+  "closed_at": "2026-07-18T17:20:41.09563314Z",
+  "close_reason": "StreamEvent types already implemented",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "StreamEvent: all event types with correct Mastodon wire format",
-  "updated_at": "2026-04-23T00:33:59Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-hen",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:34:45Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-hen",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

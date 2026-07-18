@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-7322",
+  "title": "GET /api/v1/streaming/*: Server-Sent Events with auth and keepalive",
+  "description": "Implement SSE endpoints: /api/v1/streaming/user, /streaming/public, /streaming/public/local, /streaming/hashtag?tag=, /streaming/hashtag/local?tag=, /streaming/direct. Authenticate via Bearer token from Authorization header OR ?access_token= query param. Return text/event-stream. Subscribe to appropriate broadcast channel. Forward events. Send heartbeat comment (:heartbeat) every 15 seconds. Handle client disconnect by dropping the subscription.\n\nAGENT WORKFLOW: Spawn a research subagent to connect to mastodon.social streaming SSE with curl and document the heartbeat format and exact header requirements. Spawn a testing subagent to write an SSE client test.\n\nTEST DISCIPLINE:\n- Connect to /streaming/user → receive update event when followed account posts\n- Connect to /streaming/public → receive public post events\n- Connect to /streaming/hashtag?tag=rust → receive event when #rust post created\n- Heartbeat: after 15s of no events, receive ':heartbeat' comment line\n- Auth: missing token → 401 before stream opens\n- Disconnect: server cleans up subscription (no goroutine leak — verify via metrics or test helper)\n\nDEFENSIVE PROGRAMMING:\n- access_token query param: this is a valid auth method for SSE (Authorization header can't be set in EventSource)\n- Gracefully handle broadcast::RecvError::Lagged: send a gap event or reconnect hint to client\n- Connection limit: max 100 concurrent SSE connections (configurable) to prevent resource exhaustion",
   "acceptance_criteria": "SSE client receives correct events; heartbeat after 15s; missing auth returns 401; disconnect cleans up subscription; lagged receiver handled gracefully",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:34:11Z",
   "created_by": "Mark Atwood",
-  "description": "Implement SSE endpoints: /api/v1/streaming/user, /streaming/public, /streaming/public/local, /streaming/hashtag?tag=, /streaming/hashtag/local?tag=, /streaming/direct. Authenticate via Bearer token from Authorization header OR ?access_token= query param. Return text/event-stream. Subscribe to appropriate broadcast channel. Forward events. Send heartbeat comment (:heartbeat) every 15 seconds. Handle client disconnect by dropping the subscription.\n\nAGENT WORKFLOW: Spawn a research subagent to connect to mastodon.social streaming SSE with curl and document the heartbeat format and exact header requirements. Spawn a testing subagent to write an SSE client test.\n\nTEST DISCIPLINE:\n- Connect to /streaming/user → receive update event when followed account posts\n- Connect to /streaming/public → receive public post events\n- Connect to /streaming/hashtag?tag=rust → receive event when #rust post created\n- Heartbeat: after 15s of no events, receive ':heartbeat' comment line\n- Auth: missing token → 401 before stream opens\n- Disconnect: server cleans up subscription (no goroutine leak — verify via metrics or test helper)\n\nDEFENSIVE PROGRAMMING:\n- access_token query param: this is a valid auth method for SSE (Authorization header can't be set in EventSource)\n- Gracefully handle broadcast::RecvError::Lagged: send a gap event or reconnect hint to client\n- Connection limit: max 100 concurrent SSE connections (configurable) to prevent resource exhaustion",
-  "ephemeral": false,
-  "id": "smallhold-7322",
-  "is_template": false,
-  "issue_type": "feature",
+  "updated_at": "2026-07-18T17:20:41.03458617Z",
+  "closed_at": "2026-07-18T17:20:41.03458617Z",
+  "close_reason": "SSE streaming already in streaming.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "GET /api/v1/streaming/*: Server-Sent Events with auth and keepalive",
-  "updated_at": "2026-04-23T00:34:11Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-57e",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:34:47Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-57e",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

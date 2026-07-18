@@ -1,29 +1,26 @@
 {
+  "id": "smallhold-jujq",
+  "title": "Emit streaming events on post create, delete, edit",
+  "description": "After successful post creation, emit streaming events:\n- Public/PublicLocal channels: emit 'update' event if visibility=public\n- User channels: emit 'update' event for each local follower of the author\n- Hashtag channels: emit 'update' event on each Hashtag(tag) channel matching tags in the post\n- Direct channel: emit 'update' (actually 'conversation') for direct posts to local actors\n\nOn post delete: emit 'delete' event with status ID on all channels that received the original 'update'.\nOn post edit: emit 'status.update' event.\n\nAGENT WORKFLOW: Spawn a research subagent to design the fanout architecture: should we collect affected channels synchronously before returning, or use a separate fanout task? Recommend the simpler approach.\n\nTEST DISCIPLINE:\n- Create public post → verify 'update' event received on Public channel within 100ms\n- Create post with #rust → verify 'update' on Hashtag('rust') channel\n- Delete post → verify 'delete' event on correct channels\n- Edit post → verify 'status.update' event\n- Post from account with no followers → no User channel events emitted (no crash)\n\nDEFENSIVE PROGRAMMING:\n- Fanout must not block the HTTP response — use tokio::spawn for fanout\n- Fanout panic must not crash the server — wrap in catch_unwind equivalent\n- Don't emit events for non-public posts on public channels",
   "acceptance_criteria": "Public post → update on Public channel; hashtag post → update on Hashtag channel; delete → delete event; edit → status.update; fanout doesn't block HTTP response",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:34:31Z",
   "created_by": "Mark Atwood",
-  "description": "After successful post creation, emit streaming events:\n- Public/PublicLocal channels: emit 'update' event if visibility=public\n- User channels: emit 'update' event for each local follower of the author\n- Hashtag channels: emit 'update' event on each Hashtag(tag) channel matching tags in the post\n- Direct channel: emit 'update' (actually 'conversation') for direct posts to local actors\n\nOn post delete: emit 'delete' event with status ID on all channels that received the original 'update'.\nOn post edit: emit 'status.update' event.\n\nAGENT WORKFLOW: Spawn a research subagent to design the fanout architecture: should we collect affected channels synchronously before returning, or use a separate fanout task? Recommend the simpler approach.\n\nTEST DISCIPLINE:\n- Create public post → verify 'update' event received on Public channel within 100ms\n- Create post with #rust → verify 'update' on Hashtag('rust') channel\n- Delete post → verify 'delete' event on correct channels\n- Edit post → verify 'status.update' event\n- Post from account with no followers → no User channel events emitted (no crash)\n\nDEFENSIVE PROGRAMMING:\n- Fanout must not block the HTTP response — use tokio::spawn for fanout\n- Fanout panic must not crash the server — wrap in catch_unwind equivalent\n- Don't emit events for non-public posts on public channels",
-  "ephemeral": false,
-  "id": "smallhold-jujq",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:40.903104459Z",
+  "closed_at": "2026-07-18T17:20:40.903104459Z",
+  "close_reason": "Streaming events already wired in posting.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Emit streaming events on post create, delete, edit",
-  "updated_at": "2026-04-23T00:34:31Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-3vt",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:34:53Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-3vt",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

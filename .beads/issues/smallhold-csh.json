@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Boost from Ivory creates a boost post; original author on mastodon.social sees Announce; boost appears in boosting actor's timeline as wrapper post with reblog=original; unboost sends Undo Announce; Status.reblog is full nested Status object not just an ID",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:05:10Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-csh",
+  "title": "Boost / unboost endpoints + outbound Announce/Undo Announce",
   "description": "Implement POST /api/v1/statuses/:id/reblog and /unreblog. Create a new post row that is a boost (boost_of_id or boost_of_uri set). Return a Status object where the outer wrapper has empty content and reblog field points to the original. Enqueue outbound Announce or Undo{Announce} activity.",
   "design": "Boost post: new posts row with boost_of_id (local) or boost_of_uri (remote) set, content='', content_html=''. ap_id = new snowflake. Announce activity: {type:Announce, actor:..., object:original_ap_uri, to:[AS2Public]}. Status serialization: outer Status has content='', reblog=full_original_status_object.",
-  "ephemeral": false,
-  "id": "smallhold-csh",
-  "is_template": false,
-  "issue_type": "feature",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Boost from Ivory creates a boost post; original author on mastodon.social sees Announce; boost appears in boosting actor's timeline as wrapper post with reblog=original; unboost sends Undo Announce; Status.reblog is full nested Status object not just an ID",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "Boost / unboost endpoints + outbound Announce/Undo Announce",
-  "updated_at": "2026-04-23T00:05:10Z",
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:05:10Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:58.387181106Z",
+  "closed_at": "2026-07-18T17:20:58.387181106Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-w59",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:15Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-w59",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

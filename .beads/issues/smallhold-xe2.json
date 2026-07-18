@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Elk can connect via WebSocket and receive live updates; subscribe command with stream='user' receives home timeline events; subscribe command with stream='public' receives public events; unsubscribe stops receiving those events; connection receives heartbeat",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:05:17Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-xe2",
+  "title": "WebSocket streaming endpoint",
   "description": "Implement WebSocket streaming at GET /api/v1/streaming. Mastodon WebSocket protocol: client sends subscribe/unsubscribe commands as JSON messages, server sends events as JSON messages with stream, event, payload fields. Clients negotiate stream via 'stream' field in subscribe command. Some clients (Elk) prefer WebSocket over SSE.",
   "design": "axum WebSocket handler. Client messages: {type:'subscribe', stream:'user'} etc. Server messages: {stream:['user'], event:'update', payload:'{...status_json...}'}. Multiple stream subscriptions per connection supported. Re-use same broadcast channel infrastructure as SSE. Heartbeat: server sends {event:'ping'} every 15s.",
-  "ephemeral": false,
-  "id": "smallhold-xe2",
-  "is_template": false,
-  "issue_type": "feature",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Elk can connect via WebSocket and receive live updates; subscribe command with stream='user' receives home timeline events; subscribe command with stream='public' receives public events; unsubscribe stops receiving those events; connection receives heartbeat",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "WebSocket streaming endpoint",
-  "updated_at": "2026-04-23T00:05:17Z",
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:05:17Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:58.327555162Z",
+  "closed_at": "2026-07-18T17:20:58.327555162Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-oo2",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:20Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-oo2",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

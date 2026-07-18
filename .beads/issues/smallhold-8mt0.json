@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-8mt0",
+  "title": "Follow request management — GET /api/v1/follow_requests, authorize, reject",
+  "description": "## What\nImplement follow request management for locked accounts. GET /api/v1/follow_requests returns pending inbound follow requests as an array of Account objects. POST /api/v1/follow_requests/:id/authorize creates the followers row and sends an Accept activity to the requester. POST /api/v1/follow_requests/:id/reject sends a Reject activity and removes the request. Inbound Follow activities to locked accounts go into a pending follow_requests state instead of auto-accepting.\n\n## Why\nLocked accounts are a key privacy feature. Without follow request management, Ivory's follower request notification badge is stuck at a non-zero number with no way to clear it. Part of sub-epic 8-D.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/follow_requests to document the exact Account array response shape; check mastodon.social source for the Accept and Reject activity JSON shapes (type, actor, object fields); document the Relationship object changes after authorize/reject (following=true after authorize).\n- Spawn an Implementation subagent to: add follow_requests table migration (id snowflake, follower_remote_id, followee_local_id, ap_activity_id, created_at); modify inbox Follow handler: check followee is_locked flag; if locked, insert to follow_requests instead of follows; implement GET /api/v1/follow_requests handler: query follow_requests JOIN remote_accounts, serialize as Account array; implement authorize handler: INSERT INTO follows, DELETE FROM follow_requests, enqueue Accept activity to requester inbox; implement reject handler: enqueue Reject activity, DELETE FROM follow_requests.\n- Spawn a Test subagent to: write integration tests with in-memory SQLite; create locked local persona; dispatch inbound Follow from remote actor; assert follow_requests row created, follows row NOT created; call authorize; assert follows row created, follow_requests row deleted, Accept activity enqueued; call reject on separate request; assert Reject activity enqueued, row deleted; GET /api/v1/follow_requests returns correct Account shape.\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/follow_requests live fixture for Account array shape; ActivityPub Accept/Reject spec shapes (not the serialization code under test); wiremock for asserting delivery to remote inbox.\n- Test approach: integration test with in-memory SQLite; create locked account; send Follow activity; verify state transitions through each step; verify Accept/Reject JSON body shape matches mastodon.social fixtures using wiremock request capture.\n\n## Defensive programming checklist\n- Authorize endpoint: return 404 if follow_requests row does not exist (not panic)\n- Reject endpoint: return 404 if follow_requests row does not exist\n- Accept activity object field must be the original Follow AP activity ID (not the requester URI)\n- Do not auto-accept follows to locked accounts — check is_locked before routing to follow_requests vs follows\n- No .unwrap() in handler paths\n- Deliver Accept/Reject asynchronously via delivery queue — do not block the HTTP response",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:54:14Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nImplement follow request management for locked accounts. GET /api/v1/follow_requests returns pending inbound follow requests as an array of Account objects. POST /api/v1/follow_requests/:id/authorize creates the followers row and sends an Accept activity to the requester. POST /api/v1/follow_requests/:id/reject sends a Reject activity and removes the request. Inbound Follow activities to locked accounts go into a pending follow_requests state instead of auto-accepting.\n\n## Why\nLocked accounts are a key privacy feature. Without follow request management, Ivory's follower request notification badge is stuck at a non-zero number with no way to clear it. Part of sub-epic 8-D.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v1/follow_requests to document the exact Account array response shape; check mastodon.social source for the Accept and Reject activity JSON shapes (type, actor, object fields); document the Relationship object changes after authorize/reject (following=true after authorize).\n- Spawn an Implementation subagent to: add follow_requests table migration (id snowflake, follower_remote_id, followee_local_id, ap_activity_id, created_at); modify inbox Follow handler: check followee is_locked flag; if locked, insert to follow_requests instead of follows; implement GET /api/v1/follow_requests handler: query follow_requests JOIN remote_accounts, serialize as Account array; implement authorize handler: INSERT INTO follows, DELETE FROM follow_requests, enqueue Accept activity to requester inbox; implement reject handler: enqueue Reject activity, DELETE FROM follow_requests.\n- Spawn a Test subagent to: write integration tests with in-memory SQLite; create locked local persona; dispatch inbound Follow from remote actor; assert follow_requests row created, follows row NOT created; call authorize; assert follows row created, follow_requests row deleted, Accept activity enqueued; call reject on separate request; assert Reject activity enqueued, row deleted; GET /api/v1/follow_requests returns correct Account shape.\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/follow_requests live fixture for Account array shape; ActivityPub Accept/Reject spec shapes (not the serialization code under test); wiremock for asserting delivery to remote inbox.\n- Test approach: integration test with in-memory SQLite; create locked account; send Follow activity; verify state transitions through each step; verify Accept/Reject JSON body shape matches mastodon.social fixtures using wiremock request capture.\n\n## Defensive programming checklist\n- Authorize endpoint: return 404 if follow_requests row does not exist (not panic)\n- Reject endpoint: return 404 if follow_requests row does not exist\n- Accept activity object field must be the original Follow AP activity ID (not the requester URI)\n- Do not auto-accept follows to locked accounts — check is_locked before routing to follow_requests vs follows\n- No .unwrap() in handler paths\n- Deliver Accept/Reject asynchronously via delivery queue — do not block the HTTP response",
-  "ephemeral": false,
-  "id": "smallhold-8mt0",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:21:30.03043162Z",
+  "closed_at": "2026-07-18T17:21:30.03043162Z",
+  "close_reason": "Follow requests already in interactions.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "Follow request management — GET /api/v1/follow_requests, authorize, reject",
-  "updated_at": "2026-04-23T00:54:14Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-664l",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:54:22Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-664l",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Home timeline shows posts from followed accounts in reverse chronological order; pagination via Link header works; empty timeline returns [] not error; posts from both local and remote followed accounts appear; boosted posts appear as boost wrapper with reblog field",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:05:53Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-5b3",
+  "title": "GET /api/v1/timelines/home",
   "description": "Implement the home timeline: a paginated feed of posts from accounts the authed persona follows. Computed on read via SQL query — no fanout, no cache. Includes local posts from followed accounts and remote posts from followed remote accounts. Supports max_id, since_id, min_id, limit params. Returns Status objects with full serialization.",
   "design": "Query: SELECT p.* FROM posts p JOIN follows f ON p.account_id = f.followee_id WHERE f.follower_id = ? UNION SELECT rp.* FROM remote_posts rp JOIN follows f ON rp.remote_account_id = f.followee_remote_id WHERE f.follower_id = ? ORDER BY id DESC LIMIT ? — then serialize each to Status. Snowflake-based pagination.",
-  "ephemeral": false,
-  "id": "smallhold-5b3",
-  "is_template": false,
-  "issue_type": "feature",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Home timeline shows posts from followed accounts in reverse chronological order; pagination via Link header works; empty timeline returns [] not error; posts from both local and remote followed accounts appear; boosted posts appear as boost wrapper with reblog field",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "GET /api/v1/timelines/home",
-  "updated_at": "2026-04-23T00:05:53Z",
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:05:53Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:58.070676377Z",
+  "closed_at": "2026-07-18T17:20:58.070676377Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-w59",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:05:57Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-w59",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

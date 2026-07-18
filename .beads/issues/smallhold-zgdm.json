@@ -1,35 +1,33 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-zgdm",
+  "title": "Prometheus metrics endpoint",
+  "description": "## What\nExpose a Prometheus-compatible /metrics endpoint (or separate internal listener) that publishes counters, gauges, and histograms for the smallhold server.\n\n## Why\nOperators need observability into request rates, latency, delivery queue health, and connection counts without reading raw logs.\n\n## Scope\n- Integrate metrics and metrics-exporter-prometheus crates\n- Register standard HTTP, delivery, SQLite, and connection metrics\n- Gate behind config flag [monitoring] metrics_enabled / metrics_addr\n- Instrument axum middleware, delivery worker, and SQLx layer",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:18:15Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nExpose a Prometheus-compatible /metrics endpoint (or separate internal listener) that publishes counters, gauges, and histograms for the smallhold server.\n\n## Why\nOperators need observability into request rates, latency, delivery queue health, and connection counts without reading raw logs.\n\n## Scope\n- Integrate metrics and metrics-exporter-prometheus crates\n- Register standard HTTP, delivery, SQLite, and connection metrics\n- Gate behind config flag [monitoring] metrics_enabled / metrics_addr\n- Instrument axum middleware, delivery worker, and SQLx layer",
-  "ephemeral": false,
-  "id": "smallhold-zgdm",
-  "is_template": false,
-  "issue_type": "epic",
+  "updated_at": "2026-07-18T17:21:11.961974517Z",
+  "closed_at": "2026-07-18T17:21:11.961974517Z",
+  "close_reason": "Deferred — ops tooling",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Prometheus metrics endpoint",
-  "updated_at": "2026-04-23T04:18:15Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-jex0",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:18:52Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-jex0",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-oi9v",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:18:51Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-oi9v",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

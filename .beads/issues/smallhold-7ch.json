@@ -1,30 +1,27 @@
 {
+  "id": "smallhold-7ch",
+  "title": "tokio broadcast channel infrastructure for streaming",
+  "description": "Implement the internal broadcast channel system that routes events to streaming subscribers. Channels are keyed by type and optionally account_id or hashtag. Types: user:{account_id}, public, public:local, hashtag:{tag}, direct:{account_id}. Events are emitted at post write, post delete, notification creation, and post edit. The channel infrastructure must be set up before SSE and WebSocket handlers can route to it.",
+  "design": "tokio::sync::broadcast::channel per channel key. Channel capacity: 256 (configurable). Store channels in a DashMap\u003cChannelKey, Sender\u003cStreamEvent\u003e\u003e in Arc on AppState. ChannelKey enum: Public, PublicLocal, User(i64), Hashtag(String), Direct(i64). StreamEvent: {event_type, payload_json}.",
   "acceptance_criteria": "Posting a status emits an update event on the public channel and user channel for the author's followers; deleting a status emits a delete event; creating a notification emits a notification event on the user channel; hashtag posts emit on the correct hashtag channel",
-  "compaction_level": 0,
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:04:45Z",
   "created_by": "Mark Atwood",
-  "description": "Implement the internal broadcast channel system that routes events to streaming subscribers. Channels are keyed by type and optionally account_id or hashtag. Types: user:{account_id}, public, public:local, hashtag:{tag}, direct:{account_id}. Events are emitted at post write, post delete, notification creation, and post edit. The channel infrastructure must be set up before SSE and WebSocket handlers can route to it.",
-  "design": "tokio::sync::broadcast::channel per channel key. Channel capacity: 256 (configurable). Store channels in a DashMap<ChannelKey, Sender<StreamEvent>> in Arc on AppState. ChannelKey enum: Public, PublicLocal, User(i64), Hashtag(String), Direct(i64). StreamEvent: {event_type, payload_json}.",
-  "ephemeral": false,
-  "id": "smallhold-7ch",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:58.508629463Z",
+  "closed_at": "2026-07-18T17:20:58.508629463Z",
+  "close_reason": "Already implemented",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "tokio broadcast channel infrastructure for streaming",
-  "updated_at": "2026-04-23T00:04:45Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-oo2",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:04:50Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-oo2",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

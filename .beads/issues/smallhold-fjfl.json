@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-fjfl",
+  "title": "GET /api/v2/search — account and hashtag search",
+  "description": "## What\nImplement GET /api/v2/search returning account and hashtag results. Local persona search by username and display_name via LIKE query. Hashtag search from the post_tags table. No full-text post search in v1 — return empty statuses array. Support type param (accounts, hashtags, statuses), q param (query string), resolve param (fetch remote actor if @user@domain format), limit param.\n\n## Why\nSearch is the primary discovery mechanism for clients. Phanpy and Elk both call /api/v2/search on their search UIs. Without it, users cannot find accounts or hashtags. Part of sub-epic 8-C.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v2/search?q=test\u0026type=accounts and /api/v2/search?q=rust\u0026type=hashtags to capture exact response shapes including the hashtag history array format; document all accepted query params and their defaults; check what resolve=true does for a @user@domain query.\n- Spawn an Implementation subagent to: add GET /api/v2/search handler; parse q, type, resolve, limit, offset, min_id, max_id params; for type=accounts or no type: query local accounts WHERE username ILIKE '%q%' OR display_name ILIKE '%q%', also check remote_accounts; if resolve=true and q matches @user@domain format, trigger actor fetch if not cached; for type=hashtags: query post_tags for distinct tags LIKE q, return with name/url/history (history=[]) array; for type=statuses: return {accounts:[], statuses:[], hashtags:[]}; serialize accounts as Account objects, hashtags as Tag objects.\n- Spawn a Test subagent to: write integration tests against in-memory SQLite with seeded accounts and post_tags rows; assert account search returns matching local account; assert hashtag search returns matching tags; assert statuses returns empty array; assert resolve=true for @remote@domain triggers fetch attempt (mock HTTP server); assert limit param respected; assert response shape matches mastodon.social fixture.\n\n## Test discipline\n- Independent oracle: curl mastodon.social /api/v2/search?q=gargron\u0026type=accounts live fixture (not the code under test); mastodon.social /api/v2/search?q=rust\u0026type=hashtags live fixture for Tag object shape.\n- Test approach: integration test with in-memory SQLite; seed 3 local accounts with varying usernames; query for partial match; assert exact JSON shape of accounts[0] matches mastodon.social Account object structure; hashtag test: seed post_tags rows; search returns correct Tag array.\n\n## Defensive programming checklist\n- Sanitize q param: strip leading/trailing whitespace; reject empty q with 422\n- LIKE query: escape % and _ in user input to prevent LIKE injection\n- Limit param: clamp to [1, 40], default 20\n- resolve=true: only resolve if q looks like @user@domain (regex check first), never resolve arbitrary URIs\n- No .unwrap() in handler path\n- Do not expose remote actor internal IDs in Account.id — use local snowflake ID",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:52:56Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nImplement GET /api/v2/search returning account and hashtag results. Local persona search by username and display_name via LIKE query. Hashtag search from the post_tags table. No full-text post search in v1 — return empty statuses array. Support type param (accounts, hashtags, statuses), q param (query string), resolve param (fetch remote actor if @user@domain format), limit param.\n\n## Why\nSearch is the primary discovery mechanism for clients. Phanpy and Elk both call /api/v2/search on their search UIs. Without it, users cannot find accounts or hashtags. Part of sub-epic 8-C.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social /api/v2/search?q=test&type=accounts and /api/v2/search?q=rust&type=hashtags to capture exact response shapes including the hashtag history array format; document all accepted query params and their defaults; check what resolve=true does for a @user@domain query.\n- Spawn an Implementation subagent to: add GET /api/v2/search handler; parse q, type, resolve, limit, offset, min_id, max_id params; for type=accounts or no type: query local accounts WHERE username ILIKE '%q%' OR display_name ILIKE '%q%', also check remote_accounts; if resolve=true and q matches @user@domain format, trigger actor fetch if not cached; for type=hashtags: query post_tags for distinct tags LIKE q, return with name/url/history (history=[]) array; for type=statuses: return {accounts:[], statuses:[], hashtags:[]}; serialize accounts as Account objects, hashtags as Tag objects.\n- Spawn a Test subagent to: write integration tests against in-memory SQLite with seeded accounts and post_tags rows; assert account search returns matching local account; assert hashtag search returns matching tags; assert statuses returns empty array; assert resolve=true for @remote@domain triggers fetch attempt (mock HTTP server); assert limit param respected; assert response shape matches mastodon.social fixture.\n\n## Test discipline\n- Independent oracle: curl mastodon.social /api/v2/search?q=gargron&type=accounts live fixture (not the code under test); mastodon.social /api/v2/search?q=rust&type=hashtags live fixture for Tag object shape.\n- Test approach: integration test with in-memory SQLite; seed 3 local accounts with varying usernames; query for partial match; assert exact JSON shape of accounts[0] matches mastodon.social Account object structure; hashtag test: seed post_tags rows; search returns correct Tag array.\n\n## Defensive programming checklist\n- Sanitize q param: strip leading/trailing whitespace; reject empty q with 422\n- LIKE query: escape % and _ in user input to prevent LIKE injection\n- Limit param: clamp to [1, 40], default 20\n- resolve=true: only resolve if q looks like @user@domain (regex check first), never resolve arbitrary URIs\n- No .unwrap() in handler path\n- Do not expose remote actor internal IDs in Account.id — use local snowflake ID",
-  "ephemeral": false,
-  "id": "smallhold-fjfl",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:21:30.224477433Z",
+  "closed_at": "2026-07-18T17:21:30.224477433Z",
+  "close_reason": "Search already in interactions.rs + search.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "GET /api/v2/search — account and hashtag search",
-  "updated_at": "2026-04-23T00:52:56Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-wn62",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:53:04Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-wn62",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

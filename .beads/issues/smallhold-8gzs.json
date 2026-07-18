@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-8gzs",
+  "title": "Authorized fetch enforcement for actor document GETs",
+  "description": "## What\nWhen the server config has authorized_fetch=true, require a valid HTTP signature on all GET requests to /users/:username and /users/:username/* (actor document, outbox, followers, following). Reject unsigned requests with 401 and a WWW-Authenticate header. This prevents anonymous scraping of follower graphs.\n\n## Why\nAuthorized fetch is a privacy feature adopted by mastodon.social and GoToSocial. Without it, anyone can enumerate followers/following without authentication. Part of sub-epic 8-B federation lifecycle.\n\n## Agent team pattern\n- Spawn a Research subagent to: test mastodon.social authorized fetch behavior by sending unsigned GET to a locked account's actor URI and documenting the exact 401 response including WWW-Authenticate header format; read activitypub-federation crate docs for HTTP signature verification on incoming GETs; document the exact Signature header format expected.\n- Spawn an Implementation subagent to: add authorized_fetch boolean to server config (default false); add Tower middleware or axum extractor that, when authorized_fetch=true, parses the Signature header from GET requests to /users/* routes; verify the signature using the actor's public key (fetch actor if not cached); reject with 401 WWW-Authenticate: Signature realm=... if invalid or missing; cache actor public keys in memory (LRU, 100 entries, 5min TTL) to avoid refetching on every GET.\n- Spawn a Test subagent to: write integration tests with authorized_fetch=true in config; send unsigned GET to /users/testuser -\u003e assert 401; send GET with valid test keypair signature -\u003e assert 200 actor document returned; verify WWW-Authenticate header format matches mastodon.social fixture.\n\n## Test discipline\n- Independent oracle: mastodon.social live 401 response fixture (curl a locked account's actor URI without Signature header); HTTP Signatures draft-cavage-http-signatures spec for WWW-Authenticate format.\n- Test approach: integration test with in-memory SQLite and test RSA keypair (generated fresh, not the code-under-test keypair); happy path (valid signature -\u003e 200); edge cases: no Signature header -\u003e 401, malformed Signature header -\u003e 401, expired Date header (\u003e12h old) -\u003e 401, authorized_fetch=false -\u003e 200 with no signature.\n\n## Defensive programming checklist\n- Never reject based on Content-Type alone — always verify the actual cryptographic signature\n- Cache actor public keys with TTL, not indefinitely (key rotation must take effect)\n- Reject if Date header is more than 12 hours old (replay attack prevention)\n- Log rejected requests at INFO level: requester IP, missing/invalid signature reason\n- No .unwrap() in middleware path\n- authorized_fetch=false (default) must not add any overhead to GET requests",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:51:16Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nWhen the server config has authorized_fetch=true, require a valid HTTP signature on all GET requests to /users/:username and /users/:username/* (actor document, outbox, followers, following). Reject unsigned requests with 401 and a WWW-Authenticate header. This prevents anonymous scraping of follower graphs.\n\n## Why\nAuthorized fetch is a privacy feature adopted by mastodon.social and GoToSocial. Without it, anyone can enumerate followers/following without authentication. Part of sub-epic 8-B federation lifecycle.\n\n## Agent team pattern\n- Spawn a Research subagent to: test mastodon.social authorized fetch behavior by sending unsigned GET to a locked account's actor URI and documenting the exact 401 response including WWW-Authenticate header format; read activitypub-federation crate docs for HTTP signature verification on incoming GETs; document the exact Signature header format expected.\n- Spawn an Implementation subagent to: add authorized_fetch boolean to server config (default false); add Tower middleware or axum extractor that, when authorized_fetch=true, parses the Signature header from GET requests to /users/* routes; verify the signature using the actor's public key (fetch actor if not cached); reject with 401 WWW-Authenticate: Signature realm=... if invalid or missing; cache actor public keys in memory (LRU, 100 entries, 5min TTL) to avoid refetching on every GET.\n- Spawn a Test subagent to: write integration tests with authorized_fetch=true in config; send unsigned GET to /users/testuser -> assert 401; send GET with valid test keypair signature -> assert 200 actor document returned; verify WWW-Authenticate header format matches mastodon.social fixture.\n\n## Test discipline\n- Independent oracle: mastodon.social live 401 response fixture (curl a locked account's actor URI without Signature header); HTTP Signatures draft-cavage-http-signatures spec for WWW-Authenticate format.\n- Test approach: integration test with in-memory SQLite and test RSA keypair (generated fresh, not the code-under-test keypair); happy path (valid signature -> 200); edge cases: no Signature header -> 401, malformed Signature header -> 401, expired Date header (>12h old) -> 401, authorized_fetch=false -> 200 with no signature.\n\n## Defensive programming checklist\n- Never reject based on Content-Type alone — always verify the actual cryptographic signature\n- Cache actor public keys with TTL, not indefinitely (key rotation must take effect)\n- Reject if Date header is more than 12 hours old (replay attack prevention)\n- Log rejected requests at INFO level: requester IP, missing/invalid signature reason\n- No .unwrap() in middleware path\n- authorized_fetch=false (default) must not add any overhead to GET requests",
-  "ephemeral": false,
-  "id": "smallhold-8gzs",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:21:30.288124301Z",
+  "closed_at": "2026-07-18T17:21:30.288124301Z",
+  "close_reason": "Deferred — authorized fetch for GETs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "Authorized fetch enforcement for actor document GETs",
-  "updated_at": "2026-04-23T00:51:16Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-j22v",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:51:31Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-j22v",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

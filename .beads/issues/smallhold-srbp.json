@@ -1,28 +1,25 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-srbp",
+  "title": "Handle inbound Move activity — alsoKnownAs validation and follower migration",
+  "description": "## What\nAccept inbound Move activities where an actor migrates to a new account. Validate: the target actor's alsoKnownAs list must include the source actor URI (proving the target authorized the move). Migrate local followers: for each local persona that followed the old actor, create a new follow to the target actor and send a Follow activity to the target. Record the migration in remote_accounts.\n\n## Why\nAccount migration is a core fediverse social contract. Without it, users who move to smallhold from another server lose their followers. Part of sub-epic 8-B federation lifecycle.\n\n## Agent team pattern\n- Spawn a Research subagent to: read ActivityPub Move activity spec and the Mastodon implementation at mastodon.social (curl a live Move activity JSON that mastodon.social sends when a user migrates); check activitypub-federation crate for any Move handling helpers; document the alsoKnownAs field location in the actor document (top-level array of URIs).\n- Spawn an Implementation subagent to: add Move variant to the inbox activity dispatch; fetch the target actor document (GET with HTTP signature per GoToSocial requirement); extract alsoKnownAs from target actor; reject with logged warning if source URI not in alsoKnownAs; find all local follows where followee = source actor ID; for each: insert follow to target actor, enqueue Follow activity to target inbox; update remote_accounts.moved_to_uri = target URI; mark source account with moved_at timestamp.\n- Spawn a Test subagent to: write integration test with in-memory SQLite; seed a remote actor A with local follower; mock target actor B's HTTP endpoint returning actor document with alsoKnownAs: [A]; dispatch Move(A, B); assert follow row created for B; assert Follow activity enqueued for B's inbox; assert Move rejected when B.alsoKnownAs does not include A.\n\n## Test discipline\n- Independent oracle: ActivityPub Move spec (W3C); mastodon.social live Move activity fixture; mock HTTP server for actor fetch using wiremock (independent of the handler under test).\n- Test approach: integration test with in-memory SQLite; happy path (valid alsoKnownAs =\u003e migration succeeds); edge cases: alsoKnownAs missing =\u003e rejection logged no panic; target actor fetch fails (500) =\u003e graceful error no DB change; Move for actor with zero local followers =\u003e no-op success.\n\n## Defensive programming checklist\n- Always fetch target actor document with HTTP signature (GoToSocial requires signed GETs)\n- Reject Move if source actor URI not in target.alsoKnownAs — do not proceed with migration\n- Ignore Move for actors we have never seen (no remote_accounts row) — return 200 silently\n- No .unwrap() in inbox handler path\n- Do not send Follow activities synchronously in the inbox handler — enqueue and return 200 quickly\n- Log migration at INFO level: actor_from, actor_to, follower_count",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T00:50:24Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nAccept inbound Move activities where an actor migrates to a new account. Validate: the target actor's alsoKnownAs list must include the source actor URI (proving the target authorized the move). Migrate local followers: for each local persona that followed the old actor, create a new follow to the target actor and send a Follow activity to the target. Record the migration in remote_accounts.\n\n## Why\nAccount migration is a core fediverse social contract. Without it, users who move to smallhold from another server lose their followers. Part of sub-epic 8-B federation lifecycle.\n\n## Agent team pattern\n- Spawn a Research subagent to: read ActivityPub Move activity spec and the Mastodon implementation at mastodon.social (curl a live Move activity JSON that mastodon.social sends when a user migrates); check activitypub-federation crate for any Move handling helpers; document the alsoKnownAs field location in the actor document (top-level array of URIs).\n- Spawn an Implementation subagent to: add Move variant to the inbox activity dispatch; fetch the target actor document (GET with HTTP signature per GoToSocial requirement); extract alsoKnownAs from target actor; reject with logged warning if source URI not in alsoKnownAs; find all local follows where followee = source actor ID; for each: insert follow to target actor, enqueue Follow activity to target inbox; update remote_accounts.moved_to_uri = target URI; mark source account with moved_at timestamp.\n- Spawn a Test subagent to: write integration test with in-memory SQLite; seed a remote actor A with local follower; mock target actor B's HTTP endpoint returning actor document with alsoKnownAs: [A]; dispatch Move(A, B); assert follow row created for B; assert Follow activity enqueued for B's inbox; assert Move rejected when B.alsoKnownAs does not include A.\n\n## Test discipline\n- Independent oracle: ActivityPub Move spec (W3C); mastodon.social live Move activity fixture; mock HTTP server for actor fetch using wiremock (independent of the handler under test).\n- Test approach: integration test with in-memory SQLite; happy path (valid alsoKnownAs => migration succeeds); edge cases: alsoKnownAs missing => rejection logged no panic; target actor fetch fails (500) => graceful error no DB change; Move for actor with zero local followers => no-op success.\n\n## Defensive programming checklist\n- Always fetch target actor document with HTTP signature (GoToSocial requires signed GETs)\n- Reject Move if source actor URI not in target.alsoKnownAs — do not proceed with migration\n- Ignore Move for actors we have never seen (no remote_accounts row) — return 200 silently\n- No .unwrap() in inbox handler path\n- Do not send Follow activities synchronously in the inbox handler — enqueue and return 200 quickly\n- Log migration at INFO level: actor_from, actor_to, follower_count",
-  "ephemeral": false,
-  "id": "smallhold-srbp",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:21:30.416629897Z",
+  "closed_at": "2026-07-18T17:21:30.416629897Z",
+  "close_reason": "Move handling already in inbox.rs",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 3,
-  "status": "open",
-  "title": "Handle inbound Move activity — alsoKnownAs validation and follower migration",
-  "updated_at": "2026-04-23T00:50:24Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-j22v",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:50:26Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-j22v",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

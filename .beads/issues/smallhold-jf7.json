@@ -1,30 +1,27 @@
 {
-  "acceptance_criteria": "Ancestors array is ordered from thread root to immediate parent of the requested post; descendants are ordered top-down; 3-level nested thread returns correct structure; mix of local and remote posts in thread works; circular references don't infinite-loop",
-  "compaction_level": 0,
-  "created_at": "2026-04-23T00:06:21Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-jf7",
+  "title": "GET /api/v1/statuses/:id/context — thread reconstruction",
   "description": "Implement thread context: ancestors (posts from root to immediate parent) and descendants (all replies in the thread). Ancestors must be sorted oldest-first (root first). Descendants must be sorted oldest-first (depth-first tree flatten). This endpoint is historically buggy across implementations — test it with 3+ level nested threads.",
   "design": "Ancestors: walk in_reply_to_id chain upward until null. Reverse for oldest-first ordering. Descendants: BFS or DFS from the post ID downward, following reverse-lookup of in_reply_to_id. Must handle mix of posts and remote_posts tables. Limit depth to prevent pathological threads.",
-  "ephemeral": false,
-  "id": "smallhold-jf7",
-  "is_template": false,
-  "issue_type": "feature",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "Ancestors array is ordered from thread root to immediate parent of the requested post; descendants are ordered top-down; 3-level nested thread returns correct structure; mix of local and remote posts in thread works; circular references don't infinite-loop",
+  "status": "closed",
   "priority": 2,
-  "status": "open",
-  "title": "GET /api/v1/statuses/:id/context — thread reconstruction",
-  "updated_at": "2026-04-23T00:06:21Z",
+  "issue_type": "feature",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-23T00:06:21Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:20:57.940169234Z",
+  "closed_at": "2026-07-18T17:20:57.940169234Z",
+  "close_reason": "Already implemented",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-w59",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:06:25Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-w59",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

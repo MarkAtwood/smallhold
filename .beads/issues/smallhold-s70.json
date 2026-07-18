@@ -1,51 +1,51 @@
 {
-  "acceptance_criteria": "PATCH /api/v1/accounts/update_credentials updates bio/display name/fields; avatar and header upload works and appears in client; inbound Move activity migrates follower relationships; domain-blocked accounts have their activities dropped; hashtag timeline returns posts; GET /api/v2/search returns account and hashtag results",
-  "compaction_level": 0,
-  "created_at": "2026-04-22T23:55:56Z",
-  "created_by": "Mark Atwood",
+  "id": "smallhold-s70",
+  "title": "Phase 8: Polish and Tier 3 Endpoints",
   "description": "Profile editing, avatar/header upload, alsoKnownAs for inbound account migration, domain block enforcement, hashtag timelines, search, follow request management, bookmarks, and persona key rotation. These are Tier 3 features from the spec — clients work without them but with degraded UX.",
   "design": "Account fields stored as JSON array in accounts.fields_json. Bio rendered from markdown to HTML at update time, stored in bio_html. Avatar/header stored as media rows, referenced by avatar_media_id/header_media_id. Domain blocks checked on every inbound activity before processing. Hashtag timeline indexes via a tags extraction step at post-creation time.",
-  "ephemeral": false,
-  "id": "smallhold-s70",
-  "is_template": false,
-  "issue_type": "epic",
-  "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
+  "acceptance_criteria": "PATCH /api/v1/accounts/update_credentials updates bio/display name/fields; avatar and header upload works and appears in client; inbound Move activity migrates follower relationships; domain-blocked accounts have their activities dropped; hashtag timeline returns posts; GET /api/v2/search returns account and hashtag results",
+  "status": "closed",
   "priority": 3,
-  "status": "open",
-  "title": "Phase 8: Polish and Tier 3 Endpoints",
-  "updated_at": "2026-04-22T23:55:56Z",
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-04-22T23:55:56Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T17:21:31.474779775Z",
+  "closed_at": "2026-07-18T17:21:31.474779775Z",
+  "close_reason": "Phase 8 complete",
+  "metadata": {},
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-664l",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:53:55Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-664l",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-bb7s",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:48:42Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-bb7s",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-j22v",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:49:55Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-j22v",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     },
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-wn62",
+      "type": "relates-to",
       "created_at": "2026-04-22T17:52:35Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-wn62",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }
