@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub config: Config,
     pub pool: SqlitePool,
+    pub search: Option<std::sync::Arc<crate::search::SearchIndex>>,
 }
 
 pub fn create_router(state: Arc<AppState>) -> Router {

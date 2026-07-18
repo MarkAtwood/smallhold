@@ -13,6 +13,7 @@ pub mod inbox;
 pub mod interactions;
 pub mod media;
 pub mod posting;
+pub mod search;
 pub mod server;
 pub mod streaming;
 pub mod theme;

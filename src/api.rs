@@ -1839,7 +1839,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/conversations", get(empty_array))
         .route("/api/v1/featured_tags", get(empty_array))
         .route("/api/v1/endorsements", get(empty_array))
-        .route("/api/v1/scheduled_statuses", get(empty_array))
         .route("/api/v1/instance/rules", get(empty_array))
         .route("/api/v1/instance/peers", get(empty_array))
         .route("/api/v1/instance/activity", get(empty_array))

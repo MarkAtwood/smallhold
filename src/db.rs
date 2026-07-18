@@ -327,6 +327,15 @@ CREATE TABLE IF NOT EXISTS filter_keywords (
     keyword    TEXT NOT NULL,
     whole_word INTEGER NOT NULL DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS scheduled_statuses (
+    id            INTEGER PRIMARY KEY,
+    account_id    INTEGER NOT NULL REFERENCES accounts(id),
+    scheduled_at  INTEGER NOT NULL,
+    params_json   TEXT NOT NULL,
+    created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_statuses(scheduled_at);
 "#;
 
 #[cfg(test)]
@@ -343,8 +352,8 @@ mod tests {
                 .await
                 .unwrap();
         assert!(
-            result.0 >= 19,
-            "Expected at least 19 tables, got {}",
+            result.0 >= 20,
+            "Expected at least 20 tables, got {}",
             result.0
         );
     }

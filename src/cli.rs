@@ -59,6 +59,10 @@ pub enum Commands {
     /// Inspect delivery queue
     #[command(subcommand)]
     Queue(QueueCommands),
+
+    /// Manage search index
+    #[command(subcommand)]
+    Search(SearchCommands),
 }
 
 #[derive(Subcommand)]
@@ -141,6 +145,12 @@ pub enum QueueCommands {
     RetryDead,
 }
 
+#[derive(Subcommand)]
+pub enum SearchCommands {
+    /// Rebuild the full-text search index from the database
+    Reindex,
+}
+
 impl Cli {
     pub async fn run(self) -> Result<()> {
         match self.command {
@@ -159,6 +169,7 @@ impl Cli {
             }
             Commands::DomainBlock(cmd) => cmd_domain_block(cmd, &self.config).await,
             Commands::Queue(cmd) => cmd_queue(cmd, &self.config).await,
+            Commands::Search(cmd) => cmd_search(cmd, &self.config).await,
         }
     }
 }
@@ -244,9 +255,21 @@ async fn cmd_serve(config_path: &Path) -> Result<()> {
     let config = Config::load(config_path)?;
     let pool = db::create_pool(&config.storage.database_path).await?;
 
+    let search_dir = std::path::Path::new(&config.storage.media_dir)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let search = match crate::search::SearchIndex::open(search_dir) {
+        Ok(idx) => Some(std::sync::Arc::new(idx)),
+        Err(e) => {
+            tracing::warn!("search index unavailable: {e}");
+            None
+        }
+    };
+
     let state = std::sync::Arc::new(crate::server::AppState {
         config: config.clone(),
         pool: pool.clone(),
+        search,
     });
 
     // Start delivery worker
@@ -656,6 +679,24 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
             .await?;
 
             eprintln!("Reset {} dead deliveries.", result.rows_affected());
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_search(cmd: SearchCommands, config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    match cmd {
+        SearchCommands::Reindex => {
+            let search_dir = std::path::Path::new(&config.storage.media_dir)
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
+            let search = crate::search::SearchIndex::open(search_dir)
+                .context("Failed to open search index")?;
+            let count = search.reindex_all(&pool).await?;
+            eprintln!("Reindexed {count} posts");
         }
     }
     Ok(())

@@ -1144,10 +1144,11 @@ async fn search(
 
     let mut result_accounts: Vec<Value> = Vec::new();
     let mut result_hashtags: Vec<Value> = Vec::new();
-    let result_statuses: Vec<Value> = Vec::new(); // ponytail: full-text deferred
+    let mut result_statuses: Vec<Value> = Vec::new();
 
     let search_accounts = search_type.is_none() || search_type == Some("accounts");
     let search_hashtags = search_type.is_none() || search_type == Some("hashtags");
+    let search_statuses = search_type.is_none() || search_type == Some("statuses");
 
     if search_accounts && !query.is_empty() {
         // Check if query looks like user@domain for WebFinger resolution
@@ -1317,6 +1318,33 @@ async fn search(
                 "url": format!("https://{domain}/tags/{tag}"),
                 "history": []
             }));
+        }
+    }
+
+    if search_statuses && !query.is_empty() {
+        if let Some(ref search_idx) = state.search {
+            if let Ok(post_ids) = search_idx.search(query, limit as usize) {
+                for pid in post_ids {
+                    let post = sqlx::query_as::<_, crate::posting::PostRow>(&format!(
+                        "SELECT {} FROM posts WHERE id = ?",
+                        crate::posting::POST_COLUMNS
+                    ))
+                    .bind(pid)
+                    .fetch_optional(&state.pool)
+                    .await?;
+
+                    if let Some(post) = post {
+                        let status = crate::posting::load_status(
+                            &state.pool,
+                            &post,
+                            domain,
+                            Some(auth.account_id),
+                        )
+                        .await?;
+                        result_statuses.push(status);
+                    }
+                }
+            }
         }
     }
 

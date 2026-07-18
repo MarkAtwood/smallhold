@@ -1,28 +1,27 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-nnke",
+  "title": "Implement GET/PUT/DELETE /api/v1/scheduled_statuses management endpoints",
+  "description": "## What\nImplement the three scheduled status management endpoints: GET /api/v1/scheduled_statuses (paginated list of pending scheduled posts for the authenticated persona); PUT /api/v1/scheduled_statuses/:id to reschedule (update scheduled_at, must still be \u003e= now()+5min); DELETE /api/v1/scheduled_statuses/:id to cancel (delete row, must not leave orphaned delivery_queue rows).\n\n## Why\nClients need to let users view, reschedule, and cancel queued posts. Without these endpoints the client UI for scheduled posts is read-only or broken.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social GET /api/v1/scheduled_statuses and GET /api/v1/scheduled_statuses/:id to capture exact JSON shape; note pagination header format (Link rel=next/prev); check what fields PUT /api/v1/scheduled_statuses/:id accepts\n- Spawn an Implementation subagent to: add GET handler returning paginated ScheduledStatus list scoped to authenticated persona; add PUT handler validating new scheduled_at \u003e= now()+5min, updating DB row; add DELETE handler removing post row and any delivery_queue rows with matching post_id atomically in a transaction\n- Spawn a Test subagent to: test GET returns only own persona's scheduled posts (not another persona's); test PUT rejects past or near-future scheduled_at with 422; test DELETE removes post and asserts no delivery_queue rows remain; test 404 on unknown id\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/scheduled_statuses live response shape — note field names, pagination link header format\n- Test approach: create scheduled post via POST in test setup, then exercise GET/PUT/DELETE; assert isolation between personas (persona A cannot see/modify persona B's scheduled posts); assert transaction atomicity of DELETE by checking delivery_queue table post-delete\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Scope all queries to authenticated persona's id — never expose other personas' scheduled posts\n- DELETE must be atomic: delete post row and delivery_queue rows in one transaction so no orphan rows remain\n- PUT must re-validate scheduled_at is still in the future by at least 5 minutes\n- Return 404 (not 403) for ids that belong to a different persona (don't leak existence)",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:18:42Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nImplement the three scheduled status management endpoints: GET /api/v1/scheduled_statuses (paginated list of pending scheduled posts for the authenticated persona); PUT /api/v1/scheduled_statuses/:id to reschedule (update scheduled_at, must still be >= now()+5min); DELETE /api/v1/scheduled_statuses/:id to cancel (delete row, must not leave orphaned delivery_queue rows).\n\n## Why\nClients need to let users view, reschedule, and cancel queued posts. Without these endpoints the client UI for scheduled posts is read-only or broken.\n\n## Agent team pattern\n- Spawn a Research subagent to: curl mastodon.social GET /api/v1/scheduled_statuses and GET /api/v1/scheduled_statuses/:id to capture exact JSON shape; note pagination header format (Link rel=next/prev); check what fields PUT /api/v1/scheduled_statuses/:id accepts\n- Spawn an Implementation subagent to: add GET handler returning paginated ScheduledStatus list scoped to authenticated persona; add PUT handler validating new scheduled_at >= now()+5min, updating DB row; add DELETE handler removing post row and any delivery_queue rows with matching post_id atomically in a transaction\n- Spawn a Test subagent to: test GET returns only own persona's scheduled posts (not another persona's); test PUT rejects past or near-future scheduled_at with 422; test DELETE removes post and asserts no delivery_queue rows remain; test 404 on unknown id\n\n## Test discipline\n- Independent oracle: mastodon.social /api/v1/scheduled_statuses live response shape — note field names, pagination link header format\n- Test approach: create scheduled post via POST in test setup, then exercise GET/PUT/DELETE; assert isolation between personas (persona A cannot see/modify persona B's scheduled posts); assert transaction atomicity of DELETE by checking delivery_queue table post-delete\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths\n- Scope all queries to authenticated persona's id — never expose other personas' scheduled posts\n- DELETE must be atomic: delete post row and delivery_queue rows in one transaction so no orphan rows remain\n- PUT must re-validate scheduled_at is still in the future by at least 5 minutes\n- Return 404 (not 403) for ids that belong to a different persona (don't leak existence)",
-  "ephemeral": false,
-  "id": "smallhold-nnke",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:16.141823523Z",
+  "started_at": "2026-07-18T17:14:31.433515145Z",
+  "closed_at": "2026-07-18T17:20:16.141823523Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "Implement GET/PUT/DELETE /api/v1/scheduled_statuses management endpoints",
-  "updated_at": "2026-04-23T04:18:42Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-4iru",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:19:02Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-4iru",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }

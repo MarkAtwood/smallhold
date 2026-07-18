@@ -433,7 +433,7 @@ fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
 // ---------------------------------------------------------------------------
 
 #[derive(sqlx::FromRow)]
-struct PostRow {
+pub struct PostRow {
     id: i64,
     account_id: i64,
     in_reply_to_id: Option<i64>,
@@ -449,7 +449,7 @@ struct PostRow {
     edited_at: Option<i64>,
 }
 
-const POST_COLUMNS: &str = "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
+pub const POST_COLUMNS: &str = "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
 
 /// Build the Mastodon Status JSON for a local post.
@@ -522,7 +522,7 @@ fn serialize_status(
 // Request / response types
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, serde::Serialize, Clone)]
 struct CreateStatusRequest {
     status: Option<String>,
     media_ids: Option<Vec<String>>,
@@ -531,6 +531,7 @@ struct CreateStatusRequest {
     spoiler_text: Option<String>,
     visibility: Option<String>,
     language: Option<String>,
+    scheduled_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -583,7 +584,7 @@ fn media_type_from_mime(mime: &str) -> &str {
 
 /// Fetch a post and build a full Status JSON for it.
 #[allow(clippy::type_complexity)]
-async fn load_status(
+pub async fn load_status(
     pool: &SqlitePool,
     post: &PostRow,
     domain: &str,
@@ -925,6 +926,42 @@ async fn create_status(
         .clone()
         .or_else(|| Some(state.config.defaults.default_language.clone()));
 
+    // Check for scheduled_at — if present and >= 5 min in the future, store
+    // as a scheduled post instead of creating immediately.
+    if let Some(ref scheduled_str) = body.scheduled_at {
+        let scheduled_ms = chrono::DateTime::parse_from_rfc3339(scheduled_str)
+            .or_else(|_| chrono::DateTime::parse_from_str(scheduled_str, "%+"))
+            .map(|dt| dt.timestamp_millis())
+            .map_err(|_| AppError::unprocessable("Invalid scheduled_at datetime"))?;
+
+        let now = now_millis();
+        let five_min_ms = 5 * 60 * 1000;
+
+        if scheduled_ms > now + five_min_ms {
+            let sched_id = generate_id();
+            let params_json = serde_json::to_string(&body)
+                .map_err(|e| AppError::internal(e.to_string()))?;
+
+            sqlx::query(
+                "INSERT INTO scheduled_statuses \
+                 (id, account_id, scheduled_at, params_json, created_at) \
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(sched_id)
+            .bind(auth.account_id)
+            .bind(scheduled_ms)
+            .bind(&params_json)
+            .bind(now)
+            .execute(&state.pool)
+            .await?;
+
+            let scheduled_json = scheduled_status_to_json(
+                sched_id, scheduled_ms, &body, &visibility, sensitive, &language,
+            );
+            return Ok((StatusCode::OK, Json(scheduled_json)).into_response());
+        }
+    }
+
     let in_reply_to_id: Option<i64> = body
         .in_reply_to_id
         .as_ref()
@@ -1196,6 +1233,11 @@ async fn create_status(
         channel: format!("user:{}", auth.account_id),
     });
 
+    // Index for full-text search
+    if let Some(ref search) = state.search {
+        let _ = search.index_post(post_id, &text, auth.account_id).await;
+    }
+
     Ok((StatusCode::OK, Json(status)).into_response())
 }
 
@@ -1272,6 +1314,11 @@ async fn delete_status(
         .bind(post_id)
         .execute(&state.pool)
         .await?;
+
+    // Remove from search index
+    if let Some(ref search) = state.search {
+        let _ = search.delete_post(post_id).await;
+    }
 
     publish(StreamEvent {
         event_type: "delete".into(),
@@ -1472,6 +1519,11 @@ async fn edit_status(
         payload: status_json_str,
         channel: format!("user:{}", auth.account_id),
     });
+
+    // Update search index
+    if let Some(ref search) = state.search {
+        let _ = search.index_post(post_id, &text, auth.account_id).await;
+    }
 
     Ok(Json(status))
 }
@@ -2513,6 +2565,190 @@ async fn unpin_status(
     Ok(Json(status))
 }
 // ---------------------------------------------------------------------------
+// Scheduled statuses
+// ---------------------------------------------------------------------------
+
+fn scheduled_status_to_json(
+    id: i64,
+    scheduled_at_ms: i64,
+    body: &CreateStatusRequest,
+    visibility: &str,
+    sensitive: bool,
+    language: &Option<String>,
+) -> Value {
+    json!({
+        "id": id.to_string(),
+        "scheduled_at": millis_to_iso(scheduled_at_ms),
+        "params": {
+            "text": body.status.as_deref().unwrap_or(""),
+            "visibility": visibility,
+            "sensitive": sensitive,
+            "spoiler_text": body.spoiler_text.as_deref().unwrap_or(""),
+            "media_ids": body.media_ids.as_deref().unwrap_or(&[]),
+            "language": language.as_deref().unwrap_or("en"),
+        },
+        "media_attachments": []
+    })
+}
+
+fn scheduled_row_to_json(id: i64, scheduled_at_ms: i64, params_json: &str) -> Value {
+    let params: Value = serde_json::from_str(params_json).unwrap_or(json!({}));
+    let visibility = params.get("visibility")
+        .and_then(|v| v.as_str())
+        .unwrap_or("public");
+    let sensitive = params.get("sensitive")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let spoiler_text = params.get("spoiler_text")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let text = params.get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let media_ids = params.get("media_ids")
+        .cloned()
+        .unwrap_or(json!([]));
+    let language = params.get("language")
+        .and_then(|v| v.as_str())
+        .unwrap_or("en");
+
+    json!({
+        "id": id.to_string(),
+        "scheduled_at": millis_to_iso(scheduled_at_ms),
+        "params": {
+            "text": text,
+            "visibility": visibility,
+            "sensitive": sensitive,
+            "spoiler_text": spoiler_text,
+            "media_ids": media_ids,
+            "language": language,
+        },
+        "media_attachments": []
+    })
+}
+
+/// GET /api/v1/scheduled_statuses
+async fn list_scheduled_statuses(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+) -> Result<Json<Value>, AppError> {
+    let rows: Vec<(i64, i64, String)> = sqlx::query_as(
+        "SELECT id, scheduled_at, params_json FROM scheduled_statuses \
+         WHERE account_id = ? ORDER BY scheduled_at",
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|(id, scheduled_at, params_json)| {
+            scheduled_row_to_json(*id, *scheduled_at, params_json)
+        })
+        .collect();
+
+    Ok(Json(json!(items)))
+}
+
+/// GET /api/v1/scheduled_statuses/:id
+async fn get_scheduled_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let sched_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Scheduled status not found"))?;
+
+    let row: Option<(i64, i64, String)> = sqlx::query_as(
+        "SELECT id, scheduled_at, params_json FROM scheduled_statuses \
+         WHERE id = ? AND account_id = ?",
+    )
+    .bind(sched_id)
+    .bind(auth.account_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (id, scheduled_at, params_json) =
+        row.ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
+
+    Ok(Json(scheduled_row_to_json(id, scheduled_at, &params_json)))
+}
+
+#[derive(Deserialize)]
+struct UpdateScheduledStatusRequest {
+    scheduled_at: String,
+}
+
+/// PUT /api/v1/scheduled_statuses/:id
+async fn update_scheduled_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateScheduledStatusRequest>,
+) -> Result<Json<Value>, AppError> {
+    let sched_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Scheduled status not found"))?;
+
+    let scheduled_ms = chrono::DateTime::parse_from_rfc3339(&body.scheduled_at)
+        .or_else(|_| chrono::DateTime::parse_from_str(&body.scheduled_at, "%+"))
+        .map(|dt| dt.timestamp_millis())
+        .map_err(|_| AppError::unprocessable("Invalid scheduled_at datetime"))?;
+
+    let now = now_millis();
+    let five_min_ms = 5 * 60 * 1000;
+    if scheduled_ms <= now + five_min_ms {
+        return Err(AppError::unprocessable(
+            "scheduled_at must be at least 5 minutes in the future",
+        ));
+    }
+
+    let row: Option<(i64, String)> = sqlx::query_as(
+        "SELECT id, params_json FROM scheduled_statuses \
+         WHERE id = ? AND account_id = ?",
+    )
+    .bind(sched_id)
+    .bind(auth.account_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (sid, params_json) =
+        row.ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
+
+    sqlx::query("UPDATE scheduled_statuses SET scheduled_at = ? WHERE id = ?")
+        .bind(scheduled_ms)
+        .bind(sched_id)
+        .execute(&state.pool)
+        .await?;
+
+    Ok(Json(scheduled_row_to_json(sid, scheduled_ms, &params_json)))
+}
+
+/// DELETE /api/v1/scheduled_statuses/:id
+async fn delete_scheduled_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let sched_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Scheduled status not found"))?;
+
+    let result = sqlx::query("DELETE FROM scheduled_statuses WHERE id = ? AND account_id = ?")
+        .bind(sched_id)
+        .bind(auth.account_id)
+        .execute(&state.pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("Scheduled status not found"));
+    }
+
+    Ok(StatusCode::OK)
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -2534,6 +2770,17 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/statuses/{id}/unbookmark", post(unbookmark))
         .route("/api/v1/statuses/{id}/pin", post(pin_status))
         .route("/api/v1/statuses/{id}/unpin", post(unpin_status))
+        // Scheduled statuses
+        .route(
+            "/api/v1/scheduled_statuses",
+            get(list_scheduled_statuses),
+        )
+        .route(
+            "/api/v1/scheduled_statuses/{id}",
+            get(get_scheduled_status)
+                .put(update_scheduled_status)
+                .delete(delete_scheduled_status),
+        )
         // Timelines
         .route("/api/v1/timelines/home", get(timeline_home))
         .route("/api/v1/timelines/public", get(timeline_public))

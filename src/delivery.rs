@@ -4,9 +4,11 @@ use std::time::Duration;
 
 use sqlx::SqlitePool;
 
+use crate::api::millis_to_iso;
 use crate::config::Config;
 use crate::federation::FederationClient;
 use crate::id::generate_id;
+use crate::posting::render_content;
 
 #[derive(sqlx::FromRow)]
 struct DeliveryRow {
@@ -202,6 +204,11 @@ async fn process_batch(
         }
     }
 
+    // Process due scheduled posts
+    if let Err(e) = process_scheduled_posts(pool, config).await {
+        tracing::error!("scheduled posts error: {e}");
+    }
+
     Ok(())
 }
 
@@ -318,5 +325,208 @@ async fn schedule_retry(
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+// -- Scheduled posts --
+
+/// Check for and create any scheduled posts that are now due.
+async fn process_scheduled_posts(
+    pool: &SqlitePool,
+    config: &Config,
+) -> anyhow::Result<()> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let domain = &config.server.domain;
+
+    let due_posts: Vec<(i64, i64, String)> = sqlx::query_as(
+        "SELECT id, account_id, params_json FROM scheduled_statuses \
+         WHERE scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
+    )
+    .bind(now_ms)
+    .fetch_all(pool)
+    .await?;
+
+    for (sched_id, account_id, params_json) in due_posts {
+        if let Err(e) = create_scheduled_post(pool, domain, account_id, &params_json, now_ms).await
+        {
+            tracing::error!("Failed to create scheduled post {sched_id}: {e}");
+            // Delete the row anyway to avoid infinite retry of a broken scheduled post
+        }
+
+        sqlx::query("DELETE FROM scheduled_statuses WHERE id = ?")
+            .bind(sched_id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+/// Create a post from stored scheduled params. Simplified version of the
+/// create_status handler — inserts the post row, renders content, inserts
+/// tags/mentions, and enqueues delivery to followers.
+async fn create_scheduled_post(
+    pool: &SqlitePool,
+    domain: &str,
+    account_id: i64,
+    params_json: &str,
+    now_ms: i64,
+) -> anyhow::Result<()> {
+    let params: serde_json::Value = serde_json::from_str(params_json)?;
+
+    let text = params.get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let visibility = params.get("visibility")
+        .and_then(|v| v.as_str())
+        .unwrap_or("public");
+    let sensitive = params.get("sensitive")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let spoiler_text = params.get("spoiler_text")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let language = params.get("language")
+        .and_then(|v| v.as_str());
+
+    let account: (String,) = sqlx::query_as("SELECT username FROM accounts WHERE id = ?")
+        .bind(account_id)
+        .fetch_one(pool)
+        .await?;
+    let username = &account.0;
+
+    let rendered = render_content(text, domain);
+    let post_id = generate_id();
+    let ap_id = format!("https://{domain}/users/{username}/statuses/{post_id}");
+
+    sqlx::query(
+        "INSERT INTO posts (id, account_id, ap_id, content, content_html, \
+         spoiler_text, visibility, sensitive, language, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(post_id)
+    .bind(account_id)
+    .bind(&ap_id)
+    .bind(text)
+    .bind(&rendered.html)
+    .bind(spoiler_text)
+    .bind(visibility)
+    .bind(sensitive)
+    .bind(language)
+    .bind(now_ms)
+    .execute(pool)
+    .await?;
+
+    // Insert tags
+    for tag in &rendered.tags {
+        sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
+            .bind(post_id)
+            .bind(tag)
+            .execute(pool)
+            .await?;
+    }
+
+    // Insert mentions
+    for m in &rendered.mentions {
+        match &m.domain {
+            None => {
+                let local: Option<(i64,)> =
+                    sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                        .bind(&m.username)
+                        .fetch_optional(pool)
+                        .await?;
+                if let Some((aid,)) = local {
+                    sqlx::query(
+                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_account_id) \
+                         VALUES (?, ?)",
+                    )
+                    .bind(post_id)
+                    .bind(aid)
+                    .execute(pool)
+                    .await?;
+                }
+            }
+            Some(mention_domain) => {
+                let remote: Option<(i64,)> = sqlx::query_as(
+                    "SELECT id FROM remote_accounts WHERE username = ? AND domain = ?",
+                )
+                .bind(&m.username)
+                .bind(mention_domain)
+                .fetch_optional(pool)
+                .await?;
+                if let Some((rid,)) = remote {
+                    sqlx::query(
+                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) \
+                         VALUES (?, ?)",
+                    )
+                    .bind(post_id)
+                    .bind(rid)
+                    .execute(pool)
+                    .await?;
+                }
+            }
+        }
+    }
+
+    // Update last_status_at
+    sqlx::query("UPDATE accounts SET last_status_at = ? WHERE id = ?")
+        .bind(now_ms)
+        .bind(account_id)
+        .execute(pool)
+        .await?;
+
+    // Enqueue federation Create{Note}
+    let actor = format!("https://{domain}/users/{username}");
+    let note_id = format!("{actor}/statuses/{post_id}");
+    let followers_url = format!("{actor}/followers");
+    let published = millis_to_iso(now_ms);
+    let public = "https://www.w3.org/ns/activitystreams#Public";
+
+    let (to, cc) = match visibility {
+        "public" => (
+            vec![serde_json::json!(public)],
+            vec![serde_json::json!(&followers_url)],
+        ),
+        "unlisted" => (
+            vec![serde_json::json!(&followers_url)],
+            vec![serde_json::json!(public)],
+        ),
+        "private" => (
+            vec![serde_json::json!(&followers_url)],
+            vec![],
+        ),
+        _ => (
+            vec![serde_json::json!(public)],
+            vec![serde_json::json!(&followers_url)],
+        ),
+    };
+
+    let activity = serde_json::json!({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": format!("{note_id}/activity"),
+        "type": "Create",
+        "actor": &actor,
+        "published": &published,
+        "to": &to,
+        "cc": &cc,
+        "object": {
+            "id": &note_id,
+            "type": "Note",
+            "attributedTo": &actor,
+            "content": &rendered.html,
+            "url": format!("https://{domain}/@{username}/{post_id}"),
+            "to": &to,
+            "cc": &cc,
+            "published": &published,
+            "sensitive": sensitive,
+            "summary": if spoiler_text.is_empty() { None } else { Some(spoiler_text) },
+        }
+    });
+
+    if let Err(e) = enqueue_to_followers(pool, account_id, &activity).await {
+        tracing::error!("Failed to enqueue scheduled Create activity: {e}");
+    }
+
+    tracing::info!("Created scheduled post {post_id} for @{username}");
     Ok(())
 }

@@ -1,28 +1,27 @@
 {
-  "compaction_level": 0,
+  "id": "smallhold-mic6",
+  "title": "CLI reindex command: smallhold search reindex",
+  "description": "## What\nImplement the `smallhold search reindex` CLI subcommand that drops and rebuilds the tantivy index from all posts in the DB, with progress output and safety guards.\n\n## Why\nAfter schema migrations, index corruption, or index directory loss, operators need a reliable offline tool to restore search without restarting or patching the server.\n\n## Agent team pattern\n- Spawn a Research subagent to: read tantivy docs for dropping an index directory and recreating it (schema must match); understand how to acquire an exclusive lock on the index directory before deletion (tantivy's Directory::lock or simply checking for active writers via a lockfile); read clap v4 derive docs for adding a subcommand with an optional --yes flag for non-interactive confirmation.\n- Spawn an Implementation subagent to: add `search reindex` as a clap subcommand under the admin CLI; the command opens SQLite directly (no running server required); checks that search_index_path is writable (exit nonzero with error if not); acquires tantivy's DirectoryLock on the index dir (exit with clear error if another process holds it); deletes all files in the index directory; creates a fresh index with the same schema; iterates all posts from DB in batches of 500, printing progress (\"Indexed N/Total posts...\"); calls IndexWriter::commit after each batch; prints \"Reindex complete. N posts indexed.\" on success; exits nonzero on any error.\n- Spawn a Test subagent to: write an integration test that indexes 5 posts, manually corrupts the index directory (delete one segment file), runs reindex, then searches for a word from one of the 5 posts and asserts the result is found — confirming reindex restored search correctly.\n\n## Test discipline\n- Independent oracle: after reindex, search result is verified against the known post id from the DB INSERT return value — not re-derived from index internals.\n- Test approach: the test is self-contained: seed DB, corrupt index, invoke reindex as a library function (not subprocess), search, assert result.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths (CLI exits are OK with process::exit, but prefer returning Result and printing error)\n- Acquire exclusive lock on index directory before deleting — prevents concurrent server index access during rebuild\n- Exit nonzero and print a clear error message if index directory is not writable\n- Reindex runs as a CLI command (talks to SQLite directly) — the server does not need to be running\n- Print progress to stdout so operators can see it is not hung on large datasets\n- Batch size of 500 with per-batch commit avoids holding all posts in memory at once\n- On any batch error, log the error and continue (best-effort reindex) or abort and print instructions — document which behavior is chosen",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
   "created_at": "2026-04-23T04:21:16Z",
   "created_by": "Mark Atwood",
-  "description": "## What\nImplement the `smallhold search reindex` CLI subcommand that drops and rebuilds the tantivy index from all posts in the DB, with progress output and safety guards.\n\n## Why\nAfter schema migrations, index corruption, or index directory loss, operators need a reliable offline tool to restore search without restarting or patching the server.\n\n## Agent team pattern\n- Spawn a Research subagent to: read tantivy docs for dropping an index directory and recreating it (schema must match); understand how to acquire an exclusive lock on the index directory before deletion (tantivy's Directory::lock or simply checking for active writers via a lockfile); read clap v4 derive docs for adding a subcommand with an optional --yes flag for non-interactive confirmation.\n- Spawn an Implementation subagent to: add `search reindex` as a clap subcommand under the admin CLI; the command opens SQLite directly (no running server required); checks that search_index_path is writable (exit nonzero with error if not); acquires tantivy's DirectoryLock on the index dir (exit with clear error if another process holds it); deletes all files in the index directory; creates a fresh index with the same schema; iterates all posts from DB in batches of 500, printing progress (\"Indexed N/Total posts...\"); calls IndexWriter::commit after each batch; prints \"Reindex complete. N posts indexed.\" on success; exits nonzero on any error.\n- Spawn a Test subagent to: write an integration test that indexes 5 posts, manually corrupts the index directory (delete one segment file), runs reindex, then searches for a word from one of the 5 posts and asserts the result is found — confirming reindex restored search correctly.\n\n## Test discipline\n- Independent oracle: after reindex, search result is verified against the known post id from the DB INSERT return value — not re-derived from index internals.\n- Test approach: the test is self-contained: seed DB, corrupt index, invoke reindex as a library function (not subprocess), search, assert result.\n\n## Defensive programming checklist\n- No `.unwrap()` in handler paths (CLI exits are OK with process::exit, but prefer returning Result and printing error)\n- Acquire exclusive lock on index directory before deleting — prevents concurrent server index access during rebuild\n- Exit nonzero and print a clear error message if index directory is not writable\n- Reindex runs as a CLI command (talks to SQLite directly) — the server does not need to be running\n- Print progress to stdout so operators can see it is not hung on large datasets\n- Batch size of 500 with per-batch commit avoids holding all posts in memory at once\n- On any batch error, log the error and continue (best-effort reindex) or abort and print instructions — document which behavior is chosen",
-  "ephemeral": false,
-  "id": "smallhold-mic6",
-  "is_template": false,
-  "issue_type": "task",
+  "updated_at": "2026-07-18T17:20:16.264184899Z",
+  "started_at": "2026-07-18T17:14:31.691678696Z",
+  "closed_at": "2026-07-18T17:20:16.264184899Z",
+  "close_reason": "Closed",
   "metadata": {},
-  "no_history": false,
-  "owner": "mark@wolfssl.com",
-  "pinned": false,
-  "priority": 2,
-  "status": "open",
-  "title": "CLI reindex command: smallhold search reindex",
-  "updated_at": "2026-04-23T04:21:16Z",
   "dependencies": [
     {
+      "issue_id": "",
+      "depends_on_id": "smallhold-i28n",
+      "type": "relates-to",
       "created_at": "2026-04-22T21:21:21Z",
       "created_by": "Mark Atwood",
-      "depends_on_id": "smallhold-i28n",
-      "metadata": "{}",
-      "type": "relates-to"
+      "metadata": "{}"
     }
-  ],
-  "timeout": 0
+  ]
 }
