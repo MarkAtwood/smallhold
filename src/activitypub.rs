@@ -201,21 +201,79 @@ async fn profile_page(
     Ok(Html(html))
 }
 
-/// GET /users/{username}/outbox — empty OrderedCollection stub.
+/// Row from the posts table needed for outbox items.
+#[derive(sqlx::FromRow)]
+struct PostRow {
+    id: i64,
+    content_html: String,
+    created_at: i64,
+}
+
+/// GET /users/{username}/outbox — OrderedCollection of public Create{Note} activities.
 async fn outbox(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    // Verify the account exists before returning a collection.
-    let _ = fetch_account(&state.pool, &username).await?;
+    let account_row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    let (account_id,) =
+        account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+
     let domain = &state.config.server.domain;
+    let actor_uri = format!("https://{domain}/users/{username}");
+
+    let (total,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM posts WHERE account_id = ? AND visibility = 'public'",
+    )
+    .bind(account_id)
+    .fetch_one(&state.pool)
+    .await?;
+
+    let posts: Vec<PostRow> = sqlx::query_as(
+        "SELECT id, content_html, created_at \
+         FROM posts \
+         WHERE account_id = ? AND visibility = 'public' \
+         ORDER BY created_at DESC \
+         LIMIT 20",
+    )
+    .bind(account_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let items: Vec<Value> = posts
+        .into_iter()
+        .map(|p| {
+            let published = crate::api::millis_to_iso(p.created_at);
+            let status_uri = format!("{actor_uri}/statuses/{}", p.id);
+            json!({
+                "id": format!("{status_uri}/activity"),
+                "type": "Create",
+                "actor": &actor_uri,
+                "published": &published,
+                "object": {
+                    "id": &status_uri,
+                    "type": "Note",
+                    "content": p.content_html,
+                    "attributedTo": &actor_uri,
+                    "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                    "cc": [format!("{actor_uri}/followers")],
+                    "published": &published,
+                    "url": format!("https://{domain}/@{username}/{}", p.id)
+                }
+            })
+        })
+        .collect();
 
     Ok(ap_response(json!({
         "@context": "https://www.w3.org/ns/activitystreams",
         "id": format!("https://{domain}/users/{username}/outbox"),
         "type": "OrderedCollection",
-        "totalItems": 0,
-        "orderedItems": []
+        "totalItems": total,
+        "orderedItems": items
     })))
 }
 

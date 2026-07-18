@@ -14,6 +14,7 @@ use crate::error::AppError;
 use crate::federation::{upsert_remote_account, FederationClient, RemoteActorData};
 use crate::id::generate_id;
 use crate::server::AppState;
+use crate::streaming::{publish, StreamEvent};
 
 // Length caps for inbound string fields.
 const MAX_CONTENT_LEN: usize = 100_000;
@@ -775,6 +776,15 @@ async fn handle_create(
     .execute(&state.pool)
     .await?;
 
+    // Publish to public streaming timeline
+    if visibility == "public" || visibility == "unlisted" {
+        publish(StreamEvent {
+            event_type: "update".into(),
+            payload: post_id.to_string(),
+            channel: "public".into(),
+        });
+    }
+
     // Process mentions in the tag array.
     let domain = &state.config.server.domain;
     if let Some(tags) = object["tag"].as_array() {
@@ -812,6 +822,12 @@ async fn handle_create(
                 .bind(now)
                 .execute(&state.pool)
                 .await?;
+
+                publish(StreamEvent {
+                    event_type: "notification".into(),
+                    payload: notif_id.to_string(),
+                    channel: format!("user:{}", local_account_id),
+                });
             }
         }
     }
@@ -857,6 +873,12 @@ async fn handle_create(
                     .bind(now)
                     .execute(&state.pool)
                     .await?;
+
+                    publish(StreamEvent {
+                        event_type: "notification".into(),
+                        payload: notif_id.to_string(),
+                        channel: format!("user:{}", local_account_id),
+                    });
                 }
             }
         }

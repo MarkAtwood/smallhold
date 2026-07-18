@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-segx",
+  "title": "Outbox should return actual posts for public access",
+  "description": "The outbox OrderedCollection stub returns empty. It should return public posts for authenticated fetches (needed for federation discovery).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T05:57:28.251298241Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T06:00:39.88343949Z",
+  "started_at": "2026-07-18T05:57:36.468402684Z",
+  "closed_at": "2026-07-18T06:00:39.88343949Z",
+  "close_reason": "Closed"
+}

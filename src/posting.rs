@@ -4,6 +4,7 @@ use crate::delivery::enqueue_to_followers;
 use crate::error::AppError;
 use crate::id::generate_id;
 use crate::server::AppState;
+use crate::streaming::{publish, StreamEvent};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -814,6 +815,83 @@ async fn create_status(
         .execute(&state.pool)
         .await?;
 
+    // Enqueue outbound ActivityPub Create{Note} for federation
+    {
+        let actor = format!("https://{domain}/users/{}", auth.username);
+        let note_id = format!("{actor}/statuses/{post_id}");
+        let followers_url = format!("{actor}/followers");
+        let published = millis_to_iso(now);
+        let public = "https://www.w3.org/ns/activitystreams#Public";
+
+        let (to, cc) = match visibility.as_str() {
+            "public" => (vec![json!(public)], vec![json!(&followers_url)]),
+            "unlisted" => (vec![json!(&followers_url)], vec![json!(public)]),
+            "private" => (vec![json!(&followers_url)], vec![]),
+            "direct" => {
+                let mut to_addrs: Vec<Value> = Vec::new();
+                for m in &rendered.mentions {
+                    if m.domain.is_none() {
+                        to_addrs.push(json!(format!(
+                            "https://{domain}/users/{}", m.username
+                        )));
+                    }
+                }
+                (to_addrs, vec![])
+            }
+            _ => (vec![json!(public)], vec![json!(&followers_url)]),
+        };
+
+        // Build mention tags for the Note (local mentions only for now)
+        let mut mention_tags: Vec<Value> = Vec::new();
+        for m in &rendered.mentions {
+            if m.domain.is_none() {
+                mention_tags.push(json!({
+                    "type": "Mention",
+                    "href": format!("https://{domain}/users/{}", m.username),
+                    "name": format!("@{}@{domain}", m.username)
+                }));
+            }
+        }
+
+        let in_reply_to_ap = in_reply_to_id.map(|rid| {
+            json!(format!(
+                "https://{domain}/users/{}/statuses/{rid}",
+                auth.username
+            ))
+        });
+
+        let activity = json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": format!("{note_id}/activity"),
+            "type": "Create",
+            "actor": &actor,
+            "published": &published,
+            "to": &to,
+            "cc": &cc,
+            "object": {
+                "id": &note_id,
+                "type": "Note",
+                "attributedTo": &actor,
+                "content": &rendered.html,
+                "url": format!("https://{domain}/@{}/{post_id}", auth.username),
+                "to": &to,
+                "cc": &cc,
+                "published": &published,
+                "sensitive": sensitive,
+                "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) },
+                "inReplyTo": in_reply_to_ap,
+                "tag": &mention_tags,
+                "attachment": []
+            }
+        });
+
+        if let Err(e) =
+            enqueue_to_followers(&state.pool, auth.account_id, &activity).await
+        {
+            tracing::error!("Failed to enqueue Create activity: {e}");
+        }
+    }
+
     // Build response
     let post = sqlx::query_as::<_, PostRow>(&format!(
         "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
@@ -824,6 +902,22 @@ async fn create_status(
 
     let status =
         load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+
+    // Publish streaming events
+    let status_json_str = serde_json::to_string(&status).unwrap_or_default();
+    if visibility == "public" || visibility == "unlisted" {
+        publish(StreamEvent {
+            event_type: "update".into(),
+            payload: status_json_str.clone(),
+            channel: "public".into(),
+        });
+    }
+    publish(StreamEvent {
+        event_type: "update".into(),
+        payload: status_json_str,
+        channel: format!("user:{}", auth.account_id),
+    });
+
     Ok((StatusCode::OK, Json(status)).into_response())
 }
 
@@ -903,6 +997,12 @@ async fn delete_status(
         .bind(post_id)
         .execute(&state.pool)
         .await?;
+
+    publish(StreamEvent {
+        event_type: "delete".into(),
+        payload: id.clone(),
+        channel: "public".into(),
+    });
 
     Ok((StatusCode::OK, Json(status)).into_response())
 }
