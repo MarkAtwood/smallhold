@@ -168,9 +168,12 @@ fn parse_hashtags(text: &str) -> Vec<String> {
             }
             if end > start {
                 let tag: String = chars[start..end].iter().collect();
-                let lower = tag.to_lowercase();
-                if seen.insert(lower) {
-                    tags.push(tag);
+                // Require at least one letter — pure numbers like #5 are not hashtags
+                if tag.chars().any(|c| c.is_alphabetic()) {
+                    let lower = tag.to_lowercase();
+                    if seen.insert(lower) {
+                        tags.push(tag);
+                    }
                 }
             }
             i = end;
@@ -1711,6 +1714,24 @@ mod tests {
     fn parse_hashtags_ignores_after_alphanum() {
         let tags = parse_hashtags("test");
         assert_eq!(tags.len(), 0);
+    }
+
+    #[test]
+    fn parse_hashtags_rejects_pure_numbers() {
+        assert!(parse_hashtags("issue #5").is_empty());
+        assert!(parse_hashtags("#123 items").is_empty());
+        assert!(parse_hashtags("#0").is_empty());
+    }
+
+    #[test]
+    fn parse_hashtags_accepts_mixed_alphanumeric() {
+        let tags = parse_hashtags("#test123");
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0], "test123");
+
+        let tags = parse_hashtags("#123test");
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0], "123test");
     }
 
     #[test]

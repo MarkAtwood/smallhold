@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-1ill",
+  "title": "Fix hashtag regex: numbers-only tags should not be parsed",
+  "description": "Posting 'test #5' creates a tag '5' which is wrong. Hashtags need at least one letter.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T05:47:36.355502443Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:51:02.447757768Z",
+  "started_at": "2026-07-18T05:47:43.178108421Z",
+  "closed_at": "2026-07-18T05:51:02.447757768Z",
+  "close_reason": "Closed"
+}

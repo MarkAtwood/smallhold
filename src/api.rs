@@ -99,6 +99,16 @@ pub struct StatusRow {
 }
 
 pub fn account_to_json(row: &AccountRow, domain: &str) -> Value {
+    account_to_json_with_counts(row, domain, 0, 0, 0)
+}
+
+pub fn account_to_json_with_counts(
+    row: &AccountRow,
+    domain: &str,
+    followers_count: i64,
+    following_count: i64,
+    statuses_count: i64,
+) -> Value {
     let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
 
     json!({
@@ -117,27 +127,41 @@ pub fn account_to_json(row: &AccountRow, domain: &str) -> Value {
         "avatar_static": format!("https://{domain}/avatars/original/missing.png"),
         "header": format!("https://{domain}/headers/original/missing.png"),
         "header_static": format!("https://{domain}/headers/original/missing.png"),
-        "followers_count": 0,
-        "following_count": 0,
-        "statuses_count": 0,
+        "followers_count": followers_count,
+        "following_count": following_count,
+        "statuses_count": statuses_count,
         "last_status_at": row.last_status_at.map(millis_to_date),
         "emojis": [],
         "fields": fields,
     })
 }
 
-fn account_to_json_with_source(row: &AccountRow, domain: &str) -> Value {
-    let mut v = account_to_json(row, domain);
-    let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
-    v["source"] = json!({
-        "privacy": "public",
-        "sensitive": false,
-        "language": "en",
-        "note": row.bio,
-        "fields": fields,
-        "follow_requests_count": 0,
-    });
-    v
+pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
+    let (followers,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM followers WHERE local_account_id = ?",
+    )
+    .bind(account_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or((0,));
+
+    let (following,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM follows WHERE follower_id = ?",
+    )
+    .bind(account_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or((0,));
+
+    let (statuses,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM posts WHERE account_id = ?",
+    )
+    .bind(account_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or((0,));
+
+    (followers, following, statuses)
 }
 
 pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
@@ -724,7 +748,19 @@ async fn verify_credentials(
 ) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
     let row = fetch_account_row(&state.pool, auth.account_id).await?;
-    Ok(Json(account_to_json_with_source(&row, domain)))
+    let (followers, following, statuses) =
+        fetch_account_counts(&state.pool, auth.account_id).await;
+    let mut v = account_to_json_with_counts(&row, domain, followers, following, statuses);
+    let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
+    v["source"] = json!({
+        "privacy": "public",
+        "sensitive": false,
+        "language": "en",
+        "note": row.bio,
+        "fields": fields,
+        "follow_requests_count": 0
+    });
+    Ok(Json(v))
 }
 
 /// GET /api/v1/accounts/{id}
@@ -737,7 +773,10 @@ async fn get_account(
         .map_err(|_| AppError::not_found("Account not found"))?;
     let domain = &state.config.server.domain;
     let row = fetch_account_row(&state.pool, id).await?;
-    Ok(Json(account_to_json(&row, domain)))
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, id).await;
+    Ok(Json(account_to_json_with_counts(
+        &row, domain, followers, following, statuses,
+    )))
 }
 
 /// GET /api/v1/accounts/lookup?acct=username
@@ -758,7 +797,10 @@ async fn account_lookup(
 
     let domain = &state.config.server.domain;
     let row = fetch_account_row_by_username(&state.pool, username).await?;
-    Ok(Json(account_to_json(&row, domain)))
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, row.id).await;
+    Ok(Json(account_to_json_with_counts(
+        &row, domain, followers, following, statuses,
+    )))
 }
 
 /// GET /api/v1/accounts/{id}/statuses
@@ -956,6 +998,19 @@ async fn post_markers() -> Json<Value> {
     Json(json!({}))
 }
 
+async fn get_tag(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Json<Value> {
+    let domain = &state.config.server.domain;
+    Json(json!({
+        "name": id,
+        "url": format!("https://{domain}/tags/{id}"),
+        "history": [],
+        "following": false
+    }))
+}
+
 /// GET /api/v1/apps/verify_credentials
 async fn verify_app_credentials(
     State(state): State<Arc<AppState>>,
@@ -1026,6 +1081,16 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/domain_blocks", get(empty_array_authed))
         .route("/api/v1/bookmarks", get(empty_array))
         .route("/api/v1/favourites", get(empty_array))
+        .route("/api/v1/conversations", get(empty_array))
+        .route("/api/v1/featured_tags", get(empty_array))
+        .route("/api/v1/endorsements", get(empty_array))
+        .route("/api/v1/scheduled_statuses", get(empty_array))
+        .route("/api/v1/tags/{id}", get(get_tag))
+        .route("/api/v1/tags/{id}/follow", post(get_tag))
+        .route("/api/v1/tags/{id}/unfollow", post(get_tag))
+        .route("/api/v1/instance/rules", get(empty_array))
+        .route("/api/v1/instance/peers", get(empty_array))
+        .route("/api/v1/instance/activity", get(empty_array))
         .route("/api/v1/preferences", get(preferences))
         .route(
             "/api/v1/markers",

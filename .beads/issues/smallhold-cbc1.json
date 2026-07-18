@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-cbc1",
+  "title": "Fix account statuses_count: query actual count from posts table",
+  "description": "statuses_count always returns 0 instead of actual post count",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T05:51:48.975088944Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T05:56:23.812793314Z",
+  "started_at": "2026-07-18T05:51:49.086460136Z",
+  "closed_at": "2026-07-18T05:56:23.812793314Z",
+  "close_reason": "Closed"
+}
