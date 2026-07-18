@@ -2,11 +2,13 @@
   "id": "smallhold-cmzx",
   "title": "Phanpy web client verified working",
   "description": "Phanpy successfully connects, authenticates via OAuth, and displays timeline with 6 posts. Fixed: CORS headers, app registration response format (redirect_uris array, scopes array), form-encoded POST /api/v1/apps.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T17:59:22.974188894Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T17:59:22.974188894Z"
+  "updated_at": "2026-07-18T18:05:04.681199693Z",
+  "closed_at": "2026-07-18T18:05:04.681199693Z",
+  "close_reason": "Closed"
 }
