@@ -534,11 +534,25 @@ struct CreateStatusRequest {
     scheduled_at: Option<String>,
 }
 
+fn deserialize_optional_number<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<i64>, D::Error> {
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        None => Ok(None),
+        Some(s) => s
+            .parse::<i64>()
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Deserialize)]
 struct PaginationParams {
     max_id: Option<String>,
     since_id: Option<String>,
     min_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     limit: Option<i64>,
 }
 
