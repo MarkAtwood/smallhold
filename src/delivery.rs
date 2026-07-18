@@ -107,6 +107,24 @@ pub async fn enqueue_delivery(
     Ok(())
 }
 
+/// Fan-out an activity to every subscribed relay's inbox.
+pub async fn enqueue_to_relays(
+    pool: &SqlitePool,
+    sender_account_id: i64,
+    activity: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let inboxes: Vec<(String,)> =
+        sqlx::query_as("SELECT inbox_url FROM relays WHERE state = 'accepted'")
+            .fetch_all(pool)
+            .await?;
+
+    for (inbox,) in inboxes {
+        enqueue_delivery(pool, &inbox, sender_account_id, activity).await?;
+    }
+
+    Ok(())
+}
+
 /// Fan-out an activity to every follower's inbox (deduped by shared inbox).
 pub async fn enqueue_to_followers(
     pool: &SqlitePool,

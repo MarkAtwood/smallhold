@@ -141,10 +141,15 @@ pub async fn create_subscription(
     .await?;
 
     let vapid_pub = get_vapid_public_key(pool).await;
-    Ok(subscription_to_json(id, endpoint, &vapid_pub, alerts, policy))
+    Ok(subscription_to_json(
+        id, endpoint, &vapid_pub, alerts, policy,
+    ))
 }
 
-pub async fn get_subscription(pool: &SqlitePool, account_id: i64) -> Result<Option<Value>, AppError> {
+pub async fn get_subscription(
+    pool: &SqlitePool,
+    account_id: i64,
+) -> Result<Option<Value>, AppError> {
     let row: Option<SubscriptionRow> = sqlx::query_as(
         "SELECT id, account_id, endpoint, key_p256dh, key_auth, \
          alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, \
@@ -164,7 +169,13 @@ pub async fn get_subscription(pool: &SqlitePool, account_id: i64) -> Result<Opti
                 follow: r.alerts_follow,
                 poll: r.alerts_poll,
             };
-            Ok(Some(subscription_to_json(r.id, &r.endpoint, &vapid_pub, &alerts, &r.policy)))
+            Ok(Some(subscription_to_json(
+                r.id,
+                &r.endpoint,
+                &vapid_pub,
+                &alerts,
+                &r.policy,
+            )))
         }
         None => Ok(None),
     }
@@ -204,7 +215,13 @@ pub async fn delete_subscription(pool: &SqlitePool, account_id: i64) -> Result<(
     Ok(())
 }
 
-fn subscription_to_json(id: i64, endpoint: &str, server_key: &str, alerts: &AlertsConfig, policy: &str) -> Value {
+fn subscription_to_json(
+    id: i64,
+    endpoint: &str,
+    server_key: &str,
+    alerts: &AlertsConfig,
+    policy: &str,
+) -> Value {
     json!({
         "id": id.to_string(),
         "endpoint": endpoint,
@@ -291,7 +308,11 @@ async fn send_push_inner(
 
     // Build VAPID JWT
     let endpoint_url: url::Url = sub.endpoint.parse()?;
-    let audience = format!("{}://{}", endpoint_url.scheme(), endpoint_url.host_str().unwrap_or(""));
+    let audience = format!(
+        "{}://{}",
+        endpoint_url.scheme(),
+        endpoint_url.host_str().unwrap_or("")
+    );
     let jwt = build_vapid_jwt(&vapid_pem, &audience, domain)?;
 
     // Send HTTP POST
@@ -332,7 +353,11 @@ async fn send_push_inner(
 // RFC 8291 payload encryption (aes128gcm content encoding)
 // ---------------------------------------------------------------------------
 
-fn encrypt_payload(client_pub_b64: &str, client_auth_b64: &str, plaintext: &[u8]) -> anyhow::Result<Vec<u8>> {
+fn encrypt_payload(
+    client_pub_b64: &str,
+    client_auth_b64: &str,
+    plaintext: &[u8],
+) -> anyhow::Result<Vec<u8>> {
     // Decode client public key (base64url)
     let client_pub_bytes = URL_SAFE_NO_PAD
         .decode(client_pub_b64)
@@ -394,8 +419,8 @@ fn encrypt_payload(client_pub_b64: &str, client_auth_b64: &str, plaintext: &[u8]
     padded.push(0x02); // delimiter for final record
 
     // Encrypt with AES-128-GCM
-    let cipher = Aes128Gcm::new_from_slice(&cek)
-        .map_err(|_| anyhow::anyhow!("AES key init failed"))?;
+    let cipher =
+        Aes128Gcm::new_from_slice(&cek).map_err(|_| anyhow::anyhow!("AES key init failed"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, padded.as_ref())

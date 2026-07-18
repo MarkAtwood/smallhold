@@ -70,6 +70,10 @@ pub enum Commands {
 
     /// Register with fediverse census services
     Census,
+
+    /// Manage relay subscriptions
+    #[command(subcommand)]
+    Relay(RelayCommands),
 }
 
 #[derive(Subcommand)]
@@ -179,6 +183,22 @@ pub enum ImportCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum RelayCommands {
+    /// Subscribe to a relay
+    Add {
+        /// Relay actor URL (e.g. https://relay.fedi.buzz/actor)
+        url: String,
+    },
+    /// Unsubscribe from a relay
+    Remove {
+        /// Relay actor URL
+        url: String,
+    },
+    /// List subscribed relays
+    List,
+}
+
 impl Cli {
     pub async fn run(self) -> Result<()> {
         match self.command {
@@ -200,6 +220,7 @@ impl Cli {
             Commands::Search(cmd) => cmd_search(cmd, &self.config).await,
             Commands::Import(cmd) => cmd_import(cmd, &self.config).await,
             Commands::Census => cmd_census(&self.config).await,
+            Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
         }
     }
 }
@@ -217,21 +238,35 @@ async fn cmd_census(config_path: &Path) -> Result<()> {
     // the-federation.info — instant registration
     let url = format!("https://the-federation.info/register/{domain}");
     match client.get(&url).send().await {
-        Ok(resp) => eprintln!("  the-federation.info: {} {}", resp.status(), if resp.status().is_success() { "OK" } else { "FAILED" }),
+        Ok(resp) => eprintln!(
+            "  the-federation.info: {} {}",
+            resp.status(),
+            if resp.status().is_success() {
+                "OK"
+            } else {
+                "FAILED"
+            }
+        ),
         Err(e) => eprintln!("  the-federation.info: FAILED ({e})"),
     }
 
     // FediDB — just ping, their crawler does the rest
     let url = "https://fedidb.org/software/smallhold".to_string();
     match client.get(&url).send().await {
-        Ok(resp) => eprintln!("  fedidb.org: {} (crawler will pick up NodeInfo)", resp.status()),
+        Ok(resp) => eprintln!(
+            "  fedidb.org: {} (crawler will pick up NodeInfo)",
+            resp.status()
+        ),
         Err(e) => eprintln!("  fedidb.org: FAILED ({e})"),
     }
 
     // Fediverse Observer — ping the instance page
     let url = format!("https://fediverse.observer/api/v1/instance/{domain}");
     match client.get(&url).send().await {
-        Ok(resp) => eprintln!("  fediverse.observer: {} (crawler will discover via peers)", resp.status()),
+        Ok(resp) => eprintln!(
+            "  fediverse.observer: {} (crawler will discover via peers)",
+            resp.status()
+        ),
         Err(e) => eprintln!("  fediverse.observer: FAILED ({e})"),
     }
 
@@ -943,6 +978,137 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
             }
             if stats.profile_updated {
                 eprintln!("  Profile: updated");
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    match cmd {
+        RelayCommands::Add { url } => {
+            // Fetch the relay's actor document to get its inbox URL.
+            let first_account: Option<(i64, String, String)> = sqlx::query_as(
+                "SELECT id, username, private_key_pem FROM accounts ORDER BY created_at LIMIT 1",
+            )
+            .fetch_optional(&pool)
+            .await?;
+
+            let (account_id, username, private_key_pem) = first_account
+                .ok_or_else(|| anyhow::anyhow!("No local persona exists. Create one first."))?;
+
+            let fed_client = crate::federation::FederationClient::new(&config)
+                .context("Failed to create federation client")?;
+
+            let key_id = format!(
+                "https://{}/users/{}#main-key",
+                config.server.domain, username
+            );
+            let actor_data = fed_client
+                .fetch_actor(&url, &private_key_pem, &key_id)
+                .await
+                .with_context(|| format!("Failed to fetch relay actor: {url}"))?;
+
+            let inbox_url = &actor_data.inbox_url;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+
+            let relay_id = generate_id();
+            sqlx::query(
+                "INSERT INTO relays (id, inbox_url, actor_uri, state, created_at) VALUES (?, ?, ?, 'pending', ?) \
+                 ON CONFLICT(inbox_url) DO UPDATE SET state = 'pending'",
+            )
+            .bind(relay_id)
+            .bind(inbox_url)
+            .bind(&url)
+            .bind(now)
+            .execute(&pool)
+            .await
+            .context("Failed to insert relay")?;
+
+            // Enqueue a Follow activity to the relay.
+            let follow_id = generate_id();
+            let domain = &config.server.domain;
+            let actor = format!("https://{domain}/users/{username}");
+            let follow_activity = serde_json::json!({
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                "type": "Follow",
+                "actor": &actor,
+                "object": &url
+            });
+
+            crate::delivery::enqueue_delivery(&pool, inbox_url, account_id, &follow_activity)
+                .await
+                .context("Failed to enqueue Follow activity")?;
+
+            eprintln!("Subscribed to relay (pending acceptance): {url}");
+        }
+        RelayCommands::Remove { url } => {
+            let relay: Option<(i64, String, String)> =
+                sqlx::query_as("SELECT id, inbox_url, actor_uri FROM relays WHERE actor_uri = ?")
+                    .bind(&url)
+                    .fetch_optional(&pool)
+                    .await?;
+
+            let (_, inbox_url, _) =
+                relay.ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;
+
+            // Get the first local account to send the Undo.
+            let first_account: Option<(i64, String)> =
+                sqlx::query_as("SELECT id, username FROM accounts ORDER BY created_at LIMIT 1")
+                    .fetch_optional(&pool)
+                    .await?;
+
+            let (account_id, username) =
+                first_account.ok_or_else(|| anyhow::anyhow!("No local persona exists."))?;
+
+            let domain = &config.server.domain;
+            let actor = format!("https://{domain}/users/{username}");
+            let undo_id = generate_id();
+            let follow_id = generate_id();
+            let undo_activity = serde_json::json!({
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": format!("https://{domain}/activities/undo-{undo_id}"),
+                "type": "Undo",
+                "actor": &actor,
+                "object": {
+                    "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                    "type": "Follow",
+                    "actor": &actor,
+                    "object": &url
+                }
+            });
+
+            crate::delivery::enqueue_delivery(&pool, &inbox_url, account_id, &undo_activity)
+                .await
+                .context("Failed to enqueue Undo activity")?;
+
+            sqlx::query("DELETE FROM relays WHERE actor_uri = ?")
+                .bind(&url)
+                .execute(&pool)
+                .await?;
+
+            eprintln!("Unsubscribed from relay: {url}");
+        }
+        RelayCommands::List => {
+            let rows: Vec<(String, String, String)> = sqlx::query_as(
+                "SELECT actor_uri, inbox_url, state FROM relays ORDER BY created_at",
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            if rows.is_empty() {
+                eprintln!("No relay subscriptions.");
+            } else {
+                for (actor_uri, _inbox_url, state) in rows {
+                    eprintln!("  {actor_uri} [{state}]");
+                }
             }
         }
     }

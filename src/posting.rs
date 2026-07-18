@@ -1,7 +1,7 @@
 use crate::api::{
     account_to_json, fetch_account_row, hex_encode, millis_to_iso, now_millis, AuthenticatedAccount,
 };
-use crate::delivery::{enqueue_delivery, enqueue_to_followers};
+use crate::delivery::{enqueue_delivery, enqueue_to_followers, enqueue_to_relays};
 use crate::error::AppError;
 use crate::id::generate_id;
 use crate::server::AppState;
@@ -1067,9 +1067,15 @@ async fn create_status(
                         let push_domain = domain.clone();
                         tokio::spawn(async move {
                             crate::push::send_push_notification(
-                                &pool, aid, "mention",
-                                "New mention", &from_user, None, &push_domain,
-                            ).await;
+                                &pool,
+                                aid,
+                                "mention",
+                                "New mention",
+                                &from_user,
+                                None,
+                                &push_domain,
+                            )
+                            .await;
                         });
                     }
                 }
@@ -1238,6 +1244,12 @@ async fn create_status(
 
         if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
             tracing::error!("Failed to enqueue Create activity: {e}");
+        }
+
+        if visibility == "public" {
+            if let Err(e) = enqueue_to_relays(&state.pool, auth.account_id, &activity).await {
+                tracing::error!("Failed to enqueue Create activity to relays: {e}");
+            }
         }
     }
 
@@ -1786,9 +1798,15 @@ async fn favourite(
         let push_domain = domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
-                &pool, target, "favourite",
-                "New favourite", &from_user, None, &push_domain,
-            ).await;
+                &pool,
+                target,
+                "favourite",
+                "New favourite",
+                &from_user,
+                None,
+                &push_domain,
+            )
+            .await;
         });
     }
 
@@ -1992,9 +2010,15 @@ async fn reblog(
             let push_domain = domain.clone();
             tokio::spawn(async move {
                 crate::push::send_push_notification(
-                    &pool, target, "reblog",
-                    "New boost", &from_user, None, &push_domain,
-                ).await;
+                    &pool,
+                    target,
+                    "reblog",
+                    "New boost",
+                    &from_user,
+                    None,
+                    &push_domain,
+                )
+                .await;
             });
         }
 
@@ -3153,10 +3177,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         )
         // Conversations
         .route("/api/v1/conversations", get(list_conversations))
-        .route(
-            "/api/v1/conversations/{id}",
-            delete(delete_conversation),
-        )
+        .route("/api/v1/conversations/{id}", delete(delete_conversation))
         .route(
             "/api/v1/conversations/{id}/read",
             post(mark_conversation_read),

@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-hzc1",
+  "title": "Relay support: subscribe, publish, and manage ActivityPub relays",
+  "description": "Add relay subscription support. CLI: smallhold relay add/remove/list. On subscribe, send Follow to relay actor. On post creation, deliver to all subscribed relay inboxes alongside follower inboxes. Inbound: accept posts from relay actors into federated timeline.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-18T23:42:15.461188213Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-18T23:47:36.283698145Z",
+  "started_at": "2026-07-18T23:42:15.564434365Z",
+  "closed_at": "2026-07-18T23:47:36.283698145Z",
+  "close_reason": "Closed"
+}

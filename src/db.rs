@@ -393,6 +393,14 @@ CREATE TABLE IF NOT EXISTS post_edits (
     created_at      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_post_edits_post ON post_edits(post_id, created_at);
+
+CREATE TABLE IF NOT EXISTS relays (
+    id          INTEGER PRIMARY KEY,
+    inbox_url   TEXT NOT NULL UNIQUE,
+    actor_uri   TEXT NOT NULL,
+    state       TEXT NOT NULL DEFAULT 'pending',
+    created_at  INTEGER NOT NULL
+);
 "#;
 
 #[cfg(test)]

@@ -635,9 +635,15 @@ async fn handle_follow(
         let push_domain = domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
-                &pool, account_id, "follow",
-                "New follower", &actor, None, &push_domain,
-            ).await;
+                &pool,
+                account_id,
+                "follow",
+                "New follower",
+                &actor,
+                None,
+                &push_domain,
+            )
+            .await;
         });
 
         // Send Accept back.
@@ -917,9 +923,15 @@ async fn handle_create(
                 let push_domain = domain.clone();
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
-                        &pool, local_account_id, "mention",
-                        "New mention", &actor, None, &push_domain,
-                    ).await;
+                        &pool,
+                        local_account_id,
+                        "mention",
+                        "New mention",
+                        &actor,
+                        None,
+                        &push_domain,
+                    )
+                    .await;
                 });
             }
         }
@@ -979,9 +991,15 @@ async fn handle_create(
                     let push_domain = domain.clone();
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
-                            &pool, local_account_id, "mention",
-                            "New mention", &actor, None, &push_domain,
-                        ).await;
+                            &pool,
+                            local_account_id,
+                            "mention",
+                            "New mention",
+                            &actor,
+                            None,
+                            &push_domain,
+                        )
+                        .await;
                     });
                 }
             }
@@ -1243,9 +1261,15 @@ async fn handle_like(
         let push_domain = state.config.server.domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
-                &pool, account_id, "favourite",
-                "New favourite", &actor, None, &push_domain,
-            ).await;
+                &pool,
+                account_id,
+                "favourite",
+                "New favourite",
+                &actor,
+                None,
+                &push_domain,
+            )
+            .await;
         });
 
         tracing::info!(
@@ -1298,9 +1322,15 @@ async fn handle_announce(
         let push_domain = state.config.server.domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
-                &pool, account_id, "reblog",
-                "New boost", &actor, None, &push_domain,
-            ).await;
+                &pool,
+                account_id,
+                "reblog",
+                "New boost",
+                &actor,
+                None,
+                &push_domain,
+            )
+            .await;
         });
 
         tracing::info!(
@@ -1548,6 +1578,19 @@ async fn handle_accept(
     .execute(&state.pool)
     .await?;
 
+    // Check if this Accept is from a relay we subscribed to.
+    let relay_updated = sqlx::query("UPDATE relays SET state = 'accepted' WHERE actor_uri = ?")
+        .bind(&remote.actor_uri)
+        .execute(&state.pool)
+        .await?;
+
+    if relay_updated.rows_affected() > 0 {
+        tracing::info!(
+            relay = %remote.actor_uri,
+            "relay subscription accepted"
+        );
+    }
+
     tracing::info!(
         local_account_id = local_id,
         remote_actor = %remote.actor_uri,
@@ -1592,6 +1635,19 @@ async fn handle_reject(
         .bind(remote.id)
         .execute(&state.pool)
         .await?;
+
+    // Check if this Reject is from a relay we subscribed to.
+    let relay_updated = sqlx::query("UPDATE relays SET state = 'rejected' WHERE actor_uri = ?")
+        .bind(&remote.actor_uri)
+        .execute(&state.pool)
+        .await?;
+
+    if relay_updated.rows_affected() > 0 {
+        tracing::info!(
+            relay = %remote.actor_uri,
+            "relay subscription rejected"
+        );
+    }
 
     tracing::info!(
         local_account_id = local_id,
