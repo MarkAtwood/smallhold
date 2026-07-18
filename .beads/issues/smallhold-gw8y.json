@@ -2,11 +2,15 @@
   "id": "smallhold-gw8y",
   "title": "GET /api/v1/statuses/:id/history — edit history",
   "description": "Clients show edit history when a post has been edited. Need to store previous versions of post content on edit and serve them via this endpoint. Return array of StatusEdit objects with content, spoiler_text, created_at for each version.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "feature",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-18T21:55:22.714938213Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-18T21:55:22.714938213Z"
+  "updated_at": "2026-07-18T22:36:04.011198516Z",
+  "started_at": "2026-07-18T22:33:13.131566104Z",
+  "closed_at": "2026-07-18T22:36:04.011198516Z",
+  "close_reason": "Closed"
 }

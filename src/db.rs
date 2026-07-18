@@ -382,6 +382,17 @@ CREATE TABLE IF NOT EXISTS conversation_hidden (
     post_id         INTEGER NOT NULL REFERENCES posts(id),
     UNIQUE (account_id, post_id)
 );
+
+CREATE TABLE IF NOT EXISTS post_edits (
+    id              INTEGER PRIMARY KEY,
+    post_id         INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    content         TEXT NOT NULL,
+    content_html    TEXT NOT NULL,
+    spoiler_text    TEXT NOT NULL DEFAULT '',
+    sensitive       INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_post_edits_post ON post_edits(post_id, created_at);
 "#;
 
 #[cfg(test)]

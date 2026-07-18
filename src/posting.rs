@@ -1408,6 +1408,16 @@ async fn edit_status(
 
     let rendered = render_content(&text, domain);
 
+    // Save current version to edit history before overwriting
+    sqlx::query(
+        "INSERT INTO post_edits (id, post_id, content, content_html, spoiler_text, sensitive, created_at) \
+         SELECT ?, id, content, content_html, spoiler_text, sensitive, COALESCE(edited_at, created_at) FROM posts WHERE id = ?",
+    )
+    .bind(generate_id())
+    .bind(post_id)
+    .execute(&state.pool)
+    .await?;
+
     // Update the post row
     sqlx::query(
         "UPDATE posts SET content = ?, content_html = ?, spoiler_text = ?, \
@@ -1579,6 +1589,73 @@ async fn get_status(
 
     let status = load_status(&state.pool, &post, domain, None).await?;
     Ok(Json(status))
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/statuses/:id/history
+// ---------------------------------------------------------------------------
+
+async fn status_history(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Status not found"))?;
+    let domain = &state.config.server.domain;
+
+    let post =
+        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
+            .bind(post_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("Status not found"))?;
+
+    // For non-public posts, history is not exposed (simplification)
+    if post.visibility == "direct" || post.visibility == "private" {
+        return Err(AppError::not_found("Status not found"));
+    }
+
+    let account = fetch_account_row(&state.pool, post.account_id).await?;
+    let account_json = account_to_json(&account, domain);
+
+    // Fetch previous versions from post_edits, ordered oldest first
+    let edits: Vec<(String, String, String, bool, i64)> = sqlx::query_as(
+        "SELECT content, content_html, spoiler_text, sensitive, created_at \
+         FROM post_edits WHERE post_id = ? ORDER BY created_at ASC",
+    )
+    .bind(post_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let mut history: Vec<Value> = edits
+        .iter()
+        .map(|(_, html, spoiler, sensitive, created_at)| {
+            json!({
+                "content": html,
+                "spoiler_text": spoiler,
+                "sensitive": sensitive,
+                "created_at": millis_to_iso(*created_at),
+                "account": &account_json,
+                "emojis": [],
+                "media_attachments": []
+            })
+        })
+        .collect();
+
+    // Append current version as the final entry
+    let current_ts = post.edited_at.unwrap_or(post.created_at);
+    history.push(json!({
+        "content": post.content_html,
+        "spoiler_text": post.spoiler_text,
+        "sensitive": post.sensitive,
+        "created_at": millis_to_iso(current_ts),
+        "account": &account_json,
+        "emojis": [],
+        "media_attachments": []
+    }));
+
+    Ok(Json(json!(history)))
 }
 
 // ---------------------------------------------------------------------------
@@ -3080,6 +3157,7 @@ pub fn routes() -> Router<Arc<AppState>> {
             get(get_status).delete(delete_status).put(edit_status),
         )
         .route("/api/v1/statuses/{id}/context", get(status_context))
+        .route("/api/v1/statuses/{id}/history", get(status_history))
         // Interactions
         .route("/api/v1/statuses/{id}/favourite", post(favourite))
         .route("/api/v1/statuses/{id}/unfavourite", post(unfavourite))
