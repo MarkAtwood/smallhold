@@ -278,7 +278,15 @@ async fn import_outbox(
             .get("contentMap")
             .and_then(|m| m.as_object())
             .and_then(|m| m.keys().next())
-            .map(|k| k.to_string());
+            .map(|k| k.to_string())
+            .or_else(|| {
+                let detected = crate::posting::detect_language(&content_clean);
+                if detected != "en" {
+                    Some(detected.to_string())
+                } else {
+                    None
+                }
+            });
 
         // Insert the post
         let result = sqlx::query(

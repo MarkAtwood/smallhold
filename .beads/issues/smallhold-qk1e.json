@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-qk1e",
+  "title": "Automatic language detection on posts",
+  "description": "Detect the language of post content automatically when no language is explicitly set. Use a lightweight detection library (whatlang or lingua). Store detected language in posts.language field. Expose in Status JSON. ~50 lines.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T00:38:43.303410086Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T00:45:49.403180677Z",
+  "started_at": "2026-07-19T00:41:48.278533375Z",
+  "closed_at": "2026-07-19T00:45:49.403180677Z",
+  "close_reason": "Closed"
+}

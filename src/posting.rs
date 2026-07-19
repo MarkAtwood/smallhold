@@ -19,6 +19,56 @@ use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 // ---------------------------------------------------------------------------
+// Language detection
+// ---------------------------------------------------------------------------
+
+pub fn detect_language(text: &str) -> &'static str {
+    if text.len() < 20 {
+        return "en"; // Too short to detect reliably
+    }
+    match whatlang::detect_lang(text) {
+        Some(lang) => whatlang_to_bcp47(lang),
+        None => "en",
+    }
+}
+
+fn whatlang_to_bcp47(lang: whatlang::Lang) -> &'static str {
+    use whatlang::Lang::*;
+    match lang {
+        Eng => "en",
+        Spa => "es",
+        Fra => "fr",
+        Deu => "de",
+        Ita => "it",
+        Por => "pt",
+        Rus => "ru",
+        Jpn => "ja",
+        Cmn => "zh",
+        Kor => "ko",
+        Ara => "ar",
+        Hin => "hi",
+        Tur => "tr",
+        Nld => "nl",
+        Pol => "pl",
+        Swe => "sv",
+        Dan => "da",
+        Nob => "nb",
+        Fin => "fi",
+        Ces => "cs",
+        Ukr => "uk",
+        Cat => "ca",
+        Ron => "ro",
+        Hun => "hu",
+        Ell => "el",
+        Heb => "he",
+        Tha => "th",
+        Vie => "vi",
+        Ind => "id",
+        _ => "en",
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Keyword filter types and helpers
 // ---------------------------------------------------------------------------
 
@@ -937,7 +987,15 @@ async fn create_status(
     let language = body
         .language
         .clone()
-        .or_else(|| Some(state.config.defaults.default_language.clone()));
+        .filter(|l| !l.is_empty())
+        .or_else(|| {
+            let detected = detect_language(&text);
+            if detected != "en" {
+                Some(detected.to_string())
+            } else {
+                Some(state.config.defaults.default_language.clone())
+            }
+        });
 
     // Check for scheduled_at — if present and >= 5 min in the future, store
     // as a scheduled post instead of creating immediately.
@@ -1420,7 +1478,15 @@ async fn edit_status(
     let language = body
         .language
         .clone()
-        .or_else(|| Some(state.config.defaults.default_language.clone()));
+        .filter(|l| !l.is_empty())
+        .or_else(|| {
+            let detected = detect_language(&text);
+            if detected != "en" {
+                Some(detected.to_string())
+            } else {
+                Some(state.config.defaults.default_language.clone())
+            }
+        });
 
     let rendered = render_content(&text, domain);
 
