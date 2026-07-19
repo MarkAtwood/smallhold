@@ -280,7 +280,8 @@ async fn import_outbox(
             .and_then(|m| m.keys().next())
             .map(|k| k.to_string())
             .or_else(|| {
-                let detected = crate::posting::detect_language(&content_clean);
+                let plain = crate::posting::strip_html_tags(&content_clean);
+                let detected = crate::posting::detect_language(&plain);
                 if detected != "en" {
                     Some(detected.to_string())
                 } else {

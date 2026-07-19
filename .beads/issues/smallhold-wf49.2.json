@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-wf49.2",
+  "title": "langdetect: no confidence threshold",
+  "description": "detect_language uses whatlang::detect_lang which discards the confidence score. Short posts (20-50 chars), code snippets, or mixed-language text can get low-confidence false detections (e.g. code detected as Indonesian/Malay due to common variable names). whatlang::detect returns Info with is_reliable() (threshold 0.9). Consider switching to detect() and only accepting results where is_reliable() is true. Without this, users will see wrong language tags on short or code-heavy posts.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T00:49:06.137487447Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T00:50:41.74387186Z",
+  "closed_at": "2026-07-19T00:50:41.74387186Z",
+  "close_reason": "Closed",
+  "labels": [
+    "langdetect",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-wf49.2",
+      "depends_on_id": "smallhold-wf49",
+      "type": "parent-child",
+      "created_at": "2026-07-19T00:49:06.158572101Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

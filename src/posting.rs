@@ -26,9 +26,9 @@ pub fn detect_language(text: &str) -> &'static str {
     if text.len() < 20 {
         return "en"; // Too short to detect reliably
     }
-    match whatlang::detect_lang(text) {
-        Some(lang) => whatlang_to_bcp47(lang),
-        None => "en",
+    match whatlang::detect(text) {
+        Some(info) if info.is_reliable() => whatlang_to_bcp47(info.lang()),
+        _ => "en",
     }
 }
 
@@ -244,7 +244,7 @@ fn apply_filters(statuses: &mut Vec<Value>, filters: &[ActiveFilter]) {
 }
 
 /// Naive HTML tag stripper for filter matching purposes.
-fn strip_html_tags(html: &str) -> String {
+pub fn strip_html_tags(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut in_tag = false;
     for ch in html.chars() {

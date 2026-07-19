@@ -1,0 +1,18 @@
+{
+  "id": "smallhold-wf49",
+  "title": "Review: smallhold langdetect round 1",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T00:46:00.273822854Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T00:50:41.774239775Z",
+  "started_at": "2026-07-19T00:46:00.337102385Z",
+  "closed_at": "2026-07-19T00:50:41.774239775Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ]
+}
