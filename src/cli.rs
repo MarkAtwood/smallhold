@@ -282,15 +282,11 @@ async fn cmd_census(config_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 fn generate_secret_key() -> String {
     use rand::RngCore;
     let mut bytes = [0u8; 64];
     rand::thread_rng().fill_bytes(&mut bytes);
-    hex_encode(&bytes)
+    crate::api::hex_encode(&bytes)
 }
 
 fn format_millis_human(ms: i64) -> String {
@@ -648,7 +644,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             );
 
             use sha2::{Digest, Sha256};
-            let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
+            let token_hash = crate::api::hex_encode(&Sha256::digest(token.as_bytes()));
 
             let app_id = get_or_create_cli_app(&pool).await?;
 

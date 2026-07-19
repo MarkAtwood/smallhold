@@ -18,31 +18,39 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
-// Schema: blocks and mutes tables (created lazily)
+// Schema: blocks and mutes tables (created lazily, once per process)
 // ---------------------------------------------------------------------------
 
+static TABLES_ENSURED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+
 async fn ensure_interaction_tables(pool: &sqlx::SqlitePool) -> Result<(), AppError> {
-    sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS blocks (
-            account_id        INTEGER NOT NULL REFERENCES accounts(id),
-            blocked_account_id   INTEGER REFERENCES accounts(id),
-            blocked_remote_id    INTEGER REFERENCES remote_accounts(id),
-            created_at        INTEGER NOT NULL,
-            CHECK ((blocked_account_id IS NOT NULL) != (blocked_remote_id IS NOT NULL)),
-            UNIQUE (account_id, blocked_account_id, blocked_remote_id)
-        );
-        CREATE TABLE IF NOT EXISTS mutes (
-            account_id        INTEGER NOT NULL REFERENCES accounts(id),
-            muted_account_id     INTEGER REFERENCES accounts(id),
-            muted_remote_id      INTEGER REFERENCES remote_accounts(id),
-            created_at        INTEGER NOT NULL,
-            CHECK ((muted_account_id IS NOT NULL) != (muted_remote_id IS NOT NULL)),
-            UNIQUE (account_id, muted_account_id, muted_remote_id)
-        );",
-    )
-    .execute(pool)
-    .await?;
-    Ok(())
+    TABLES_ENSURED
+        .get_or_try_init(|| async {
+            sqlx::raw_sql(
+                "CREATE TABLE IF NOT EXISTS blocks (
+                    account_id        INTEGER NOT NULL REFERENCES accounts(id),
+                    blocked_account_id   INTEGER REFERENCES accounts(id),
+                    blocked_remote_id    INTEGER REFERENCES remote_accounts(id),
+                    created_at        INTEGER NOT NULL,
+                    CHECK ((blocked_account_id IS NOT NULL) != (blocked_remote_id IS NOT NULL)),
+                    UNIQUE (account_id, blocked_account_id, blocked_remote_id)
+                );
+                CREATE TABLE IF NOT EXISTS mutes (
+                    account_id        INTEGER NOT NULL REFERENCES accounts(id),
+                    muted_account_id     INTEGER REFERENCES accounts(id),
+                    muted_remote_id      INTEGER REFERENCES remote_accounts(id),
+                    created_at        INTEGER NOT NULL,
+                    CHECK ((muted_account_id IS NOT NULL) != (muted_remote_id IS NOT NULL)),
+                    UNIQUE (account_id, muted_account_id, muted_remote_id)
+                );",
+            )
+            .execute(pool)
+            .await
+            .map(|_| ())
+            .map_err(AppError::from)
+        })
+        .await
+        .copied()
 }
 
 // ---------------------------------------------------------------------------

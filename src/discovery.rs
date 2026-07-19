@@ -130,6 +130,10 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
         .fetch_one(&state.pool)
         .await?;
 
+    let (user_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
+        .fetch_one(&state.pool)
+        .await?;
+
     let body = serde_json::json!({
         "version": "2.0",
         "software": {
@@ -138,7 +142,7 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
         },
         "protocols": ["activitypub"],
         "usage": {
-            "users": { "total": 1 },
+            "users": { "total": user_count },
             "localPosts": local_posts
         },
         "openRegistrations": false

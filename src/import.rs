@@ -255,7 +255,7 @@ async fn import_outbox(
 
     // Track last timestamp for sequence deduplication
     let mut last_ms: i64 = 0;
-    let mut last_seq: u16 = 0;
+    let mut last_seq: u32 = 0;
 
     let mut tx = pool.begin().await?;
 
@@ -356,11 +356,14 @@ async fn import_outbox(
             for tag in tags {
                 let tag_type = tag.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 if tag_type == "Hashtag" {
-                    let tag_name = tag
+                    let tag_name: String = tag
                         .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .trim_start_matches('#')
+                        .chars()
+                        .filter(|c| c.is_alphanumeric())
+                        .collect::<String>()
                         .to_lowercase();
                     if !tag_name.is_empty() {
                         let _ = sqlx::query(
@@ -460,13 +463,13 @@ async fn import_outbox(
     Ok(())
 }
 
-fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u16) -> (i64, u16) {
+fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u32) -> (i64, u32) {
     let seq = if published_ms == last_ms {
-        last_seq + 1
+        last_seq.saturating_add(1)
     } else {
         0
     };
-    let id = ((published_ms as u64) << 16 | seq as u64) as i64;
+    let id = ((published_ms as u64) << 16 | (seq as u64 & 0xFFFF)) as i64;
     (id, seq)
 }
 

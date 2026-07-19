@@ -180,8 +180,8 @@ async fn handle_ws(
     initial_params: HashMap<String, String>,
 ) {
     let (mut ws_tx, mut ws_rx) = futures::StreamExt::split(socket);
-    // ponytail: no per-connection subscription cap; connection limits delegated
-    // to reverse proxy (Caddy max_conns, nginx limit_conn_zone).
+    // ponytail: cap at 10 subscriptions per connection; connection limits
+    // delegated to reverse proxy (Caddy max_conns, nginx limit_conn_zone).
     let mut subscriptions: Vec<String> = Vec::new();
 
     // If `stream` was provided as a query param, auto-subscribe
@@ -211,6 +211,9 @@ async fn handle_ws(
                                 match cmd.cmd_type.as_str() {
                                     "subscribe" => {
                                         if let Ok(ch) = resolve_channel(stream, &account, &params) {
+                                            if subscriptions.len() >= 10 {
+                                                continue;
+                                            }
                                             if !subscriptions.contains(&ch) {
                                                 subscriptions.push(ch);
                                             }

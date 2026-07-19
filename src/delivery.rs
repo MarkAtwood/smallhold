@@ -296,7 +296,7 @@ async fn deliver_one(
     match result {
         Ok(resp) => {
             let status = resp.status();
-            if status.is_success() || status == 202 {
+            if status.is_success() {
                 mark_delivered(pool, row.id).await?;
                 circuit_record_success(&target_domain);
             } else if status == 410 {
@@ -645,6 +645,18 @@ async fn create_scheduled_post(
             tracing::debug!("Failed to enqueue to relays: {e}");
         }
     }
+
+    // ponytail: search index lives in AppState which the delivery worker doesn't
+    // have access to. Scheduled posts won't appear in search until the next
+    // `smallhold search reindex` or a full reindex is triggered. Upgrade path:
+    // pass Arc<AppState> to the delivery worker instead of bare pool+config.
+
+    // Emit streaming event so connected clients see the post immediately
+    crate::streaming::publish(crate::streaming::StreamEvent {
+        event_type: "update".to_string(),
+        payload: activity["object"].to_string(),
+        channel: format!("user:{account_id}"),
+    });
 
     tracing::info!("Created scheduled post {post_id} for @{username}");
     Ok(())
