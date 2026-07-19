@@ -1,18 +1,22 @@
 FROM rust:latest AS builder
 
+RUN rustup target add x86_64-unknown-linux-musl && \
+    apt-get update && apt-get install -y musl-tools && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
 
-RUN cargo build --release && strip target/release/smallhold
+RUN cargo build --release --target x86_64-unknown-linux-musl && \
+    strip target/x86_64-unknown-linux-musl/release/smallhold
 
-FROM debian:bookworm-slim
+FROM alpine:3.20
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -H smallhold && \
+    mkdir -p /data/media && chown -R smallhold:smallhold /data
 
-COPY --from=builder /build/target/release/smallhold /usr/local/bin/smallhold
-
-RUN useradd -r -s /bin/false smallhold && mkdir -p /data/media && chown -R smallhold:smallhold /data
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/smallhold /usr/local/bin/smallhold
 
 USER smallhold
 WORKDIR /data
