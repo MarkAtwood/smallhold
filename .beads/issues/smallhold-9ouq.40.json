@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.40",
   "title": "profile_page queries for account ID redundantly",
   "description": "activitypub.rs profile_page calls fetch_account (which queries by username and returns the full row), then immediately queries 'SELECT id FROM accounts WHERE username = ?' again. The fix is to either add 'id' to AccountRow or combine the queries. Same pattern in the featured() handler which calls fetch_account then discards the result and re-queries for the ID.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:40:29.951823725Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:40:29.951823725Z",
+  "updated_at": "2026-07-19T23:47:33.669617658Z",
+  "closed_at": "2026-07-19T23:47:33.669617658Z",
+  "close_reason": "Deferred: one extra query per page load.",
   "labels": [
     "efficiency",
     "review"

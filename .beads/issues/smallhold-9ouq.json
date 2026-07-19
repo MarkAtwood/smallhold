@@ -2,17 +2,17 @@
   "id": "smallhold-9ouq",
   "title": "Review: smallhold 2026-07-19",
   "notes": "Review confidence: 15% chance of missed bug in auth/federation paths. Least confident areas: WebSocket message framing edge cases, VAPID token refresh lifecycle, concurrent inbox delivery ordering. Would raise confidence if: integration test suite existed covering auth + visibility + federation roundtrip. 3 passes completed 2026-07-19.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:32:55.226836563Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:53:58.701274546Z",
+  "updated_at": "2026-07-19T23:50:54.5283539Z",
   "started_at": "2026-07-19T22:32:59.316551515Z",
-  "lease_expires_at": "2026-07-19T22:37:59.316551515Z",
-  "heartbeat_at": "2026-07-19T22:32:59.316551515Z",
+  "closed_at": "2026-07-19T23:50:54.5283539Z",
+  "close_reason": "All P0/P1 fixed, P2/P3 fixed or deferred. 77 issues total.",
   "labels": [
     "review"
   ]

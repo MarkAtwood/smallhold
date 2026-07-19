@@ -2,3 +2,4 @@
 {"id":"019f7c84-8fb2-7308-b7f5-9af7575bdd96","issue_id":"smallhold-9ouq.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: idiom","created_at":"2026-07-19T22:34:50.162199273Z"}
 {"id":"019f7c84-8fb6-797b-9609-6be999d6ba93","issue_id":"smallhold-9ouq.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: dead-code","created_at":"2026-07-19T22:34:50.166621949Z"}
 {"id":"019f7c84-8fbb-7264-8877-77d129fae4fd","issue_id":"smallhold-9ouq.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:34:50.171157248Z"}
+{"id":"019f7cc6-05d5-78f4-943c-a33dd5b7290e","issue_id":"smallhold-9ouq.11","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Dead field is marked #[allow(dead_code)] — removing it changes the struct layout used by reqwest client builder","created_at":"2026-07-19T23:46:20.245587919Z"}

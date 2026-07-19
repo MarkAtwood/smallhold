@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.61",
   "title": "AccountRow missing id field causes redundant DB queries",
   "description": "activitypub.rs AccountRow (line 65) does not include the account id. In profile_page (line 277+283) and featured (line 599+602), fetch_account is called first (proving the account exists), then a second query fetches just the id from the same table for the same username. In featured(), the result of fetch_account is even discarded (`let _ =`). Fix: add `id: i64` to AccountRow and the SELECT list in fetch_account, eliminating the redundant query in profile_page and featured. What goes wrong: two queries hit the same row per request—doubles SQLite latch acquisition for no new information.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:42:38.172757676Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:42:38.172757676Z",
+  "updated_at": "2026-07-19T23:47:35.199351827Z",
+  "closed_at": "2026-07-19T23:47:35.199351827Z",
+  "close_reason": "Deferred: minor efficiency issue.",
   "labels": [
     "perf",
     "review"

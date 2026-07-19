@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.82",
   "title": "Scheduled posts not added to search index",
   "description": "In delivery.rs create_scheduled_post (line 396), new posts created from the scheduled_statuses queue are never indexed in the tantivy search index. The regular create_status path (posting.rs:1389) calls search.index_post(), but create_scheduled_post has no access to the AppState.search field (it only receives the pool and config). Posts created via scheduled delivery are invisible to search until the admin runs 'smallhold search reindex'. The fix is either to pass the SearchIndex into the delivery worker, or to have a background reconciliation task.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:51:01.626257675Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:51:01.626257675Z",
+  "updated_at": "2026-07-19T23:50:49.887032577Z",
+  "closed_at": "2026-07-19T23:50:49.887032577Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

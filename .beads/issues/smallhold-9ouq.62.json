@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.62",
   "title": "cli.rs duplicates hex_encode instead of using crate::api::hex_encode",
   "description": "cli.rs line 285-287 defines its own private `fn hex_encode` with the same byte-by-byte format!() implementation as api.rs line 24-26. The api.rs version is already pub. cli.rs should use `crate::api::hex_encode` (or a shared utility). What goes wrong: code duplication—any fix to the encoding (e.g. switching to a faster hex crate as suggested in smallhold-9ouq.6) must be applied in two places or they silently diverge.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:42:51.323081586Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:42:51.323081586Z",
+  "updated_at": "2026-07-19T23:50:49.971363459Z",
+  "closed_at": "2026-07-19T23:50:49.971363459Z",
+  "close_reason": "Closed",
   "labels": [
     "hygiene",
     "review"

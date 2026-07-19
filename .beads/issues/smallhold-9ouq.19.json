@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.19",
   "title": "inbox.rs iterates object tags array twice",
   "description": "inbox.rs handle_create() iterates object['tag'].as_array() at line 879 (to process Mentions) and again at line 942 (to process FEP-e232 Link tags). These could be a single loop with match on tag type, avoiding the second array traversal and making the relationship between the two tag-processing blocks clearer.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:35:06.477733568Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:35:06.477733568Z",
+  "updated_at": "2026-07-19T23:47:30.788902662Z",
+  "closed_at": "2026-07-19T23:47:30.788902662Z",
+  "close_reason": "Deferred: micro-optimization, tags arrays are small.",
   "labels": [
     "elegance",
     "review"

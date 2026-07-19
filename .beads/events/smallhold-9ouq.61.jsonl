@@ -1,3 +1,4 @@
 {"id":"019f7c8b-b3e1-7cb3-aef6-4b26fbd2ab4d","issue_id":"smallhold-9ouq.61","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T22:42:38.177832973Z"}
 {"id":"019f7c8b-b3e6-7e35-8b6d-3df8ab61eb7a","issue_id":"smallhold-9ouq.61","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: perf","created_at":"2026-07-19T22:42:38.182931803Z"}
 {"id":"019f7c8b-b3eb-7d48-9845-8aca972b004d","issue_id":"smallhold-9ouq.61","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:42:38.187871013Z"}
+{"id":"019f7cc7-2aa4-70bf-935a-100b4001ce1f","issue_id":"smallhold-9ouq.61","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Deferred: minor efficiency issue.","created_at":"2026-07-19T23:47:35.204049792Z"}

@@ -1,3 +1,4 @@
 {"id":"019f7c89-d78f-7426-8090-e53282894319","issue_id":"smallhold-9ouq.41","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T22:40:36.239272593Z"}
 {"id":"019f7c89-d794-797c-9c61-7a0c0355d4d1","issue_id":"smallhold-9ouq.41","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: efficiency","created_at":"2026-07-19T22:40:36.24462218Z"}
 {"id":"019f7c89-d799-7733-bdc7-55aec7f5f5b7","issue_id":"smallhold-9ouq.41","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:40:36.249473621Z"}
+{"id":"019f7cc7-1061-7787-8404-35db68ec5dd2","issue_id":"smallhold-9ouq.41","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Deferred: performance optimization. Relationship checks are infrequent.","created_at":"2026-07-19T23:47:28.48149424Z"}

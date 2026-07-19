@@ -2,3 +2,4 @@
 {"id":"019f7c85-5608-7566-b91b-e902d414ae3f","issue_id":"smallhold-9ouq.31","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: idiom","created_at":"2026-07-19T22:35:40.936354677Z"}
 {"id":"019f7c85-560d-748c-bfb7-30ddba7dec75","issue_id":"smallhold-9ouq.31","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: ownership","created_at":"2026-07-19T22:35:40.941298963Z"}
 {"id":"019f7c85-5612-72fc-a311-057b55c5f06a","issue_id":"smallhold-9ouq.31","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:35:40.946196562Z"}
+{"id":"019f7cc7-20e3-7d6c-8577-a95298c6422d","issue_id":"smallhold-9ouq.31","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Deferred: micro-optimization.","created_at":"2026-07-19T23:47:32.707880428Z"}

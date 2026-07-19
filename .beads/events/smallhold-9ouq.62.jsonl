@@ -1,3 +1,4 @@
 {"id":"019f7c8b-e73f-7f2b-864d-abce6c1ffafc","issue_id":"smallhold-9ouq.62","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T22:42:51.327994731Z"}
 {"id":"019f7c8b-e744-7c18-b7d4-6e92ccc20ce9","issue_id":"smallhold-9ouq.62","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: hygiene","created_at":"2026-07-19T22:42:51.332792985Z"}
 {"id":"019f7c8b-e749-7549-96b1-0b6504f256ba","issue_id":"smallhold-9ouq.62","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:42:51.337347105Z"}
+{"id":"019f7cca-2377-7785-9a4e-64a023a791b4","issue_id":"smallhold-9ouq.62","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Closed","created_at":"2026-07-19T23:50:49.975493454Z"}

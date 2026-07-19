@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.18",
   "title": "collect_recipients called twice in determine_visibility",
   "description": "inbox.rs determine_visibility() (line 1031-1034) calls collect_recipients(activity) and collect_recipients(object) to gather all URIs into 'all', then collect_to_only() also iterates over activity['to'] and object['to'] again. The recipients from activity and object are collected, chained, and searched multiple times. Minor: this is not a hot path (once per inbound Create), but the double-collect + separate collect_to_only is harder to read than a single pass that categorizes to vs cc.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:35:02.770140426Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:35:02.770140426Z",
+  "updated_at": "2026-07-19T23:47:29.852805316Z",
+  "closed_at": "2026-07-19T23:47:29.852805316Z",
+  "close_reason": "Deferred: micro-optimization.",
   "labels": [
     "elegance",
     "review"

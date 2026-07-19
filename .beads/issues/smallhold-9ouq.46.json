@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.46",
   "title": "load_extra_css reads custom CSS file from disk on every page request",
   "description": "activitypub.rs load_extra_css reads theme_tokens_path and custom_css_path from the filesystem on every HTML page render (index, profile, post). For a server under load, this means filesystem I/O on every request for static content that only changes when the admin edits it. Cache the result in AppState or behind a once_cell/watch channel that reloads on SIGHUP.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:41:00.317582589Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:41:00.317582589Z",
+  "updated_at": "2026-07-19T23:50:49.65779477Z",
+  "closed_at": "2026-07-19T23:50:49.65779477Z",
+  "close_reason": "Closed",
   "labels": [
     "efficiency",
     "review"

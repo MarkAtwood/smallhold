@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.41",
   "title": "build_relationship issues 7 sequential queries",
   "description": "interactions.rs build_relationship makes 7 separate sequential DB round-trips (following, followed_by, show_reblogs, notify, blocking, blocked_by, muting) to construct a single relationship JSON. These could be collapsed into one or two queries using subqueries or CASE expressions. This function is called after every follow/unfollow/block/unblock/mute/unmute.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:40:36.234280683Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:40:36.234280683Z",
+  "updated_at": "2026-07-19T23:47:28.475060929Z",
+  "closed_at": "2026-07-19T23:47:28.475060929Z",
+  "close_reason": "Deferred: performance optimization. Relationship checks are infrequent.",
   "labels": [
     "efficiency",
     "review"

@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.59",
   "title": "load_extra_css reads files from disk on every page request",
   "description": "activitypub.rs load_extra_css() is called on every HTML page view (index_page, profile_page, post_page). It calls load_theme_css() which reads and parses a JSON file from disk, then reads a second CSS file from disk. Under load, this means filesystem I/O + JSON parse + string allocations per request. The CSS content only changes when an admin edits the config files, so it should be loaded once at startup (or cached with a file-watcher / config reload signal). What goes wrong: unnecessary filesystem I/O and allocations on every page request; under concurrent load this serializes on filesystem locks and wastes CPU on repeated JSON parsing.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:42:22.478234343Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:42:22.478234343Z",
+  "updated_at": "2026-07-19T23:46:19.811225272Z",
+  "closed_at": "2026-07-19T23:46:19.811225272Z",
+  "close_reason": "Duplicate of .46 (load_extra_css per request)",
   "labels": [
     "perf",
     "review"

@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.60",
   "title": "ensure_interaction_tables runs DDL on every interaction API call",
   "description": "interactions.rs calls ensure_interaction_tables() at the top of follow, unfollow, block, unblock, mute, and unmute handlers (6 call sites). This executes two CREATE TABLE IF NOT EXISTS statements on every request. The blocks and mutes tables should be part of the main schema in db.rs (alongside all other tables) and created at startup, not lazily on every API call. What goes wrong: two DDL statements executed per interaction request; SQLite must acquire a write lock, check the schema catalog, and release—adding latency to every follow/block/mute operation for work that only needed to happen once.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:42:30.697731233Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:42:30.697731233Z",
+  "updated_at": "2026-07-19T23:50:49.831669865Z",
+  "closed_at": "2026-07-19T23:50:49.831669865Z",
+  "close_reason": "Closed",
   "labels": [
     "perf",
     "review"

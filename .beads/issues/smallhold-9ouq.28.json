@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.28",
   "title": "delivery.rs status 202 check is redundant",
   "description": "delivery.rs deliver_one() line 280: 'if status.is_success() || status == 202'. StatusCode 202 Accepted is already in the 2xx range, so is_success() already covers it. The '|| status == 202' is dead code that suggests the author was uncertain about reqwest's is_success() behavior. Remove the redundant check and add a brief comment if desired.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:35:32.912468277Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:35:32.912468277Z",
+  "updated_at": "2026-07-19T23:50:49.944689025Z",
+  "closed_at": "2026-07-19T23:50:49.944689025Z",
+  "close_reason": "Closed",
   "labels": [
     "readability",
     "review"

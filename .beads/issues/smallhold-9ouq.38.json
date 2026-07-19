@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.38",
   "title": "Regex compiled per request in CSS sanitizer",
   "description": "sanitize_css_for_style_tag (activitypub.rs:207) and load_theme_css (theme.rs:85) both call regex::Regex::new on every invocation. These are called on every HTML page serve (index, profile, post pages). Use LazyLock like the rest of the codebase.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:40:17.566730793Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:40:17.566730793Z",
+  "updated_at": "2026-07-19T23:50:49.617788614Z",
+  "closed_at": "2026-07-19T23:50:49.617788614Z",
+  "close_reason": "Closed",
   "labels": [
     "efficiency",
     "review"

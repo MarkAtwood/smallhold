@@ -2,3 +2,4 @@
 {"id":"019f7c85-1953-7abc-83ae-ca1d5d916571","issue_id":"smallhold-9ouq.25","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: crypto-security","created_at":"2026-07-19T22:35:25.395704275Z"}
 {"id":"019f7c85-1958-74ae-919f-6ab6603fc0e0","issue_id":"smallhold-9ouq.25","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: storage","created_at":"2026-07-19T22:35:25.400307393Z"}
 {"id":"019f7c85-195d-702c-a711-6c0b63d03eca","issue_id":"smallhold-9ouq.25","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:35:25.40501187Z"}
+{"id":"019f7cc6-04fb-7723-960e-dc470870ace6","issue_id":"smallhold-9ouq.25","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Addressed by design doc (docs/design-key-storage.md) — implementation is a separate task","created_at":"2026-07-19T23:46:20.027468638Z"}

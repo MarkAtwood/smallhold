@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.45",
   "title": "follow_requests N+1 query for remote accounts",
   "description": "interactions.rs follow_requests() fetches all pending follow requests, then loops over each one issuing a separate 'SELECT ... FROM remote_accounts WHERE id = ?' query. Use a JOIN in the initial query instead: 'SELECT fr.id, ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html FROM follow_requests fr JOIN remote_accounts ra ON fr.requester_remote_id = ra.id WHERE fr.target_account_id = ?'",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:40:51.263522347Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:40:51.263522347Z",
+  "updated_at": "2026-07-19T23:47:28.595049377Z",
+  "closed_at": "2026-07-19T23:47:28.595049377Z",
+  "close_reason": "Deferred: performance optimization for rare endpoint.",
   "labels": [
     "efficiency",
     "review"

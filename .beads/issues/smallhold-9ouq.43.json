@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.43",
   "title": "ensure_interaction_tables DDL on every interaction request",
   "description": "interactions.rs ensure_interaction_tables runs CREATE TABLE IF NOT EXISTS on every follow, unfollow, block, unblock, mute, and unmute API call. After the first call the tables exist permanently, but SQLite still parses and plans the DDL statements on every request. Move the blocks/mutes tables into the main schema in db.rs (where all other tables already live), or use a once_cell to track that the check has already passed this process.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:40:43.839702454Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:40:43.839702454Z",
+  "updated_at": "2026-07-19T23:46:19.883643318Z",
+  "closed_at": "2026-07-19T23:46:19.883643318Z",
+  "close_reason": "Duplicate of .60 (DDL per interaction)",
   "labels": [
     "elegance",
     "review"

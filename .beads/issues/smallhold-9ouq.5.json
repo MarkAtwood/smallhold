@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.5",
   "title": "load_status issues N+1 queries per post",
   "description": "posting.rs load_status() (line 672) is called once per post in fetch_paginated_statuses() (line 922 loop). For each post it does: fetch account row, fetch media, fetch tags, fetch mentions, check favourites/boosts/bookmarks, check pinned, load reblog (recursive), load card. This is classic N+1: a timeline of 20 posts produces ~160+ DB queries. For a single-user SQLite server the latency is likely tolerable, but it is the wrong complexity class — the fix is to batch-load media/tags/mentions for the full page in a single IN(...) query each.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:34:40.153171165Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:34:40.153171165Z",
+  "updated_at": "2026-07-19T23:47:21.387401995Z",
+  "closed_at": "2026-07-19T23:47:21.387401995Z",
+  "close_reason": "Deferred: performance optimization, not correctness. Timeline pages are small (20 posts).",
   "labels": [
     "efficiency",
     "review"

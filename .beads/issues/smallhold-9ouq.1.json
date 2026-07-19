@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.1",
   "title": "RSA key parsed on every signature",
   "description": "federation.rs rsa_sha256_sign() parses the PEM private key from scratch on every call. In the delivery worker hot path (deliver_one -\u003e sign_post_headers -\u003e rsa_sha256_sign), this means re-parsing the same PEM on every outbound delivery. For a server with many followers and a burst of posts, this is wasted CPU. The key could be parsed once per delivery batch (or once per worker lifetime) and reused.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:34:28.181788104Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:34:28.181788104Z",
+  "updated_at": "2026-07-19T23:50:49.743818519Z",
+  "closed_at": "2026-07-19T23:50:49.743818519Z",
+  "close_reason": "Closed",
   "labels": [
     "efficiency",
     "review"
