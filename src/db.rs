@@ -398,6 +398,7 @@ CREATE TABLE IF NOT EXISTS relays (
     id          INTEGER PRIMARY KEY,
     inbox_url   TEXT NOT NULL UNIQUE,
     actor_uri   TEXT NOT NULL,
+    follow_id   TEXT NOT NULL DEFAULT '',
     state       TEXT NOT NULL DEFAULT 'pending',
     created_at  INTEGER NOT NULL
 );

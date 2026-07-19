@@ -608,6 +608,13 @@ async fn create_scheduled_post(
         tracing::error!("Failed to enqueue scheduled Create activity: {e}");
     }
 
+    // Also fan out to relays for public posts
+    if visibility == "public" {
+        if let Err(e) = enqueue_to_relays(pool, account_id, &activity).await {
+            tracing::debug!("Failed to enqueue to relays: {e}");
+        }
+    }
+
     tracing::info!("Created scheduled post {post_id} for @{username}");
     Ok(())
 }

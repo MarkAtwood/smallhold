@@ -1018,26 +1018,28 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
+            // Enqueue a Follow activity to the relay.
+            let follow_id = generate_id();
+            let domain = &config.server.domain;
+            let follow_uri = format!("https://{domain}/activities/follow-{follow_id}");
+
             let relay_id = generate_id();
             sqlx::query(
-                "INSERT INTO relays (id, inbox_url, actor_uri, state, created_at) VALUES (?, ?, ?, 'pending', ?) \
-                 ON CONFLICT(inbox_url) DO UPDATE SET state = 'pending'",
+                "INSERT INTO relays (id, inbox_url, actor_uri, follow_id, state, created_at) VALUES (?, ?, ?, ?, 'pending', ?) \
+                 ON CONFLICT(inbox_url) DO UPDATE SET state = 'pending', follow_id = excluded.follow_id",
             )
             .bind(relay_id)
             .bind(inbox_url)
             .bind(&url)
+            .bind(&follow_uri)
             .bind(now)
             .execute(&pool)
             .await
             .context("Failed to insert relay")?;
-
-            // Enqueue a Follow activity to the relay.
-            let follow_id = generate_id();
-            let domain = &config.server.domain;
             let actor = format!("https://{domain}/users/{username}");
             let follow_activity = serde_json::json!({
                 "@context": "https://www.w3.org/ns/activitystreams",
-                "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                "id": &follow_uri,
                 "type": "Follow",
                 "actor": &actor,
                 "object": &url
@@ -1050,13 +1052,13 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             eprintln!("Subscribed to relay (pending acceptance): {url}");
         }
         RelayCommands::Remove { url } => {
-            let relay: Option<(i64, String, String)> =
-                sqlx::query_as("SELECT id, inbox_url, actor_uri FROM relays WHERE actor_uri = ?")
+            let relay: Option<(i64, String, String, String)> =
+                sqlx::query_as("SELECT id, inbox_url, actor_uri, follow_id FROM relays WHERE actor_uri = ?")
                     .bind(&url)
                     .fetch_optional(&pool)
                     .await?;
 
-            let (_, inbox_url, _) =
+            let (_, inbox_url, _, stored_follow_id) =
                 relay.ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;
 
             // Get the first local account to send the Undo.
@@ -1071,14 +1073,13 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let domain = &config.server.domain;
             let actor = format!("https://{domain}/users/{username}");
             let undo_id = generate_id();
-            let follow_id = generate_id();
             let undo_activity = serde_json::json!({
                 "@context": "https://www.w3.org/ns/activitystreams",
                 "id": format!("https://{domain}/activities/undo-{undo_id}"),
                 "type": "Undo",
                 "actor": &actor,
                 "object": {
-                    "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                    "id": &stored_follow_id,
                     "type": "Follow",
                     "actor": &actor,
                     "object": &url

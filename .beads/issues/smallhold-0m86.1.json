@@ -2,13 +2,15 @@
   "id": "smallhold-0m86.1",
   "title": "Undo Follow uses wrong inner ID",
   "description": "File: src/cli.rs:1074. The Undo activity for relay Remove generates a fresh follow_id for the inner Follow object. Some relays match Undo by comparing the inner object's id to the original Follow's id. Since the original Follow's id is not persisted, the Undo may be silently ignored. Fix: store the Follow activity id in the relays table at subscription time and reuse it in the Undo.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T00:02:28.944776315Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T00:02:28.944776315Z",
+  "updated_at": "2026-07-19T00:06:57.123490101Z",
+  "closed_at": "2026-07-19T00:06:57.123490101Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"
