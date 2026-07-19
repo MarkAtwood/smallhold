@@ -1,4 +1,4 @@
-use crate::api::{check_login_rate_limit, hex_encode, now_millis};
+use crate::api::{hex_encode, now_millis};
 use crate::error::AppError;
 use crate::server::AppState;
 use axum::extract::State;
@@ -136,19 +136,8 @@ async fn consume_challenge<T: serde::de::DeserializeOwned>(
 
 async fn register_begin(
     State(state): State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    // Rate limit by client IP
-    let ip = headers
-        .get("x-real-ip")
-        .or_else(|| headers.get("x-forwarded-for"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown");
-    if !check_login_rate_limit(ip) {
-        return Err(AppError::rate_limited());
-    }
-
     // Require admin password auth
     let password = extract_password_from_body(&body)?;
     verify_admin_auth(&state, &password).await?;

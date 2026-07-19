@@ -57,13 +57,6 @@ impl AppError {
             message: msg.into(),
         }
     }
-
-    pub fn rate_limited() -> Self {
-        Self {
-            status: StatusCode::TOO_MANY_REQUESTS,
-            message: "Rate limit exceeded".into(),
-        }
-    }
 }
 
 impl IntoResponse for AppError {

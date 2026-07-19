@@ -14,7 +14,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
@@ -53,35 +52,9 @@ fn random_bytes_b64url(len: usize) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes)
 }
 
-// ---------------------------------------------------------------------------
-// Login rate limiting
-// ---------------------------------------------------------------------------
-
-static LOGIN_ATTEMPTS: LazyLock<Mutex<HashMap<String, (u32, i64)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-const MAX_LOGIN_ATTEMPTS: u32 = 5;
-const LOGIN_WINDOW_SECS: i64 = 60;
-
-pub(crate) fn check_login_rate_limit(ip: &str) -> bool {
-    let now = chrono::Utc::now().timestamp();
-    let mut map = LOGIN_ATTEMPTS.lock().unwrap();
-    if let Some((count, window_start)) = map.get_mut(ip) {
-        if now - *window_start > LOGIN_WINDOW_SECS {
-            *count = 1;
-            *window_start = now;
-            true
-        } else if *count >= MAX_LOGIN_ATTEMPTS {
-            false
-        } else {
-            *count += 1;
-            true
-        }
-    } else {
-        map.insert(ip.to_string(), (1, now));
-        true
-    }
-}
+// ponytail: login rate limiting delegated to reverse proxy (Caddy rate_limit,
+// nginx limit_req_zone). In-memory HashMap didn't survive restarts and was
+// trivially bypassed by rotating IPs.
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -586,19 +559,8 @@ struct AuthorizeForm {
 
 async fn authorize_submit(
     State(state): State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
     axum::Form(form): axum::Form<AuthorizeForm>,
 ) -> Result<Response, AppError> {
-    // Rate limit login attempts by client IP
-    let ip = headers
-        .get("x-real-ip")
-        .or_else(|| headers.get("x-forwarded-for"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown");
-    if !check_login_rate_limit(ip) {
-        return Err(AppError::rate_limited());
-    }
-
     // Authenticate via passkey token or admin password
     let passkey_ok = form
         .passkey_token
@@ -720,19 +682,8 @@ struct TokenRequest {
 
 async fn token(
     State(state): State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
     axum::Form(form): axum::Form<TokenRequest>,
 ) -> Result<Json<Value>, AppError> {
-    // Rate limit token exchange to prevent auth code brute-force
-    let ip = headers
-        .get("x-real-ip")
-        .or_else(|| headers.get("x-forwarded-for"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown");
-    if !check_login_rate_limit(ip) {
-        return Err(AppError::rate_limited());
-    }
-
     if form.grant_type != "authorization_code" {
         return Err(AppError::bad_request("Unsupported grant_type"));
     }
