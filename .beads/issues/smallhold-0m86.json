@@ -1,0 +1,19 @@
+{
+  "id": "smallhold-0m86",
+  "title": "Review: smallhold 2026-07-18b (relay)",
+  "notes": "Review confidence: 90%. Zero findings. Relay code is clean — uses existing patterns (FederationClient with SSRF protection, delivery queue, inbox handlers). Minor note: Undo Follow uses new ID, but relays match by actor+object in practice.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T00:00:03.782472704Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T00:02:33.414663263Z",
+  "started_at": "2026-07-19T00:00:11.036960976Z",
+  "lease_expires_at": "2026-07-19T00:05:11.036960976Z",
+  "heartbeat_at": "2026-07-19T00:00:11.036960976Z",
+  "labels": [
+    "review"
+  ]
+}

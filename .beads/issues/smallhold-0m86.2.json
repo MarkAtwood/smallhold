@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-0m86.2",
+  "title": "Scheduled posts skip relay fan-out",
+  "description": "File: src/delivery.rs:607. process_scheduled_posts calls enqueue_to_followers but does not call enqueue_to_relays for public visibility posts. This means scheduled public posts won't be propagated to relays, unlike interactively-created ones. Fix: add the same 'if visibility == public { enqueue_to_relays(...) }' pattern after the enqueue_to_followers call.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T00:02:34.134518447Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T00:02:34.134518447Z",
+  "labels": [
+    "consistency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-0m86.2",
+      "depends_on_id": "smallhold-0m86",
+      "type": "parent-child",
+      "created_at": "2026-07-19T00:02:34.159237316Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
