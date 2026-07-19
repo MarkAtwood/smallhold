@@ -1,0 +1,4 @@
+{"id":"019f7c91-f142-7cc3-a592-c479438678eb","issue_id":"smallhold-9ouq.72","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T22:49:27.106837467Z"}
+{"id":"019f7c91-f147-78c0-ac29-503e50d886ed","issue_id":"smallhold-9ouq.72","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-07-19T22:49:27.111574399Z"}
+{"id":"019f7c91-f14c-7478-890c-4ee700e84163","issue_id":"smallhold-9ouq.72","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:49:27.116294349Z"}
+{"id":"019f7c95-2546-7381-9c0e-842271663aeb","issue_id":"smallhold-9ouq.72","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of smallhold-9ouq.66 and smallhold-9ouq.67 which already cover the same visibility leak in get_status and account_statuses","created_at":"2026-07-19T22:52:57.030230202Z"}

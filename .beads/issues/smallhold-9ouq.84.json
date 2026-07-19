@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.84",
+  "title": "Featured collection exposes private/direct pinned posts as public",
+  "description": "In activitypub.rs featured() (line 611), the query for the featured collection does not filter by post visibility. If a user pins a private or direct post, it appears in the /users/{username}/collections/featured AP endpoint. The rendered Note objects hardcode 'to: [as:Public]' (line 631), which means a private/direct post is served with Public addressing to any remote server that fetches the featured collection. The query should add 'AND p.visibility = \"public\"' to match the outbox query's pattern, or at minimum exclude direct and private posts.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:52:27.430953061Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:52:27.430953061Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.84",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:52:27.4625041Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

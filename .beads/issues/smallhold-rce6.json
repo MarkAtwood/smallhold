@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-rce6",
+  "title": "Duplicated verify_password() in api.rs and webauthn.rs",
+  "description": "verify_password() is implemented inline in both api.rs and webauthn.rs. Should be consolidated into a single auth module (like gaja's auth.rs pattern).",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:28:14.088485733Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:54:59.976615554Z",
+  "closed_at": "2026-07-19T22:54:59.976615554Z",
+  "close_reason": "Closed"
+}

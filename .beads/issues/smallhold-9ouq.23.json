@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.23",
+  "title": "DeliveryRow derives Debug, exposing private_key_pem",
+  "description": "In delivery.rs line 13, DeliveryRow derives Debug and contains private_key_pem (the RSA signing key). If this struct ever appears in a panic message, error chain, or debug log, the full private key leaks to wherever logs are collected. The private_key_pem field is included because the delivery worker joins accounts.private_key_pem to sign outbound requests. Impact: key disclosure if any code path formats this struct with {:?} (e.g. unwrap() on a Result\u003cDeliveryRow\u003e, or future debug logging). Fix: implement a manual Debug that redacts the field, or split the struct so the key is held separately.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:16.352977407Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:16.352977407Z",
+  "labels": [
+    "crypto-security",
+    "key-lifecycle",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.23",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:16.389110994Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

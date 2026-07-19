@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-9ouq.9",
+  "title": "Semaphore permit .unwrap() in delivery worker can panic",
+  "description": "delivery.rs line 220: semaphore.clone().acquire_owned().await.unwrap(). If the semaphore is closed (e.g. due to a programming error elsewhere that drops it), this panics and kills the delivery worker task, silently halting all outbound federation. What goes wrong: the server appears healthy but stops delivering activities. The fix is to match on the result and log+break the loop, or use expect() with a justification comment and ensure the Semaphore is never closed.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:45.989048754Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:55:00.119842814Z",
+  "closed_at": "2026-07-19T22:55:00.119842814Z",
+  "close_reason": "Closed",
+  "labels": [
+    "idiom",
+    "error-handling",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.9",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:46.02053456Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

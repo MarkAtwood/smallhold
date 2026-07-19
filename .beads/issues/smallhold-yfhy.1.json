@@ -1,0 +1,22 @@
+{
+  "id": "smallhold-yfhy.1",
+  "title": "FEP-8fcf: Follower Collection Synchronization",
+  "description": "Implement follower sync per FEP-8fcf.\n\n**Spec:** https://codeberg.org/fediverse/fep/src/branch/main/fep/8fcf/fep-8fcf.md\n\n**Requirements:**\n- Generate SHA256 XOR digest of follower URIs for Collection-Synchronization header\n- Include header in responses to Follow/Undo activities\n- Parse incoming Collection-Synchronization headers\n- On digest mismatch, fetch remote followers collection and reconcile\n- Handle adds/removes to sync follower state\n\n**Why:** Detects and corrects follower drift between instances without manual intervention.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T02:27:38.023348077Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T02:27:38.023348077Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-yfhy.1",
+      "depends_on_id": "smallhold-yfhy",
+      "type": "parent-child",
+      "created_at": "2026-07-19T02:27:38.037416796Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

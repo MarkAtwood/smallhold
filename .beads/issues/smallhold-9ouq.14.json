@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.14",
+  "title": "now_millis()/now_secs() use .unwrap() on SystemTime without justification",
+  "description": "api.rs lines 29-33 and 35-40: now_millis() and now_secs() both call SystemTime::now().duration_since(UNIX_EPOCH).unwrap(). While this only panics if the system clock is before 1970 (extremely unlikely), there is no comment justifying the unwrap. What goes wrong: if the system clock is broken (NTP glitch, VM snapshot restore), the server panics instead of degrading gracefully. Low probability but the fix is trivial — add a // SAFETY comment explaining the precondition, or use .expect(\"system clock before UNIX_EPOCH\") for a clear panic message.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:55.57490462Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:55.57490462Z",
+  "labels": [
+    "idiom",
+    "error-handling",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.14",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:55.609487525Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

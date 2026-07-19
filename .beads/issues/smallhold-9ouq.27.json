@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.27",
+  "title": "webauthn auth_complete updates all credentials regardless of match",
+  "description": "webauthn.rs auth_complete() (lines 412-427): after successful authentication, it calls load_passkeys() to get all credentials, then iterates them all calling pk.update_credential(\u0026auth_result). However update_credential only modifies the credential that matched (by cred_id). Then it iterates ALL passkeys calling update_credential_bycred_id() for EACH one — which itself loads ALL rows from DB and scans for a match. For N passkeys this is O(N^2) DB queries. Since this is single-admin with typically 1-3 passkeys, it is not a performance problem, but the intent is unclear — only the matched credential needs updating.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:30.108348994Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:30.108348994Z",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.27",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:30.148029159Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

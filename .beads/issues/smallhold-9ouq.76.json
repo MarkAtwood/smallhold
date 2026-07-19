@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.76",
+  "title": "(BUG) Hashtag normalization inconsistent between import and posting",
+  "description": "Hashtags imported from Mastodon archives (import.rs line 326) are normalized as `.trim_start_matches('#').to_lowercase()` — preserving underscores and other non-alphanumeric chars. But hashtags from native posts (posting.rs lines 362-367) are normalized with `.chars().filter(|c| c.is_alphanumeric()).collect::\u003cString\u003e().to_lowercase()` — stripping underscores. Result: the same hashtag 'hello_world' becomes 'hello_world' via import but 'helloworld' via posting. Tag-based searches and followed_tags matching will miss cross-origin posts. Fix: use the same normalization in both paths.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:49:40.835412483Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:49:40.835412483Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.76",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:49:40.864265604Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

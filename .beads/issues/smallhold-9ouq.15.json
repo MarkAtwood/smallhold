@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.15",
+  "title": "FederationClient constructed per-request in inbox",
+  "description": "inbox.rs fetch_and_upsert_actor() (line 366) calls FederationClient::new() on every inbound activity that triggers a remote actor fetch. This allocates a new reqwest::Client (with its own connection pool) each time. The FederationClient should be stored in AppState and reused, sharing the connection pool and avoiding TLS handshake overhead on repeated fetches to the same remote domains.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:58.088887644Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:58.088887644Z",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.15",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:58.120020859Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

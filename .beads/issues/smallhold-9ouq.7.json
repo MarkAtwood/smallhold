@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.7",
+  "title": "Regex compiled on every call in parse_mentions/parse_hashtags/autolink",
+  "description": "posting.rs parse_mentions() (line 402), parse_hashtags() (line 425), autolink_bare_urls() (line 448) each compile a regex::Regex::new() on every invocation. These are called on every post create/edit and every inbound Note. The fix is trivial: promote to LazyLock\u003cRegex\u003e statics (like extract_fediverse_links already does on line 381).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:42.836573401Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:44.186988703Z",
+  "closed_at": "2026-07-19T22:35:44.186988703Z",
+  "close_reason": "Duplicate of smallhold-9ouq.4",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.7",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:42.865561035Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

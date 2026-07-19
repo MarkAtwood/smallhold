@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.37",
+  "title": "Date header freshness check bypassed by malformed Date value",
+  "description": "In inbox.rs verify_and_fetch_actor (lines 405-417), the Date header freshness check uses:\n\n    if let Ok(date_str) = date_val.to_str() {\n        if let Ok(parsed) = chrono::DateTime::parse_from_rfc2822(date_str) {\n            // enforce 5-minute window\n        }\n    }\n\nIf the Date header value contains non-ASCII bytes (to_str() fails) or is not valid RFC 2822 (parse fails), the freshness check is silently skipped. The Date header is still present and signed (required by line 433-435), so the signature is still verified — but the anti-replay window is not enforced.\n\nA malicious server can sign a request with a syntactically-valid-for-signature but unparseable Date (e.g. 'Thu, 99 Xxx 2099 00:00:00 GMT') and the request will pass signature verification with no time bound — the signed payload can be replayed indefinitely (subject to key rotation).\n\nImpact: infinite signature replay window when Date is malformed.\n\nFix: return Err if either to_str() or parse_from_rfc2822() fails:\n\n    let date_str = date_val.to_str().map_err(|_| AppError::unauthorized('unparseable Date'))?;\n    let parsed = chrono::DateTime::parse_from_rfc2822(date_str)\n        .map_err(|_| AppError::unauthorized('malformed Date header'))?;",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:36:19.35752385Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:36:19.35752385Z",
+  "labels": [
+    "crypto-security",
+    "untrusted-input",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.37",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:36:19.392877348Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

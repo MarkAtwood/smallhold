@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.44",
+  "title": "Streaming token in URL logged by proxies",
+  "description": "In streaming.rs line 56, the authenticate() function accepts access_token as a query parameter: params.get(\"access_token\"). This is required by the Mastodon streaming API spec for SSE clients that cannot set headers, but it means the bearer token appears in URLs. Any reverse proxy (nginx, Caddy) with default access logging will record the full token in plaintext log files. The WebSocket upgrade path (line 161) also authenticates via query params before upgrade. Impact: token disclosure via server/proxy access logs. Mitigation: document that operators should strip or redact access_token from proxy logs, or implement a short-lived streaming ticket exchange.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:40:48.570177831Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:40:48.570177831Z",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.44",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:40:48.602688457Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

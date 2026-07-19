@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.17",
+  "title": "Post char limit compares bytes not characters",
+  "description": "In posting.rs create_status (line 987) and edit_status (line 1516), the check 'text.len() \u003e state.config.limits.max_post_chars' compares byte length against a config field named max_post_chars. For ASCII this is equivalent, but for multi-byte UTF-8 content (CJK, emoji, etc.), a 500-character post may be 1500+ bytes and get rejected. The Mastodon API specifies character limits in Unicode codepoints. The instance metadata endpoint advertises this as 'max_characters'. Fix: use text.chars().count() instead of text.len(). This also affects the same check in the scheduled post path.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:02.670168099Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:02.670168099Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.17",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:02.70027717Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

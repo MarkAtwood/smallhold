@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.31",
+  "title": "determine_visibility returns owned Strings of static content",
+  "description": "inbox.rs lines 1047-1058: determine_visibility() returns `\"public\".to_string()`, `\"unlisted\".to_string()`, etc. — allocating a new String every time for values that are compile-time constants. The result is only ever compared with == or passed to SQLite bind (which accepts \u0026str). What goes wrong: unnecessary allocation on every inbound Create activity. The function could return \u0026'static str (or better, an enum per issue smallhold-9ouq.2). Minimal fix: return \u0026'static str.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:40.926228622Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:40.926228622Z",
+  "labels": [
+    "idiom",
+    "ownership",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.31",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:40.964952349Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

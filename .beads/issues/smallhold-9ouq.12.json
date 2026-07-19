@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.12",
+  "title": "handle_move SSRF: second fetch skips validate_outbound_url",
+  "description": "In inbox.rs handle_move (line ~1431), a second raw reqwest::Client fetch of old_actor_url is performed to get alsoKnownAs. This fetch: (1) does not call validate_outbound_url(), so if the actor URI somehow resolves to an internal address via DNS rebinding after the initial fetch, the second fetch will connect; (2) uses default redirect policy (follows redirects), whereas FederationClient uses Policy::none(). A compromised remote server whose actor URI initially passes SSRF checks could 302 on the second request to an internal host. The first fetch_and_upsert_actor call does validate, but only on the initial request. Additionally, the response has no body size limit -- resp.json().await will buffer an arbitrarily large response into memory. Fix: use FederationClient (or at least call validate_outbound_url and set redirect(Policy::none()) and limit response size).",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:54.122739135Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:54.122739135Z",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.12",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:54.157005655Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

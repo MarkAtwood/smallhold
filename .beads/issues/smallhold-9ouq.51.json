@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.51",
+  "title": "update_credentials issues up to 5 separate UPDATE queries",
+  "description": "interactions.rs update_credentials issues a separate UPDATE query for each optional field (display_name, bio, locked, bot, discoverable, fields). With SQLite WAL mode each write takes the write lock. These could be a single dynamic UPDATE with only the changed columns, reducing lock contention from up to 5 acquisitions to 1. Not critical for single-user, but measurable under concurrent load if multiple clients update profiles.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:41:43.629228642Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:41:43.629228642Z",
+  "labels": [
+    "elegance",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.51",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:41:43.660927776Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

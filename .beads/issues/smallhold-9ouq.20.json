@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.20",
+  "title": "api.rs hex_encode is byte-by-byte format",
+  "description": "api.rs hex_encode() (line 24-26) uses .iter().map(|b| format!(\"{b:02x}\")).collect() which allocates a String per byte then collects them all. For 32-byte SHA-256 hashes (the common case), this allocates 32 tiny Strings. Use a pre-sized String with write_fmt or the 'hex' crate's encode function for a single-allocation implementation. This is called on every authenticated request (token hashing).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:10.806816366Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:44.416593808Z",
+  "closed_at": "2026-07-19T22:35:44.416593808Z",
+  "close_reason": "Duplicate of smallhold-9ouq.6",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.20",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:10.835890173Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

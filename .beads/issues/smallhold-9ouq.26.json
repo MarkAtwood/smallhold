@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-9ouq.26",
+  "title": "Gratuitous Vec\u003cu8\u003e clone in media upload before spawn_blocking",
+  "description": "media.rs line 195: `let data = data.clone();` clones the entire uploaded file buffer (potentially megabytes) to move it into spawn_blocking. The original `data` is never used again after this point (it's consumed only inside the closure). What goes wrong: doubles peak memory usage per upload — a 40MB upload temporarily holds 80MB. The fix is to move the owned `data` directly into the closure instead of cloning it (remove the shadow binding and use `move` on the original).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:27.819450103Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:55:00.095135934Z",
+  "closed_at": "2026-07-19T22:55:00.095135934Z",
+  "close_reason": "Closed",
+  "labels": [
+    "idiom",
+    "ownership",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.26",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:27.855203532Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

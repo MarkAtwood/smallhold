@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.83",
+  "title": "delete_status streaming event only published to public channel",
+  "description": "In posting.rs delete_status (line 1474), the 'delete' streaming event is only published to the 'public' channel. Streaming clients subscribed to the 'user:{account_id}' channel (which is the standard subscription for Mastodon-compatible clients tracking their home timeline) never receive the delete event. Compare with create_status (lines 1375-1384) and edit_status (lines 1756-1764) which correctly publish to both 'public' and 'user:{account_id}'. Additionally, private posts that were never published to 'public' have no streaming channel that receives their deletion. The fix should publish the delete event to the user channel as well.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:51:20.530415471Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:51:20.530415471Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.83",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:51:20.562678109Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "smallhold-yfhy.3",
+  "title": "FEP-f228: Conversation Backfill",
+  "description": "Implement conversation backfill per FEP-f228.\n\n**Spec:** https://codeberg.org/fediverse/fep/src/branch/main/fep/f228/fep-f228.md\n\n**Requirements:**\n- Track \"context owner\" (original author) for each conversation\n- Maintain OrderedCollection of all replies at context endpoint\n- Expose collection at context URL for remote fetch\n- On receiving reply to unknown parent, backfill from context owner\n- Support both AP context property and FEP-171b thread property\n\n**Why:** Enables fetching complete threads in one request instead of chasing reply chains.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T02:27:45.072894812Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T02:27:45.072894812Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-yfhy.3",
+      "depends_on_id": "smallhold-yfhy",
+      "type": "parent-child",
+      "created_at": "2026-07-19T02:27:45.0867911Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

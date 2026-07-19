@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.70",
+  "title": "OAuth token exchange does not require client_secret",
+  "description": "POST /oauth/token (api.rs:769) only verifies client_id/client_secret 'if provided'. An attacker who intercepts an authorization code (e.g., from browser history, logs, or redirect URL) can exchange it for an access token without knowing the client_secret. The code should require client authentication for confidential clients (those issued a client_secret). This weakens the OAuth security model from two-factor (code + secret) to single-factor (code only).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:49:22.587188657Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:49:22.587188657Z",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.70",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:49:22.619491931Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

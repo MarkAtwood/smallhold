@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.72",
+  "title": "get_status and post_page expose private/direct posts without auth",
+  "description": "GET /api/v1/statuses/:id (posting.rs:1779) and GET /@username/:post_id (activitypub.rs:391) have no authentication check and no visibility filtering. Any unauthenticated user who knows or guesses a numeric post ID can read private and direct posts. The status_history endpoint correctly rejects private/direct posts (line 1821), but get_status and post_page do not. These endpoints should return 404 for visibility='private' or 'direct' unless the requester is authenticated and is either the post author or a mentioned/follower recipient.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:49:27.101678011Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:52:57.02357726Z",
+  "closed_at": "2026-07-19T22:52:57.02357726Z",
+  "close_reason": "Duplicate of smallhold-9ouq.66 and smallhold-9ouq.67 which already cover the same visibility leak in get_status and account_statuses",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.72",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:49:27.135763396Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

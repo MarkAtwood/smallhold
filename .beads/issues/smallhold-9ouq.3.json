@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.3",
+  "title": "handle_move duplicates actor fetch",
+  "description": "inbox.rs handle_move() calls fetch_and_upsert_actor() on line 1414 (which internally does a full HTTP GET + parse + DB upsert), then immediately re-fetches the same actor document with a raw reqwest client (lines 1431-1458) just to inspect the alsoKnownAs field. This doubles the network RTT to the remote server. The fix is to either (a) return the raw JSON from fetch_actor alongside RemoteActorData, or (b) add an alsoKnownAs field to RemoteActorData parsed in parse_actor_document.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:32.966028678Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:54.844652645Z",
+  "closed_at": "2026-07-19T22:35:54.844652645Z",
+  "close_reason": "Duplicate of smallhold-9ouq.16 (same handle_move double-fetch issue)",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.3",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:33.000818556Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

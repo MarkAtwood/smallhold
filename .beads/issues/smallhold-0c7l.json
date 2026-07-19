@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-0c7l",
+  "title": "Missing GIF frame bomb protection in media.rs",
+  "description": "Gaja added a 500-frame limit for GIF uploads to prevent resource exhaustion. Smallhold's media.rs lacks this check. A malicious GIF with thousands of frames could exhaust memory during processing.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:28:15.978188165Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:55:00.004780659Z",
+  "closed_at": "2026-07-19T22:55:00.004780659Z",
+  "close_reason": "Closed"
+}

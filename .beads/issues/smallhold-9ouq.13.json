@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.13",
+  "title": "inbox.rs handle_delete orphan cleanup scans full table",
+  "description": "inbox.rs line 1233: after deleting a remote post, the code runs 'DELETE FROM mentions WHERE remote_post_id NOT IN (SELECT id FROM remote_posts)'. This is a full table scan of mentions correlated against all remote_posts — O(mentions * remote_posts). Since we just deleted one specific post and know its post_id, the fix is: 'DELETE FROM mentions WHERE remote_post_id = ?' bound to the post_id of the just-deleted row (which we can get from the row ID or by querying before deletion).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:55.249057621Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:55.249057621Z",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.13",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:55.282212736Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

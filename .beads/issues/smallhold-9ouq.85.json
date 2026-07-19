@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.85",
+  "title": "Scheduled posts do not emit streaming events",
+  "description": "In delivery.rs create_scheduled_post (line 396), newly created posts from the scheduled_statuses queue never call publish(StreamEvent{...}). The regular create_status path (posting.rs:1374-1384) publishes to both 'public' and 'user:{account_id}' channels. Connected streaming clients (including Mastodon-compatible mobile apps) won't see scheduled posts appear in real-time when they fire. Users must manually refresh to see their own scheduled posts. This is a second gap in the scheduled post path (alongside the missing search index update filed separately).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:52:44.481326575Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:52:44.481326575Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.85",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:52:44.514697683Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

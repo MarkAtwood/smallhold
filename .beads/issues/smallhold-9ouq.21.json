@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.21",
+  "title": "Signature header parser does not handle escaped quotes",
+  "description": "In inbox.rs parse_signature_header (line 208), the close-quote finder uses remaining.find('\"') which will split at the first unescaped OR escaped double-quote. If a remote implementation sends a Signature value containing a backslash-escaped quote (e.g. in a keyId URL containing %22 that got decoded, or a pathological value), the parser truncates the value at the wrong position. The consequence is either: (1) signature verification fails (DoS for legitimate Move/Follow from that server), or (2) if the truncated keyId happens to match a cached key, signature verification against the wrong key (fail-safe, but confusing error). This is a robustness issue rather than a security hole because the worst case is a rejected message, but it will generate repeating issue reports from users on certain implementations that include unusual characters in keyId URIs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:14.25362827Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:14.25362827Z",
+  "labels": [
+    "correctness",
+    "maintainer-burden",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.21",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:14.288349742Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.29",
+  "title": "Direct messages to remote users never delivered",
+  "description": "In posting.rs create_status (lines 1231-1238), the 'direct' visibility case only adds local mentions (m.domain.is_none()) to the ActivityPub 'to' field. Remote mentions are silently dropped from addressing. Combined with the fact that delivery uses enqueue_to_followers (which sends to all follower inboxes, not to specific mentioned users' inboxes), this means: (1) the Create{Note} AP object has an empty or local-only 'to' field, (2) the activity is fanned out to followers' shared inboxes rather than to the mentioned remote user's inbox. Net effect: DMs to remote users (@user@remote.example) are never received by the remote server. The same exclusion of remote mentions from 'tag' array (line 1244-1253) means even if delivery happened, the receiving server wouldn't know who was mentioned. This also affects edit_status which has the same pattern. Fix: look up remote_accounts.actor_uri for remote mentions and add to 'to', add remote mention tags, and enqueue_delivery directly to the mentioned user's inbox.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:34.482870289Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:34.482870289Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.29",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:34.518677142Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

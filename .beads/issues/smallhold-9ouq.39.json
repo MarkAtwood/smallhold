@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.39",
+  "title": "Regex compiled per call in parse_mentions, parse_hashtags, autolink_bare_urls",
+  "description": "posting.rs lines 402, 425, 448 compile regex::Regex::new on every call to render_content. These are called on every post creation and profile bio update. The rest of the codebase uses LazyLock for regex patterns (see cards.rs, posting.rs:381). These three should follow the same pattern.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:40:23.975051215Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:42:14.678431433Z",
+  "closed_at": "2026-07-19T22:42:14.678431433Z",
+  "close_reason": "Duplicate of smallhold-9ouq.4",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.39",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:40:24.005803347Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

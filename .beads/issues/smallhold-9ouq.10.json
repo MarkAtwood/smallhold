@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.10",
+  "title": "media.rs clones full image data into spawn_blocking",
+  "description": "media.rs process_upload() line 194-195: 'let data = data.clone()' clones the entire uploaded file (up to max_media_mb) to move it into spawn_blocking. The original 'data' Vec is never used again after this point. This can be avoided by moving the owned Vec directly into the closure (remove the clone, use 'move' which already exists on the closure).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:47.110667045Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:44.346415876Z",
+  "closed_at": "2026-07-19T22:35:44.346415876Z",
+  "close_reason": "Duplicate of smallhold-9ouq.26",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.10",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:47.144823103Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

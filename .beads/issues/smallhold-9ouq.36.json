@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-9ouq.36",
+  "title": "Unparseable Date header bypasses freshness check",
+  "description": "In inbox.rs verify_and_fetch_actor (lines 405-417), the Date header freshness check uses nested if-let-Ok: if the date value fails to_str() or fails parse_from_rfc2822(), the check is silently skipped and processing continues. A remote actor can send a Date header with a value that is valid ASCII but not parseable as RFC 2822 (e.g., 'Date: not-a-date'), and the 5-minute freshness check is bypassed entirely. This weakens replay protection: a captured signed request with a manipulated Date header can be replayed indefinitely as long as the signature remains valid. The Date header IS required (line 403 returns an error if missing), but the format is not validated. Fix: return an error if date_val.to_str() fails or if parse_from_rfc2822 fails, or at minimum log a warning and reject.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:36:18.930696697Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:36:36.997898793Z",
+  "closed_at": "2026-07-19T22:36:36.997898793Z",
+  "close_reason": "Duplicate of smallhold-9ouq.37",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.36",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:36:18.96845266Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

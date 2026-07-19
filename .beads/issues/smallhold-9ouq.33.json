@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.33",
+  "title": "inReplyTo in outbound Create{Note} uses wrong URI",
+  "description": "In posting.rs create_status (lines 1266-1271), the inReplyTo field for the outbound ActivityPub Note is constructed as: format\\!(\"https://{domain}/users/{}/statuses/{rid}\", auth.username). This uses the *replying* user's username with the replied-to post's numeric ID. This is wrong in two cases: (1) Replying to another local user's post: generates a URI with the wrong username (should be the original author's username). (2) Replying to a remote post: generates a fake local URI instead of the remote post's actual ap_id/ap_uri. The correct implementation should query the replied-to post's ap_id from the posts table (or remote_posts table if remote) and use that as inReplyTo. Remote servers receiving this Note will not be able to thread the conversation correctly because the inReplyTo URI won't match any post they know about.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:51.030875349Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:51.030875349Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.33",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:51.061417095Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

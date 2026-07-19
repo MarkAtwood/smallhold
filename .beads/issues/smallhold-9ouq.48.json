@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.48",
+  "title": "user:notification stream not filtered to notifications only",
+  "description": "streaming.rs resolve_channel maps both 'user' and 'user:notification' to the same channel key 'user:{id}'. The Mastodon streaming API contract is that 'user:notification' only receives notification events, not status updates. Clients (e.g. Tusky, Ivory) subscribing to 'user:notification' will receive statuses they didn't ask for, causing duplicate entries in notification-only views.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:41:24.728760138Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:41:24.728760138Z",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.48",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:41:24.758269714Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

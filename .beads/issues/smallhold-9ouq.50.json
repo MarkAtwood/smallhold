@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.50",
+  "title": "Push notification endpoint SSRF: no validate_outbound_url",
+  "description": "push.rs send_push_inner: the server POSTs to the push subscription endpoint URL without calling validate_outbound_url(). Any authenticated user can register a push subscription with an internal/private IP endpoint (e.g. http://169.254.169.254/latest/meta-data/ or http://localhost:8080/admin). When a notification fires, the server sends an HTTP POST to that address. Unlike card fetching which has SSRF protection, push delivery has none. Fix: validate the endpoint URL with validate_outbound_url() at subscription creation time (create_subscription) AND require https scheme.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:41:37.295371636Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:41:37.295371636Z",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.50",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:41:37.331344836Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

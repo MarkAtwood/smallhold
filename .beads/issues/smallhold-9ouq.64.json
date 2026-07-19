@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.64",
+  "title": "ap_context() rebuilds static JSON-LD context tree on every call",
+  "description": "activitypub.rs:29 ap_context() constructs a complex serde_json::Value containing ~20 string allocations, nested maps, and arrays. This is called on every actor document request (GET /users/{username}). The value is always identical—it should be a static LazyLock\u003cValue\u003e allocated once. What goes wrong: every actor fetch (which remote servers hit frequently during federation) allocates and drops a non-trivial JSON tree for data that never changes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:44:16.328914595Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:44:16.328914595Z",
+  "labels": [
+    "perf",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.64",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:44:16.360383898Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

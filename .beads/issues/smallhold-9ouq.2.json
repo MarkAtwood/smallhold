@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.2",
+  "title": "Visibility is stringly-typed; should be an enum",
+  "description": "determine_visibility() in inbox.rs returns String, and the visibility field is compared as string literals (\"public\", \"unlisted\", \"private\", \"direct\") in at least 8 locations across inbox.rs, posting.rs, delivery.rs, and streaming.rs. What goes wrong: a typo (e.g. \"pubilc\") silently falls through to the default branch without a compile-time error, resulting in incorrect addressing or federation behavior. An enum with Display/FromStr implementations gives exhaustive match coverage and prevents impossible states.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:31.8939979Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:31.8939979Z",
+  "labels": [
+    "idiom",
+    "type-design",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.2",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:31.9316178Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

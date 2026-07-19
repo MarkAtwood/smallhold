@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.42",
+  "title": "Push endpoint SSRF: no validate_outbound_url",
+  "description": "In push.rs send_push_inner(), the server POSTs to sub.endpoint (line 325) without calling validate_outbound_url(). An authenticated user can register a push subscription with endpoint pointing to internal services (127.0.0.1, 169.254.169.254, 10.x, etc.). The PUSH_CLIENT also does not disable redirects, so even an https:// endpoint could redirect to an internal IP. Unlike delivery.rs (line 254), cards.rs (line 72), and federation.rs (line 202) which all validate outbound URLs, push.rs skips this check entirely. Impact: authenticated SSRF — local user can probe/POST encrypted blobs to arbitrary internal hosts.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:40:37.638131099Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:40:37.638131099Z",
+  "labels": [
+    "security",
+    "ssrf",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.42",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:40:37.676848881Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

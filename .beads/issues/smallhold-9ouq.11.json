@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.11",
+  "title": "FederationClient::new allocates user_agent String that is never read",
+  "description": "federation.rs line 76: user_agent field is stored as String with #[allow(dead_code)]. The field is cloned from config (line 92) but never accessed — the user_agent is passed to the reqwest Client builder directly (line 83). What goes wrong: wasted allocation per FederationClient instance, and dead code obscures whether user_agent is supposed to be used for something else. Remove the field or use it.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:50.152028737Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:50.152028737Z",
+  "labels": [
+    "idiom",
+    "dead-code",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.11",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:50.191056502Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

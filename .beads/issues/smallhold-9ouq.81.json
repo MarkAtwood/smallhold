@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.81",
+  "title": "Inbox creates notifications from blocked/muted remote accounts",
+  "description": "The inbox handlers (handle_like, handle_announce, handle_create mention processing) insert notifications unconditionally without checking whether the local user has blocked or muted the sending remote account. If a user blocks a remote account via /api/v1/accounts/:id/block, the blocks table is updated and local follow relationships are removed, but the inbox still processes incoming Like, Announce, and Create activities from that blocked account and creates notifications. The inbox should check the blocks and mutes tables before inserting notifications, matching the same (local_account_id, remote_account_id) pairing used in interactions.rs.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:50:30.231519112Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:50:30.231519112Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.81",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:50:30.262224612Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

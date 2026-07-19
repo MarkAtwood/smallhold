@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.52",
+  "title": "tar archive extraction has no path traversal protection",
+  "description": "import.rs extract_archive: calls archive.unpack(dest) on a user-provided .tar.gz without setting set_unpack_xattrs(false) or checking for path traversal (../../../etc/cron.d/evil). The tar crate's unpack() does reject absolute paths by default, but relative paths containing .. are only blocked since tar 0.4.39. If using an older version, a crafted Mastodon archive could write files anywhere on the filesystem. Even with recent tar crate, the lack of explicit checks makes this fragile. Fix: iterate entries manually and validate each path component, or at minimum set archive.set_overwrite(false) and verify paths stay within dest after canonicalization.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:41:47.499978644Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:41:47.499978644Z",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.52",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:41:47.535874328Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

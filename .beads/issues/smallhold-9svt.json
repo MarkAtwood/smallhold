@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-9svt",
+  "title": "Circuit breaker HashMap can grow unbounded",
+  "description": "The per-domain circuit breaker state in delivery.rs uses an in-memory HashMap with no eviction. Gaja added 10k-entry eviction logic. Under sustained federation with many failing domains, memory grows without bound.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:28:18.391392281Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:55:00.033755309Z",
+  "closed_at": "2026-07-19T22:55:00.033755309Z",
+  "close_reason": "Closed"
+}

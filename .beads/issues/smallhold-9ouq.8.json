@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.8",
+  "title": "LOGIN_ATTEMPTS HashMap never evicts entries",
+  "description": "In api.rs, the LOGIN_ATTEMPTS static HashMap\u003cString,(u32,i64)\u003e grows unbounded. Entries are created on every login attempt from a new IP but never removed. The window_start is reset but the key persists. Over time (weeks/months of bot scanning), this causes monotonic memory growth. Unlike CIRCUIT_BREAKER which has a retain() call at \u003e10k entries, and PASSKEY_TOKENS which cleans on every insert, LOGIN_ATTEMPTS has no eviction logic. Trigger: continuous login probes from distinct IPs (trivial for bots). Impact: slow memory leak leading to eventual OOM.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:43.99226658Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:43.99226658Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.8",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:44.021490061Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-9ouq.24",
+  "title": "LOGIN_ATTEMPTS HashMap grows without bound",
+  "description": "api.rs LOGIN_ATTEMPTS (line 60) is a static HashMap\u003cString, (u32, i64)\u003e keyed by IP address. Entries are inserted on login attempts but never evicted. Under sustained attack from many IPs, this grows without limit. The circuit breaker in delivery.rs has explicit eviction; this rate limiter does not. Fix: periodically (or on insert) evict entries older than LOGIN_WINDOW_SECS, or use a bounded LRU.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:23.410107647Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:44.264450342Z",
+  "closed_at": "2026-07-19T22:35:44.264450342Z",
+  "close_reason": "Duplicate of smallhold-9ouq.8",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.24",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:23.440583031Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

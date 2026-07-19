@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-hdiq",
+  "title": "Missing HTML sanitization on ingest",
+  "description": "Broadside has dedicated sanitize.rs using ammonia with Mastodon-compatible allowlist. Smallhold lacks equivalent HTML sanitization. Inbound federated content may contain unsafe HTML. Security gap.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:28:12.204138543Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:54:59.946014531Z",
+  "closed_at": "2026-07-19T22:54:59.946014531Z",
+  "close_reason": "Closed"
+}

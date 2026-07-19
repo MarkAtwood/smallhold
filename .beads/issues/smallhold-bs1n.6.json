@@ -1,0 +1,38 @@
+{
+  "id": "smallhold-bs1n.6",
+  "title": "Register did:plc with Bluesky directory",
+  "description": "Silently register a did:plc for each actor on plc.directory. Gives actors Bluesky-compatible portable identity for free.\n\n## Why did:plc\n\n- did:key: no rotation, no recovery\n- did:web: dies with server\n- did:plc: survives server death, supports rotation, Bluesky-compatible\n\nplc.directory is open — anyone can register, not just Bluesky users.\n\n## did:plc structure\n\ndid:plc is a hash of the genesis operation:\n```\ndid:plc:z72i7hdynmk6r22z27h6tvur\n```\n\nGenesis operation:\n```json\n{\n  \"type\": \"plc_operation\",\n  \"rotationKeys\": [\"did:key:z6Mk...\"],\n  \"verificationMethods\": {\n    \"atproto\": \"did:key:z6Mk...\"\n  },\n  \"alsoKnownAs\": [\n    \"at://alice.example.com\",\n    \"https://example.com/users/alice\"\n  ],\n  \"services\": {\n    \"atproto_pds\": {\n      \"type\": \"AtprotoPersonalDataServer\",\n      \"endpoint\": \"https://example.com\"\n    }\n  },\n  \"prev\": null,\n  \"sig\": \"...\"\n}\n```\n\n## Implementation\n\n1. On actor creation, build genesis operation\n2. Sign with actor private key\n3. POST to https://plc.directory/{did}\n4. Store did_plc in actors table\n5. Add to actor alsoKnownAs\n\n## API\n\n```\nPOST https://plc.directory/{did}\nContent-Type: application/json\n\n{genesis_operation}\n```\n\nThe {did} in the URL is derived by hashing the genesis op.\n\n## Migration\n\nBackfill: create did:plc for existing actors (idempotent if we store the genesis op).\n\n## Acceptance\n\n- [ ] New actors get did:plc registered\n- [ ] did:plc resolves on plc.directory\n- [ ] Rotation keys allow future key updates\n- [ ] alsoKnownAs includes AP actor URL\n- [ ] Existing actors backfilled",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T03:58:30.63665552Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T03:58:30.63665552Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-bs1n.6",
+      "depends_on_id": "smallhold-bs1n",
+      "type": "parent-child",
+      "created_at": "2026-07-19T03:58:30.654757195Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "smallhold-bs1n.6",
+      "depends_on_id": "smallhold-bs1n.1",
+      "type": "blocks",
+      "created_at": "2026-07-19T03:58:35.694491626Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "smallhold-bs1n.6",
+      "depends_on_id": "smallhold-bs1n.7",
+      "type": "blocks",
+      "created_at": "2026-07-19T04:10:47.328908497Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

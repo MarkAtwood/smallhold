@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.4",
+  "title": "Regex compiled on every call in parse_mentions/parse_hashtags/autolink_bare_urls",
+  "description": "In posting.rs, parse_mentions (line 402), parse_hashtags (line 425), and autolink_bare_urls (line 448) each call Regex::new() every invocation. These functions are called on every post creation and every content render. What goes wrong: Regex compilation is expensive (microseconds per call); under load this becomes measurable latency. The fix is trivial: wrap each in a LazyLock\u003cRegex\u003e static, matching the pattern already used for FEDI_POST_RE at line 381.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:34:40.139605496Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:34:40.139605496Z",
+  "labels": [
+    "idiom",
+    "performance",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.4",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:34:40.179465829Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

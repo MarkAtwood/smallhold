@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.63",
+  "title": "Undo{Follow} fabricates follow ID instead of referencing original",
+  "description": "interactions.rs unfollow handler (line 365-378): when unfollowing a remote account, the code generates a brand new follow_id (generate_id()) for the Undo object's inner Follow, instead of looking up the original Follow activity ID that was sent when the follow was created. The AP spec requires Undo to reference the original activity by its id. Strict implementations (e.g. Pleroma/Akkoma) will reject the Undo because the object.id doesn't match any known Follow activity. Result: the remote server never processes the unfollow and continues treating the user as a follower, still delivering posts. Fix: store the Follow activity ID when creating the follow (e.g. in a column on the follows table) and reference it in the Undo.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:43:17.916457938Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:43:17.916457938Z",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.63",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:43:17.945199952Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

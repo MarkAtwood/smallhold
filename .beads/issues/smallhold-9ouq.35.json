@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.35",
+  "title": "Inbound signature verification does not require (request-target)",
+  "description": "In inbox.rs verify_and_fetch_actor (lines 427-435), the code checks that the signature covers 'digest' and 'date', but does NOT require '(request-target)'. Without (request-target) in the signed headers, an attacker who observes or intercepts a valid signed POST to /inbox could replay it to /users/bob/inbox (or vice versa) on the same host, because the signature remains valid — it only covers headers that are identical across both requests.\n\nIn practice, most ActivityPub implementations (Mastodon, Pleroma) DO sign (request-target), so the field is usually present. But a malicious server could craft a valid signature omitting (request-target) and deliver the same activity to a different user-specific inbox to trigger duplicate processing.\n\nImpact: activity replay/routing between inbox endpoints on the same host. The signed digest prevents body tampering, but not re-routing.\n\nFix: require (request-target) in sig_params.headers_list, similar to the existing digest/date checks.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:36:05.977071109Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:36:05.977071109Z",
+  "labels": [
+    "crypto-security",
+    "untrusted-input",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.35",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:36:06.01455041Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

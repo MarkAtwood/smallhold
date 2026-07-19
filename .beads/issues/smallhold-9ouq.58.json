@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-9ouq.58",
+  "title": "Regex compiled on every call in sanitize_css_for_style_tag and theme.rs",
+  "description": "activitypub.rs sanitize_css_for_style_tag (line 207) and theme.rs load_theme_css (line 85) both compile a regex on every invocation: Regex::new(r\"(?i)\u003c/\\s*style\"). These are called on every page render (profile, post, index pages). The regex is identical in both locations. Fix: use a static LazyLock\u003cRegex\u003e like the rest of the codebase already does (see cards.rs URL_RE, META_RE for the pattern).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:42:19.780810899Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:42:19.780810899Z",
+  "labels": [
+    "maintainer-burden",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.58",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:42:19.809044569Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.16",
+  "title": "handle_move creates a second reqwest Client instead of reusing FederationClient",
+  "description": "inbox.rs lines 1431-1436: handle_move() creates a new reqwest::Client::builder() to re-fetch the actor document for alsoKnownAs verification, instead of using the already-available FederationClient. What goes wrong: (1) bypasses validate_outbound_url SSRF check since it hits the URL directly, (2) duplicates timeout/TLS config which can drift from the canonical client, (3) does not follow the redirect policy (none) that FederationClient enforces. The fix is to expose a raw-JSON fetch method on FederationClient.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:35:00.234366783Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:35:00.234366783Z",
+  "labels": [
+    "idiom",
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.16",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:35:00.269478937Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

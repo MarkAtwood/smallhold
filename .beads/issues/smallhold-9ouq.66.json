@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-9ouq.66",
+  "title": "GET /api/v1/statuses/:id leaks private/direct posts",
+  "description": "get_status handler (posting.rs:1779) fetches any post by ID without authentication or visibility check. An unauthenticated caller can read direct messages and private posts by guessing or enumerating numeric IDs. Mastodon returns 404 for non-public statuses when the caller is not authorized.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T22:48:51.535196951Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T22:48:51.535196951Z",
+  "labels": [
+    "correctness",
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-9ouq.66",
+      "depends_on_id": "smallhold-9ouq",
+      "type": "parent-child",
+      "created_at": "2026-07-19T22:48:51.569735663Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
