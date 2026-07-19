@@ -75,6 +75,20 @@ fn circuit_record_failure(domain: &str, now_ms: i64) {
     if state.consecutive_failures >= CIRCUIT_THRESHOLD {
         state.open_until = Some(now_ms + CIRCUIT_OPEN_MS);
     }
+
+    // Evict stale entries to prevent unbounded memory growth.
+    // First pass: keep only entries with an actively-open circuit or recent failures
+    // (threshold/2 filters out domains with just 1-2 transient errors).
+    // Second pass: if still over limit, keep only actively-open circuits.
+    if map.len() > 10_000 {
+        map.retain(|_, s| {
+            matches!(s.open_until, Some(until) if now_ms < until)
+                || s.consecutive_failures >= CIRCUIT_THRESHOLD / 2
+        });
+        if map.len() > 10_000 {
+            map.retain(|_, s| matches!(s.open_until, Some(until) if now_ms < until));
+        }
+    }
 }
 
 // -- Public API --
@@ -205,7 +219,10 @@ async fn process_batch(
             }
         }
 
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = match semaphore.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break, // Semaphore closed; stop processing
+        };
         let pool = pool.clone();
         let client = client.clone();
         let domain = config.server.domain.clone();
