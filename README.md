@@ -23,7 +23,18 @@ Designed for a solo operator running a few dozen personas under one domain. Fede
 ### Docker (fastest)
 
 ```bash
-git clone https://github.com/yourname/smallhold && cd smallhold
+docker pull fallenpegasus/smallhold:latest
+mkdir -p data && sudo chown 999:999 data
+docker run --rm -v ./data:/data fallenpegasus/smallhold init --config /data/config.toml
+# Edit data/config.toml — set domain, set listen to "0.0.0.0:8080"
+docker run --rm -v ./data:/data fallenpegasus/smallhold persona create writer --display-name="Your Name" --config /data/config.toml
+docker run -d -p 443:443 -v ./data:/data fallenpegasus/smallhold serve --config /data/config.toml
+```
+
+Or with Compose (includes Caddy for auto-TLS):
+
+```bash
+git clone https://github.com/MarkAtwood/smallhold && cd smallhold
 export SMALLHOLD_DOMAIN=yourdomain.example
 mkdir -p data && sudo chown 999:999 data
 docker compose run --rm smallhold init --config /data/config.toml
