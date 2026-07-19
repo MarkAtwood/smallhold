@@ -400,7 +400,7 @@ async fn post_page(
     let post: PostRow = sqlx::query_as(
         "SELECT p.id, p.content_html, p.created_at FROM posts p \
          JOIN accounts a ON p.account_id = a.id \
-         WHERE p.id = ? AND a.username = ?",
+         WHERE p.id = ? AND a.username = ? AND p.visibility IN ('public', 'unlisted')",
     )
     .bind(pid)
     .bind(&username)
@@ -611,7 +611,7 @@ async fn featured(
     let posts: Vec<PostRow> = sqlx::query_as(
         "SELECT p.id, p.content_html, p.created_at \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
-         WHERE pp.account_id = ? \
+         WHERE pp.account_id = ? AND p.visibility = 'public' \
          ORDER BY pp.pinned_at DESC",
     )
     .bind(account_id)

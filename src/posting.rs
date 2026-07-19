@@ -941,6 +941,7 @@ async fn create_status(
     headers: HeaderMap,
     Json(body): Json<CreateStatusRequest>,
 ) -> Result<Response, AppError> {
+    auth.require_scope("write")?;
     let domain = &state.config.server.domain;
 
     // Check idempotency key
@@ -1231,8 +1232,23 @@ async fn create_status(
             "direct" => {
                 let mut to_addrs: Vec<Value> = Vec::new();
                 for m in &rendered.mentions {
-                    if m.domain.is_none() {
-                        to_addrs.push(json!(format!("https://{domain}/users/{}", m.username)));
+                    match &m.domain {
+                        None => {
+                            to_addrs.push(json!(format!("https://{domain}/users/{}", m.username)));
+                        }
+                        Some(mention_domain) => {
+                            // Look up the remote account's actor_uri for the AP `to` field
+                            let remote: Option<(String,)> = sqlx::query_as(
+                                "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
+                            )
+                            .bind(&m.username)
+                            .bind(mention_domain)
+                            .fetch_optional(&state.pool)
+                            .await?;
+                            if let Some((actor_uri,)) = remote {
+                                to_addrs.push(json!(actor_uri));
+                            }
+                        }
                     }
                 }
                 (to_addrs, vec![])
@@ -1240,15 +1256,33 @@ async fn create_status(
             _ => (vec![json!(public)], vec![json!(&followers_url)]),
         };
 
-        // Build mention tags for the Note (local mentions only for now)
+        // Build mention tags for the Note
         let mut mention_tags: Vec<Value> = Vec::new();
         for m in &rendered.mentions {
-            if m.domain.is_none() {
-                mention_tags.push(json!({
-                    "type": "Mention",
-                    "href": format!("https://{domain}/users/{}", m.username),
-                    "name": format!("@{}@{domain}", m.username)
-                }));
+            match &m.domain {
+                None => {
+                    mention_tags.push(json!({
+                        "type": "Mention",
+                        "href": format!("https://{domain}/users/{}", m.username),
+                        "name": format!("@{}@{domain}", m.username)
+                    }));
+                }
+                Some(mention_domain) => {
+                    let remote: Option<(String,)> = sqlx::query_as(
+                        "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
+                    )
+                    .bind(&m.username)
+                    .bind(mention_domain)
+                    .fetch_optional(&state.pool)
+                    .await?;
+                    if let Some((actor_uri,)) = remote {
+                        mention_tags.push(json!({
+                            "type": "Mention",
+                            "href": actor_uri,
+                            "name": format!("@{}@{}", m.username, mention_domain)
+                        }));
+                    }
+                }
             }
         }
 
@@ -1263,12 +1297,23 @@ async fn create_status(
             }));
         }
 
-        let in_reply_to_ap = in_reply_to_id.map(|rid| {
-            json!(format!(
-                "https://{domain}/users/{}/statuses/{rid}",
-                auth.username
-            ))
-        });
+        let in_reply_to_ap = match in_reply_to_id {
+            Some(rid) => {
+                // Look up the original post's ap_id rather than constructing it
+                let original_ap_id: Option<(String,)> =
+                    sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
+                        .bind(rid)
+                        .fetch_optional(&state.pool)
+                        .await?;
+                Some(json!(original_ap_id
+                    .map(|(ap_id,)| ap_id)
+                    .unwrap_or_else(|| format!(
+                        "https://{domain}/users/{}/statuses/{rid}",
+                        auth.username
+                    ))))
+            }
+            None => None,
+        };
 
         // Query media attachments for the AP Note
         #[allow(clippy::type_complexity)]
@@ -1336,13 +1381,33 @@ async fn create_status(
             }
         });
 
-        if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
-            tracing::error!("Failed to enqueue Create activity: {e}");
-        }
+        if visibility == "direct" {
+            // Deliver DMs directly to each mentioned remote user's inbox
+            for m in &rendered.mentions {
+                if let Some(ref mention_domain) = m.domain {
+                    let remote: Option<(String,)> = sqlx::query_as(
+                        "SELECT inbox_url FROM remote_accounts WHERE username = ? AND domain = ?",
+                    )
+                    .bind(&m.username)
+                    .bind(mention_domain)
+                    .fetch_optional(&state.pool)
+                    .await?;
+                    if let Some((inbox_url,)) = remote {
+                        if let Err(e) = enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity).await {
+                            tracing::error!("Failed to enqueue DM delivery to {}: {e}", inbox_url);
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
+                tracing::error!("Failed to enqueue Create activity: {e}");
+            }
 
-        if visibility == "public" {
-            if let Err(e) = enqueue_to_relays(&state.pool, auth.account_id, &activity).await {
-                tracing::error!("Failed to enqueue Create activity to relays: {e}");
+            if visibility == "public" {
+                if let Err(e) = enqueue_to_relays(&state.pool, auth.account_id, &activity).await {
+                    tracing::error!("Failed to enqueue Create activity to relays: {e}");
+                }
             }
         }
     }
@@ -1401,6 +1466,7 @@ async fn delete_status(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Response, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
@@ -1490,6 +1556,7 @@ async fn edit_status(
     Path(id): Path<String>,
     Json(body): Json<CreateStatusRequest>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
@@ -1639,15 +1706,33 @@ async fn edit_status(
             _ => (vec![json!(public)], vec![json!(&followers_url)]),
         };
 
-        // Build mention tags for the Note (local mentions only for now)
+        // Build mention tags for the Note
         let mut mention_tags: Vec<Value> = Vec::new();
         for m in &rendered.mentions {
-            if m.domain.is_none() {
-                mention_tags.push(json!({
-                    "type": "Mention",
-                    "href": format!("https://{domain}/users/{}", m.username),
-                    "name": format!("@{}@{domain}", m.username)
-                }));
+            match &m.domain {
+                None => {
+                    mention_tags.push(json!({
+                        "type": "Mention",
+                        "href": format!("https://{domain}/users/{}", m.username),
+                        "name": format!("@{}@{domain}", m.username)
+                    }));
+                }
+                Some(mention_domain) => {
+                    let remote: Option<(String,)> = sqlx::query_as(
+                        "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
+                    )
+                    .bind(&m.username)
+                    .bind(mention_domain)
+                    .fetch_optional(&state.pool)
+                    .await?;
+                    if let Some((actor_uri,)) = remote {
+                        mention_tags.push(json!({
+                            "type": "Mention",
+                            "href": actor_uri,
+                            "name": format!("@{}@{}", m.username, mention_domain)
+                        }));
+                    }
+                }
             }
         }
 
@@ -1792,6 +1877,11 @@ async fn get_status(
             .fetch_optional(&state.pool)
             .await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
+
+    // Unauthenticated endpoint: only expose public/unlisted posts
+    if post.visibility != "public" && post.visibility != "unlisted" {
+        return Err(AppError::not_found("Status not found"));
+    }
 
     let status = load_status(&state.pool, &post, domain, None).await?;
     Ok(Json(status))
@@ -1944,6 +2034,7 @@ async fn favourite(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
@@ -2139,6 +2230,7 @@ async fn reblog(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
@@ -2401,6 +2493,7 @@ async fn bookmark(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
@@ -2851,6 +2944,7 @@ async fn pin_status(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let post_id: i64 = id
         .parse()
         .map_err(|_| AppError::not_found("Status not found"))?;
