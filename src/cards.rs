@@ -13,7 +13,9 @@ static CARD_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .user_agent("smallhold/0.2 (+https://github.com/smallhold)")
-        .redirect(reqwest::redirect::Policy::limited(5))
+        // SSRF: disable redirects so validate_outbound_url cannot be bypassed
+        // via a redirect to an internal IP. Cards behind shorteners (t.co) won't resolve.
+        .redirect(reqwest::redirect::Policy::none())
         .use_rustls_tls()
         .build()
         .expect("failed to build card HTTP client")
@@ -47,7 +49,10 @@ static URL_RE: LazyLock<Regex> =
 
 /// Extract the first https:// URL from raw post text.
 pub fn extract_first_url(text: &str) -> Option<String> {
-    URL_RE.find(text).map(|m| m.as_str().to_string())
+    URL_RE.find(text).map(|m| {
+        let url = m.as_str().trim_end_matches(['.', ',', ';', ')', ']', '!', '?']);
+        url.to_string()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +82,20 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         bail!("HTTP {}", resp.status());
     }
 
-    // Limit response body to 1MB
+    let content_type = resp.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if !content_type.contains("text/html") {
+        bail!("not HTML: {content_type}");
+    }
+
+    if let Some(len) = resp.content_length() {
+        if len > 1_048_576 {
+            bail!("response too large: {len} bytes");
+        }
+    }
+
     let body = resp
         .bytes()
         .await
@@ -89,17 +107,19 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
     let html = String::from_utf8_lossy(&body);
     let tags = parse_og_tags(&html);
 
-    let title = tags
+    let title: String = tags
         .get("og:title")
         .or_else(|| tags.get("twitter:title"))
         .cloned()
         .unwrap_or_else(|| parse_html_title(&html).unwrap_or_default());
+    let title: String = decode_html_entities(&title).chars().take(200).collect();
 
-    let description = tags
+    let description: String = tags
         .get("og:description")
         .or_else(|| tags.get("twitter:description"))
         .cloned()
         .unwrap_or_default();
+    let description: String = decode_html_entities(&description).chars().take(512).collect();
 
     let image_url = tags
         .get("og:image")
@@ -116,9 +136,13 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         "link".to_string()
     };
 
-    let provider_name = tags.get("og:site_name").cloned().unwrap_or_default();
+    let provider_name = decode_html_entities(
+        &tags.get("og:site_name").cloned().unwrap_or_default(),
+    );
 
-    let html_embed = tags.get("og:video:url").cloned().unwrap_or_default();
+    let author_name = decode_html_entities(
+        &tags.get("article:author").cloned().unwrap_or_default(),
+    );
     let width = tags
         .get("og:video:width")
         .or_else(|| tags.get("og:image:width"))
@@ -136,11 +160,11 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         title,
         description,
         image_url,
-        author_name: tags.get("article:author").cloned().unwrap_or_default(),
+        author_name,
         author_url: String::new(),
         provider_name,
         provider_url: String::new(),
-        html: html_embed,
+        html: String::new(), // Never store untrusted HTML; we don't support oEmbed/rich embeds
         width,
         height,
     })
@@ -149,6 +173,16 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
 // ---------------------------------------------------------------------------
 // HTML parsing (regex-based, no full parser needed)
 // ---------------------------------------------------------------------------
+
+fn decode_html_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+     .replace("&lt;", "<")
+     .replace("&gt;", ">")
+     .replace("&quot;", "\"")
+     .replace("&#39;", "'")
+     .replace("&#x27;", "'")
+     .replace("&apos;", "'")
+}
 
 /// Parse OpenGraph and Twitter Card meta tags from HTML.
 fn parse_og_tags(html: &str) -> HashMap<String, String> {
@@ -317,6 +351,9 @@ pub async fn fetch_and_cache_card(
 // ---------------------------------------------------------------------------
 
 /// Load the cached card JSON for a post, or None if no card exists.
+// ponytail: batch card loading available via load_cards_for_posts().
+// Currently cards loaded per-status in load_status(). Acceptable for
+// timeline sizes (max 40 posts). Wire batch loading if this becomes a bottleneck.
 #[allow(clippy::type_complexity)]
 pub async fn load_card_for_post(pool: &SqlitePool, post_id: i64) -> Option<Value> {
     let row: Option<(

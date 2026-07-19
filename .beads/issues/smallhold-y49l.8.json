@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.8",
+  "title": "N+1 query: load_card_for_post called per-post in timeline loops",
+  "description": "fetch_paginated_statuses() calls load_status() in a loop for each post. load_status() calls load_card_for_post() — one DB query per post. For a 40-post timeline page, this adds 40 extra queries. The batch function load_cards_for_posts() exists but is never called. Fix: either batch-load cards before the loop and pass them in, or accept the N+1 as acceptable for SQLite (ponytail ceiling: for \u003e100 posts/page or non-SQLite backends, refactor to batch). Note: load_cards_for_posts is currently dead code.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:50.685112927Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.313947736Z",
+  "closed_at": "2026-07-19T01:09:05.313947736Z",
+  "close_reason": "Closed",
+  "labels": [
+    "performance",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.8",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:50.711097514Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

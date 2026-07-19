@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.6",
+  "title": "Card html field served unsanitized — potential stored XSS",
+  "description": "The CardData.html field (populated from og:video:url) is stored as-is and served in the card JSON as \"html\": card.html. Mastodon clients render this field as an iframe embed. If a malicious page sets og:video:url to a javascript: URL or an HTML string with \u003cscript\u003e, a naive client could execute it. While well-behaved Mastodon clients sanitize this, the server should not rely on client-side sanitization. Fix: validate that the html field is either empty or a valid URL (https only), or apply allowlist-based HTML sanitization if full embed HTML is needed.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:33.47579226Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.196024416Z",
+  "closed_at": "2026-07-19T01:09:05.196024416Z",
+  "close_reason": "Closed",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.6",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:33.505059036Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.4",
+  "title": "No Content-Type check: card fetcher parses non-HTML responses as HTML",
+  "description": "fetch_card() sends Accept: text/html but never checks the response Content-Type header. If the URL points to an image, PDF, binary file, or JSON API, the response bytes are passed to parse_og_tags() which will find no meta tags and return an empty/garbage card (empty title, no image). This wastes a DB row and may produce a card with url but no useful metadata. Fix: check Content-Type starts with text/html (or application/xhtml+xml) before parsing; otherwise bail early.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:18.256887041Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.078031214Z",
+  "closed_at": "2026-07-19T01:09:05.078031214Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.4",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:18.286594251Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

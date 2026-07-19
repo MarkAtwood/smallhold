@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.2",
+  "title": "Body size check is post-hoc: full response buffered before 1MB limit enforced",
+  "description": "In fetch_card(), resp.bytes().await downloads the entire response body into memory, then checks body.len() \u003e 1_048_576. A malicious server can send a multi-GB response that exhausts memory before the check runs. Fix: use resp.content_length() as a pre-check (like federation.rs does), and/or stream the body with a byte-counting wrapper that aborts after 1MB. The reqwest .bytes() call will buffer the entire response regardless of size.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:03.739268355Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:04.959546317Z",
+  "closed_at": "2026-07-19T01:09:04.959546317Z",
+  "close_reason": "Closed",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.2",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:03.768658645Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

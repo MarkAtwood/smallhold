@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.5",
+  "title": "No length cap on title/description before DB storage",
+  "description": "CardData fields title, description, html, provider_name, author_name etc. are stored in SQLite TEXT columns with no length constraint. A malicious page can set og:title content to a megabyte-long string (within the 1MB body limit). This bloats the DB and API responses. Mastodon caps title at 200 chars and description at 512 chars. Fix: truncate title to ~200 chars and description to ~512 chars after extraction, before DB insert.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:24.791955547Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.139200372Z",
+  "closed_at": "2026-07-19T01:09:05.139200372Z",
+  "close_reason": "Closed",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.5",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:24.820315281Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

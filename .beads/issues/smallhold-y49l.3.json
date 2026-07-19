@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.3",
+  "title": "OG parser does not decode HTML entities in content attributes",
+  "description": "parse_og_tags() captures raw attribute values via regex ([^\"]*) but never decodes HTML entities. A page with \u003cmeta property=\"og:title\" content=\"Tom \u0026amp; Jerry\"\u003e will store the title as 'Tom \u0026amp; Jerry' literally. Common entities: \u0026amp; \u0026lt; \u0026gt; \u0026#39; \u0026quot; and numeric forms (\u0026#x27;). Mastodon's parser decodes these. Fix: apply an HTML entity decode pass on extracted content values (htmlescape crate or a small inline decoder for the ~5 common entities).",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:11.127230971Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.017587854Z",
+  "closed_at": "2026-07-19T01:09:05.017587854Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.3",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:11.158235682Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

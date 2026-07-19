@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-y49l.7",
+  "title": "extract_first_url matches URLs inside href attributes of rendered HTML",
+  "description": "extract_first_url() is called with \u0026text (raw plaintext input). This is correct for the create_status path. However, the regex r\"https://[^\\s\u003c\u003e\\]\\)]+\" has a subtle issue: if the user's input contains Markdown-style links like [text](https://example.com), the regex will match and include the trailing ) in the URL since \\) only excludes literal closing paren at end — actually wait, \\) IS in the exclusion class. Looking again: the character class is [^\\s\u003c\u003e\\]\\)] which excludes ], ), \u003c, \u003e, and whitespace. This is actually correct for common cases. Downgrading: the text is plaintext, not HTML, so this is fine. One edge case: if text contains a bare URL with trailing punctuation like https://example.com. (period), the period will be included in the extracted URL. Mastodon strips trailing punctuation (.\\!?,;:) from URLs.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:04:43.153372126Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:09:05.254456849Z",
+  "closed_at": "2026-07-19T01:09:05.254456849Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-y49l.7",
+      "depends_on_id": "smallhold-y49l",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:04:43.186583883Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
