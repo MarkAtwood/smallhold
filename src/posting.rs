@@ -985,7 +985,7 @@ async fn create_status(
         ));
     }
 
-    if text.len() > state.config.limits.max_post_chars {
+    if text.chars().count() > state.config.limits.max_post_chars {
         return Err(AppError::unprocessable(format!(
             "Validation failed: status text must be at most {} characters",
             state.config.limits.max_post_chars
@@ -1508,7 +1508,15 @@ async fn delete_status(
         tracing::error!("Failed to enqueue delete activity: {e}");
     }
 
-    // Delete related rows then the post
+    // Query media files before deletion so we can clean up from disk
+    let media_paths: Vec<(String,)> =
+        sqlx::query_as("SELECT file_path FROM media WHERE post_id = ?")
+            .bind(post_id)
+            .fetch_all(&state.pool)
+            .await?;
+
+    // Delete related rows then the post, all in a transaction
+    let mut tx = state.pool.begin().await?;
     for table in &[
         "DELETE FROM pinned_posts WHERE post_id = ?",
         "DELETE FROM post_tags WHERE post_id = ?",
@@ -1517,20 +1525,33 @@ async fn delete_status(
         "DELETE FROM bookmarks WHERE post_id = ?",
         "DELETE FROM notifications WHERE post_id = ?",
         "DELETE FROM idempotency_keys WHERE post_id = ?",
+        "DELETE FROM conversation_read_markers WHERE post_id = ?",
+        "DELETE FROM conversation_hidden WHERE post_id = ?",
+        "DELETE FROM post_cards WHERE post_id = ?",
     ] {
         sqlx::query(table)
             .bind(post_id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
     }
     sqlx::query("UPDATE media SET post_id = NULL WHERE post_id = ?")
         .bind(post_id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
     sqlx::query("DELETE FROM posts WHERE id = ?")
         .bind(post_id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
+
+    // Remove media files from disk (best-effort, after transaction committed)
+    let media_dir = &state.config.storage.media_dir;
+    for (file_path,) in &media_paths {
+        let abs_path = std::path::Path::new(media_dir).join(file_path);
+        if let Err(e) = tokio::fs::remove_file(&abs_path).await {
+            tracing::warn!(path = %abs_path.display(), error = %e, "failed to remove media file");
+        }
+    }
 
     // Remove from search index
     if let Some(ref search) = state.search {
@@ -1541,6 +1562,11 @@ async fn delete_status(
         event_type: "delete".into(),
         payload: id.clone(),
         channel: "public".into(),
+    });
+    publish(StreamEvent {
+        event_type: "delete".into(),
+        payload: id.clone(),
+        channel: format!("user:{}", auth.account_id),
     });
 
     Ok((StatusCode::OK, Json(status)).into_response())
@@ -1580,7 +1606,7 @@ async fn edit_status(
             "Validation failed: status text is required",
         ));
     }
-    if text.len() > state.config.limits.max_post_chars {
+    if text.chars().count() > state.config.limits.max_post_chars {
         return Err(AppError::unprocessable(format!(
             "Validation failed: status text must be at most {} characters",
             state.config.limits.max_post_chars
@@ -2470,6 +2496,15 @@ async fn unreblog(
                 }
             }
         }
+
+        // Delete the orphan reblog notification
+        sqlx::query(
+            "DELETE FROM notifications WHERE kind = 'reblog' AND from_account_id = ? AND post_id = ?",
+        )
+        .bind(auth.account_id)
+        .bind(post_id)
+        .execute(&state.pool)
+        .await?;
 
         sqlx::query("DELETE FROM posts WHERE id = ?")
             .bind(boost_id)
