@@ -136,6 +136,20 @@ async fn process_inbox(
         return Err(AppError::bad_request("actor URI too long"));
     }
 
+    // Check domain_blocks before any further processing.
+    if let Ok(parsed_url) = url::Url::parse(actor_uri) {
+        if let Some(actor_domain) = parsed_url.host_str() {
+            let blocked: Option<(i64,)> =
+                sqlx::query_as("SELECT 1 FROM domain_blocks WHERE domain = ?")
+                    .bind(actor_domain)
+                    .fetch_optional(&state.pool)
+                    .await?;
+            if blocked.is_some() {
+                return Err(AppError::forbidden("domain is blocked"));
+            }
+        }
+    }
+
     let remote_account =
         verify_and_fetch_actor(state, headers, body, actor_uri, request_path).await?;
 
@@ -398,22 +412,23 @@ async fn verify_and_fetch_actor(
     actor_uri: &str,
     request_path: &str,
 ) -> Result<RemoteAccountRow, AppError> {
-    // Check Date header freshness (±5 minutes)
+    // Check Date header freshness (±12 hours)
     let date_val = headers
         .get("date")
         .ok_or_else(|| AppError::unauthorized("Missing Date header"))?;
-    if let Ok(date_str) = date_val.to_str() {
-        if let Ok(parsed) = chrono::DateTime::parse_from_rfc2822(date_str) {
-            let now = chrono::Utc::now();
-            let diff = (now - parsed.with_timezone(&chrono::Utc))
-                .num_seconds()
-                .abs();
-            if diff > 300 {
-                return Err(AppError::unauthorized(
-                    "Date header too old or too far in future",
-                ));
-            }
-        }
+    let date_str = date_val
+        .to_str()
+        .map_err(|_| AppError::unauthorized("Date header is not valid ASCII"))?;
+    let parsed = chrono::DateTime::parse_from_rfc2822(date_str)
+        .map_err(|_| AppError::unauthorized("Date header is not valid RFC 2822"))?;
+    let now = chrono::Utc::now();
+    let diff = (now - parsed.with_timezone(&chrono::Utc))
+        .num_seconds()
+        .abs();
+    if diff > 43200 {
+        return Err(AppError::unauthorized(
+            "Date header too old or too far in future",
+        ));
     }
 
     let sig_header_val = headers
@@ -423,6 +438,16 @@ async fn verify_and_fetch_actor(
         .map_err(|_| AppError::bad_request("non-ASCII Signature header"))?;
 
     let sig_params = parse_signature_header(sig_header_val)?;
+
+    if !sig_params
+        .headers_list
+        .iter()
+        .any(|h| h == "(request-target)")
+    {
+        return Err(AppError::unauthorized(
+            "Signature must include (request-target)",
+        ));
+    }
 
     if !sig_params.headers_list.iter().any(|h| h == "digest") {
         return Err(AppError::unauthorized(
@@ -553,6 +578,25 @@ async fn enqueue_activity(
         .map_err(|e| AppError::internal(format!("enqueue delivery: {e}")))
 }
 
+/// Check if a remote account is blocked or muted by a local account.
+async fn is_blocked_or_muted(
+    pool: &SqlitePool,
+    local_account_id: i64,
+    remote_account_id: i64,
+) -> Result<bool, AppError> {
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT 1 FROM blocks WHERE account_id = ? AND blocked_remote_id = ?
+         UNION SELECT 1 FROM mutes WHERE account_id = ? AND muted_remote_id = ?",
+    )
+    .bind(local_account_id)
+    .bind(remote_account_id)
+    .bind(local_account_id)
+    .bind(remote_account_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.is_some())
+}
+
 // ---------------------------------------------------------------------------
 // Activity handlers
 // ---------------------------------------------------------------------------
@@ -617,35 +661,37 @@ async fn handle_follow(
         .execute(&state.pool)
         .await?;
 
-        // Create a notification.
-        let notif_id = generate_id();
-        sqlx::query(
-            "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, created_at)
-             VALUES (?, ?, 'follow', ?, ?)",
-        )
-        .bind(notif_id)
-        .bind(account_id)
-        .bind(remote.id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        // Create a notification (unless blocked/muted).
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+            let notif_id = generate_id();
+            sqlx::query(
+                "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, created_at)
+                 VALUES (?, ?, 'follow', ?, ?)",
+            )
+            .bind(notif_id)
+            .bind(account_id)
+            .bind(remote.id)
+            .bind(now)
+            .execute(&state.pool)
+            .await?;
 
-        // Fire-and-forget push notification
-        let pool = state.pool.clone();
-        let actor = remote.actor_uri.clone();
-        let push_domain = domain.clone();
-        tokio::spawn(async move {
-            crate::push::send_push_notification(
-                &pool,
-                account_id,
-                "follow",
-                "New follower",
-                &actor,
-                None,
-                &push_domain,
+            // Fire-and-forget push notification
+            let pool = state.pool.clone();
+            let actor = remote.actor_uri.clone();
+            let push_domain = domain.clone();
+            tokio::spawn(async move {
+                crate::push::send_push_notification(
+                    &pool,
+                    account_id,
+                    "follow",
+                    "New follower",
+                    &actor,
+                    None,
+                    &push_domain,
             )
             .await;
-        });
+            });
+        }
 
         // Send Accept back.
         let accept_id = generate_id();
@@ -898,42 +944,44 @@ async fn handle_create(
                 .execute(&state.pool)
                 .await?;
 
-                // Create a mention notification.
-                let notif_id = generate_id();
-                sqlx::query(
-                    "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, remote_post_id, created_at)
-                     VALUES (?, ?, 'mention', ?, ?, ?)",
-                )
-                .bind(notif_id)
-                .bind(local_account_id)
-                .bind(remote.id)
-                .bind(post_id)
-                .bind(now)
-                .execute(&state.pool)
-                .await?;
-
-                publish(StreamEvent {
-                    event_type: "notification".into(),
-                    payload: notif_id.to_string(),
-                    channel: format!("user:{}", local_account_id),
-                });
-
-                // Fire-and-forget push notification
-                let pool = state.pool.clone();
-                let actor = remote.actor_uri.clone();
-                let push_domain = domain.clone();
-                tokio::spawn(async move {
-                    crate::push::send_push_notification(
-                        &pool,
-                        local_account_id,
-                        "mention",
-                        "New mention",
-                        &actor,
-                        None,
-                        &push_domain,
+                // Create a mention notification (unless blocked/muted).
+                if !is_blocked_or_muted(&state.pool, local_account_id, remote.id).await? {
+                    let notif_id = generate_id();
+                    sqlx::query(
+                        "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, remote_post_id, created_at)
+                         VALUES (?, ?, 'mention', ?, ?, ?)",
                     )
-                    .await;
-                });
+                    .bind(notif_id)
+                    .bind(local_account_id)
+                    .bind(remote.id)
+                    .bind(post_id)
+                    .bind(now)
+                    .execute(&state.pool)
+                    .await?;
+
+                    publish(StreamEvent {
+                        event_type: "notification".into(),
+                        payload: notif_id.to_string(),
+                        channel: format!("user:{}", local_account_id),
+                    });
+
+                    // Fire-and-forget push notification
+                    let pool = state.pool.clone();
+                    let actor = remote.actor_uri.clone();
+                    let push_domain = domain.clone();
+                    tokio::spawn(async move {
+                        crate::push::send_push_notification(
+                            &pool,
+                            local_account_id,
+                            "mention",
+                            "New mention",
+                            &actor,
+                            None,
+                            &push_domain,
+                        )
+                        .await;
+                    });
+                }
             }
         }
     }
@@ -983,7 +1031,9 @@ async fn handle_create(
                 .fetch_one(&state.pool)
                 .await?;
 
-                if exists.0 == 0 {
+                if exists.0 == 0
+                    && !is_blocked_or_muted(&state.pool, local_account_id, remote.id).await?
+                {
                     let notif_id = generate_id();
                     sqlx::query(
                         "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, remote_post_id, created_at)
@@ -1172,12 +1222,29 @@ async fn handle_delete(
     if deleted_uri == remote.actor_uri {
         tracing::info!(actor = %remote.actor_uri, "remote actor self-deleted");
 
-        // Remove all their data in order: notifications, mentions, remote_posts,
-        // followers, follow_requests, then the account itself.
+        // Remove all their data in dependency order: notifications, favourites,
+        // bookmarks, mentions, remote_posts, followers, follow_requests, follows,
+        // then the account itself.
         sqlx::query("DELETE FROM notifications WHERE from_remote_account_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
+
+        sqlx::query(
+            "DELETE FROM favourites WHERE remote_post_id IN
+             (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
+        )
+        .bind(remote.id)
+        .execute(&state.pool)
+        .await?;
+
+        sqlx::query(
+            "DELETE FROM bookmarks WHERE remote_post_id IN
+             (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
+        )
+        .bind(remote.id)
+        .execute(&state.pool)
+        .await?;
 
         sqlx::query(
             "DELETE FROM mentions WHERE remote_post_id IN
@@ -1258,37 +1325,41 @@ async fn handle_like(
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        let now = chrono::Utc::now().timestamp();
-        let notif_id = generate_id();
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+            let now = chrono::Utc::now().timestamp();
+            let notif_id = generate_id();
 
-        sqlx::query(
-            "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
-             VALUES (?, ?, 'favourite', ?, ?, ?)",
-        )
-        .bind(notif_id)
-        .bind(account_id)
-        .bind(remote.id)
-        .bind(post_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
-
-        // Fire-and-forget push notification
-        let pool = state.pool.clone();
-        let actor = remote.actor_uri.clone();
-        let push_domain = state.config.server.domain.clone();
-        tokio::spawn(async move {
-            crate::push::send_push_notification(
-                &pool,
-                account_id,
-                "favourite",
-                "New favourite",
-                &actor,
-                None,
-                &push_domain,
+            let result = sqlx::query(
+                "INSERT OR IGNORE INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
+                 VALUES (?, ?, 'favourite', ?, ?, ?)",
             )
-            .await;
-        });
+            .bind(notif_id)
+            .bind(account_id)
+            .bind(remote.id)
+            .bind(post_id)
+            .bind(now)
+            .execute(&state.pool)
+            .await?;
+
+            if result.rows_affected() > 0 {
+                // Fire-and-forget push notification
+                let pool = state.pool.clone();
+                let actor = remote.actor_uri.clone();
+                let push_domain = state.config.server.domain.clone();
+                tokio::spawn(async move {
+                    crate::push::send_push_notification(
+                        &pool,
+                        account_id,
+                        "favourite",
+                        "New favourite",
+                        &actor,
+                        None,
+                        &push_domain,
+                    )
+                    .await;
+                });
+            }
+        }
 
         tracing::info!(
             actor = %remote.actor_uri,
@@ -1319,37 +1390,41 @@ async fn handle_announce(
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        let now = chrono::Utc::now().timestamp();
-        let notif_id = generate_id();
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+            let now = chrono::Utc::now().timestamp();
+            let notif_id = generate_id();
 
-        sqlx::query(
-            "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
-             VALUES (?, ?, 'reblog', ?, ?, ?)",
-        )
-        .bind(notif_id)
-        .bind(account_id)
-        .bind(remote.id)
-        .bind(post_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
-
-        // Fire-and-forget push notification
-        let pool = state.pool.clone();
-        let actor = remote.actor_uri.clone();
-        let push_domain = state.config.server.domain.clone();
-        tokio::spawn(async move {
-            crate::push::send_push_notification(
-                &pool,
-                account_id,
-                "reblog",
-                "New boost",
-                &actor,
-                None,
-                &push_domain,
+            let result = sqlx::query(
+                "INSERT OR IGNORE INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
+                 VALUES (?, ?, 'reblog', ?, ?, ?)",
             )
-            .await;
-        });
+            .bind(notif_id)
+            .bind(account_id)
+            .bind(remote.id)
+            .bind(post_id)
+            .bind(now)
+            .execute(&state.pool)
+            .await?;
+
+            if result.rows_affected() > 0 {
+                // Fire-and-forget push notification
+                let pool = state.pool.clone();
+                let actor = remote.actor_uri.clone();
+                let push_domain = state.config.server.domain.clone();
+                tokio::spawn(async move {
+                    crate::push::send_push_notification(
+                        &pool,
+                        account_id,
+                        "reblog",
+                        "New boost",
+                        &actor,
+                        None,
+                        &push_domain,
+                    )
+                    .await;
+                });
+            }
+        }
 
         tracing::info!(
             actor = %remote.actor_uri,
@@ -1427,10 +1502,8 @@ async fn handle_move(
     let old_actor = fetch_and_upsert_actor(state, &remote.actor_uri).await?;
     let _ = old_actor; // We just need the fetch to succeed; verification uses the raw document.
 
-    // Fetch the old actor document to check alsoKnownAs.
+    // Re-fetch the old actor document to check alsoKnownAs.
     let (signing_key_pem, signing_key_id) = get_signing_credentials(state).await?;
-    // We need to fetch the NEW actor and check if the OLD actor lists the NEW actor
-    // in alsoKnownAs. Fetch old actor's raw document.
     let old_actor_url: url::Url = remote
         .actor_uri
         .parse()
@@ -1439,16 +1512,11 @@ async fn handle_move(
         FederationClient::sign_get_headers(&signing_key_pem, &signing_key_id, &old_actor_url)
             .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
 
-    // ponytail: re-fetch the raw actor document to check alsoKnownAs.
-    // This duplicates the fetch_actor call somewhat but we need the raw JSON.
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            state.config.federation.fetch_timeout_secs,
-        ))
-        .build()
-        .map_err(|e| AppError::internal(format!("http client: {e}")))?;
+    let fed_client = FederationClient::new(&state.config)
+        .map_err(|e| AppError::internal(format!("federation client: {e}")))?;
 
-    let resp = client
+    let resp = fed_client
+        .client()
         .get(old_actor_url.as_str())
         .headers(get_headers)
         .header(
