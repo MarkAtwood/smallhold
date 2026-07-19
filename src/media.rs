@@ -192,8 +192,21 @@ async fn process_upload(
         .ok_or_else(|| AppError::unprocessable("Unsupported image format for processing"))?;
 
     let (width, height, blurhash, clean_data) = tokio::task::spawn_blocking({
-        let data = data.clone();
+        let sniffed_mime = mime.clone();
         move || -> Result<(u32, u32, String, Vec<u8>), AppError> {
+            // GIF frame bomb protection: reject GIFs with excessive frame counts
+            if sniffed_mime == "image/gif" {
+                let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(&data))
+                    .map_err(|e| AppError::unprocessable(format!("Invalid GIF data: {e}")))?;
+                use image::AnimationDecoder;
+                let frame_count = decoder.into_frames().count();
+                if frame_count > 500 {
+                    return Err(AppError::unprocessable(format!(
+                        "GIF has too many frames ({frame_count}, max 500)"
+                    )));
+                }
+            }
+
             let mut reader = image::ImageReader::new(std::io::Cursor::new(&data))
                 .with_guessed_format()
                 .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;

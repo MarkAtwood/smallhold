@@ -520,12 +520,7 @@ async fn verify_admin_auth(state: &AppState, password: &str) -> Result<(), AppEr
     let (password_hash,) =
         admin_row.ok_or_else(|| AppError::forbidden("Admin password not set"))?;
 
-    use argon2::{Argon2, PasswordHash, PasswordVerifier};
-    let parsed_hash = PasswordHash::new(&password_hash)
-        .map_err(|_| AppError::internal("Invalid password hash"))?;
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .map_err(|_| AppError::forbidden("Invalid password"))
+    crate::api::verify_password(password, &password_hash)
 }
 
 // ---------------------------------------------------------------------------

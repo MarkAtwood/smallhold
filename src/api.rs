@@ -692,7 +692,7 @@ async fn authorize_submit(
     Ok((StatusCode::FOUND, [(LOCATION, location)]).into_response())
 }
 
-fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
+pub(crate) fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
     use argon2::{Argon2, PasswordHash, PasswordVerifier};
     let parsed_hash =
         PasswordHash::new(hash).map_err(|_| AppError::internal("Invalid password hash"))?;

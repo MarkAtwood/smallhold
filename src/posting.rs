@@ -263,7 +263,7 @@ pub fn strip_html_tags(html: &str) -> String {
 // Content rendering
 // ---------------------------------------------------------------------------
 
-static SANITIZER_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+pub static SANITIZER_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "p",
         "br",
@@ -283,7 +283,7 @@ static SANITIZER_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     .collect()
 });
 
-static SANITIZER_TAG_ATTRS: LazyLock<
+pub static SANITIZER_TAG_ATTRS: LazyLock<
     std::collections::HashMap<&'static str, HashSet<&'static str>>,
 > = LazyLock::new(|| {
     let mut m = std::collections::HashMap::new();
@@ -293,7 +293,7 @@ static SANITIZER_TAG_ATTRS: LazyLock<
 });
 
 /// Build a restrictive ammonia sanitizer for Mastodon-compatible HTML.
-fn html_sanitizer() -> ammonia::Builder<'static> {
+pub fn html_sanitizer() -> ammonia::Builder<'static> {
     let mut builder = ammonia::Builder::new();
     builder.tags(SANITIZER_TAGS.clone());
     builder.tag_attributes(SANITIZER_TAG_ATTRS.clone());

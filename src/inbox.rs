@@ -12,6 +12,7 @@ use crate::delivery;
 use crate::error::AppError;
 use crate::federation::{upsert_remote_account, FederationClient, RemoteActorData};
 use crate::id::generate_id;
+use crate::posting::html_sanitizer;
 use crate::server::AppState;
 use crate::streaming::{publish, StreamEvent};
 
@@ -814,7 +815,7 @@ async fn handle_create(
     }
 
     let raw_content = object["content"].as_str().unwrap_or("");
-    let content_html = ammonia::clean(truncate_str(raw_content, MAX_CONTENT_LEN));
+    let content_html = html_sanitizer().clean(truncate_str(raw_content, MAX_CONTENT_LEN)).to_string();
 
     let spoiler_text = object["summary"]
         .as_str()
@@ -1099,7 +1100,7 @@ async fn handle_update(
             }
 
             let raw_content = object["content"].as_str().unwrap_or("");
-            let content_html = ammonia::clean(truncate_str(raw_content, MAX_CONTENT_LEN));
+            let content_html = html_sanitizer().clean(truncate_str(raw_content, MAX_CONTENT_LEN)).to_string();
 
             let spoiler_text = object["summary"]
                 .as_str()
