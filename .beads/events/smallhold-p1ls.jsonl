@@ -1,1 +1,2 @@
 {"id":"019f7c9f-5dab-70b9-9129-78eb461a6dc9","issue_id":"smallhold-p1ls","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T23:04:06.827048189Z"}
+{"id":"019f7cb3-fd7f-7555-8cd7-9cf12c18c8a0","issue_id":"smallhold-p1ls","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"All 4 subtasks complete: rate limiting stripped, streaming documented, deployment guide written","created_at":"2026-07-19T23:26:38.463351987Z"}

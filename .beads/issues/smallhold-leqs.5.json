@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-leqs.5",
+  "title": "Caddy rate_limit syntax invalid",
+  "description": "docs/deployment.md line 29 uses `rate_limit @auth {remote.ip} 5r/m` which is not valid syntax for any known Caddy rate limiting plugin. The mholt/caddy-ratelimit plugin uses block-style zone configuration: `rate_limit { zone name { key {remote.ip} events 5 window 1m } }`. The current syntax would fail on Caddy startup. The nginx example is correct.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:26:04.199364346Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:26:25.401118112Z",
+  "closed_at": "2026-07-19T23:26:25.401118112Z",
+  "close_reason": "Fixed: Caddy rate_limit now uses correct block syntax with zone/key/events/window",
+  "labels": [
+    "docs",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-leqs.5",
+      "depends_on_id": "smallhold-leqs",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:26:04.2233398Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-leqs.3",
+  "title": "Caddy config lacks path-scoped auth rate limiting",
+  "description": "The nginx config correctly rate-limits only auth endpoints via location ~ ^/(oauth/|admin/webauthn/), but the Caddy config example in docs/deployment.md only has a commented-out global rate_limit directive (line 26). If uncommented, it throttles all routes at 60r/m (breaking normal API usage). If left commented, auth endpoints have zero rate limiting. The Required proxy behaviors section (line 102) explicitly mandates rate limiting on auth endpoints, so the Caddy example should use a path matcher: @auth { path /oauth/* /admin/webauthn/* } + rate_limit @auth. Low severity since the nginx example is correct and Caddy is labeled as merely recommended, but a copy-paste user will get the wrong config.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:23:30.950669749Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:24:10.467981657Z",
+  "closed_at": "2026-07-19T23:24:10.467981657Z",
+  "close_reason": "Closed",
+  "labels": [
+    "docs",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-leqs.3",
+      "depends_on_id": "smallhold-leqs",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:23:30.973943577Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

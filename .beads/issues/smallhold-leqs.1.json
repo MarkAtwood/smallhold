@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-leqs.1",
+  "title": "docs: nginx limit_req_zone in wrong context",
+  "description": "In docs/deployment.md, the limit_req_zone and limit_conn_zone directives are shown inside the server{} block (lines 59-60). nginx requires these in the http{} context. A user copying this config verbatim will get 'nginx -t' failures. Move them outside the server block or add a comment noting they belong in http{}.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:21:07.11311043Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:22:00.436107154Z",
+  "closed_at": "2026-07-19T23:22:00.436107154Z",
+  "close_reason": "Closed",
+  "labels": [
+    "docs",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-leqs.1",
+      "depends_on_id": "smallhold-leqs",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:21:07.154269688Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

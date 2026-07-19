@@ -2,13 +2,15 @@
   "id": "smallhold-p1ls.1",
   "title": "Document reverse proxy requirements in README",
   "description": "Add deployment docs specifying: must run behind a reverse proxy (nginx/caddy/traefik), required config (TLS termination, rate limiting, connection limits, request size limits, X-Real-IP/X-Forwarded-For headers), and why (application delegates these concerns to the proxy layer for security and performance).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T23:05:03.233036318Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T23:05:03.233036318Z",
+  "updated_at": "2026-07-19T23:26:33.908254702Z",
+  "closed_at": "2026-07-19T23:26:33.908254702Z",
+  "close_reason": "Deployment docs written at docs/deployment.md",
   "dependencies": [
     {
       "issue_id": "smallhold-p1ls.1",

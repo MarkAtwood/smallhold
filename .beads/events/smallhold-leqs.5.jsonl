@@ -1,0 +1,4 @@
+{"id":"019f7cb3-77aa-7628-8e7e-f808a83266dd","issue_id":"smallhold-leqs.5","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T23:26:04.2024043Z"}
+{"id":"019f7cb3-77ad-7571-bae3-0ccc0080bb36","issue_id":"smallhold-leqs.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: docs","created_at":"2026-07-19T23:26:04.20535746Z"}
+{"id":"019f7cb3-77af-7f23-98df-7caee7c91e61","issue_id":"smallhold-leqs.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T23:26:04.207992785Z"}
+{"id":"019f7cb3-ca7d-721f-9920-2a5c9f5254f9","issue_id":"smallhold-leqs.5","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: Caddy rate_limit now uses correct block syntax with zone/key/events/window","created_at":"2026-07-19T23:26:25.405139611Z"}

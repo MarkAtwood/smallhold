@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-leqs.2",
+  "title": "deployment.md missing rate limit on /admin/webauthn/register/begin",
+  "description": "POST /admin/webauthn/register/begin accepts the admin password in the POST body (webauthn.rs:142) and is a valid brute-force target. However, it is not listed in docs/deployment.md 'Required proxy behaviors' section (line 102) and the nginx example location regex (line 66) only matches ^/(oauth/authorize|oauth/token), which does NOT match /admin/webauthn/register/begin. An attacker could brute-force the admin password through this endpoint without proxy rate limiting. Fix: add /admin/webauthn/register/begin to both the nginx location regex and the 'Required proxy behaviors' list.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:21:11.741032924Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:22:00.467033401Z",
+  "closed_at": "2026-07-19T23:22:00.467033401Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-leqs.2",
+      "depends_on_id": "smallhold-leqs",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:21:11.780002562Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

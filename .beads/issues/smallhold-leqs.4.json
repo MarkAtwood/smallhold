@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-leqs.4",
+  "title": "Docs claim X-Real-IP used for audit logging but no code reads it",
+  "description": "docs/deployment.md line 100 states: 'X-Real-IP header — smallhold trusts this for audit logging'. However, grep of the entire src/ tree shows zero references to X-Real-IP, X-Forwarded-For, or any audit/logging mechanism that uses client IP. The header param was previously used only for in-app rate limiting, which has been removed. The doc line should either be removed or reworded to 'reserved for future audit logging' (if that's planned), since operators reading this will assume it matters for security audit trails.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:23:37.769795317Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:24:10.496143512Z",
+  "closed_at": "2026-07-19T23:24:10.496143512Z",
+  "close_reason": "Closed",
+  "labels": [
+    "docs",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-leqs.4",
+      "depends_on_id": "smallhold-leqs",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:23:37.797565857Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
