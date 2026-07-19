@@ -127,7 +127,17 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         .get("og:image")
         .or_else(|| tags.get("twitter:image"))
         .map(|s| decode_html_entities(s))
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            // Resolve relative URLs against the page URL
+            if s.starts_with("http://") || s.starts_with("https://") {
+                s
+            } else if let Ok(base) = url::Url::parse(url) {
+                base.join(&s).map(|u| u.to_string()).unwrap_or(s)
+            } else {
+                s
+            }
+        });
 
     let og_type = tags.get("og:type").cloned().unwrap_or_default();
     let card_type = if og_type.contains("video") || tags.contains_key("og:video") {

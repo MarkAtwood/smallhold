@@ -1,0 +1,17 @@
+{
+  "id": "smallhold-9afs",
+  "title": "cards: resolve relative og:image URLs to absolute",
+  "description": "In fetch_card(), if a site uses a relative URL in og:image (e.g. content=\"/images/logo.png\"), the image_url field is stored as-is. Mastodon clients expect an absolute URL and cannot render relative paths. Fix: use url::Url::join() against the fetched page URL to resolve relative og:image/twitter:image values to absolute URLs before storing.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:15:07.875646794Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:16:57.667848054Z",
+  "closed_at": "2026-07-19T01:16:57.667848054Z",
+  "close_reason": "Closed",
+  "labels": [
+    "bug"
+  ]
+}
