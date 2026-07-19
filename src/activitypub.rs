@@ -277,6 +277,7 @@ async fn profile_page(
     let account = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
     let display_name = ammonia::clean(&account.display_name);
+    let dn_escaped = html_attr_escape(&display_name);
     let custom_css = load_extra_css(&state.config);
 
     // Counts
@@ -351,8 +352,8 @@ async fn profile_page(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>@{username}@{domain} — {display_name}</title>
-<meta property="og:title" content="{display_name} (@{username}@{domain})">
+<title>@{username}@{domain} — {dn_escaped}</title>
+<meta property="og:title" content="{dn_escaped} (@{username}@{domain})">
 <meta property="og:type" content="profile">
 <meta property="og:url" content="https://{domain}/@{username}">
 <meta property="og:description" content="Profile on {domain}">
@@ -410,6 +411,7 @@ async fn post_page(
 
     let account = fetch_account(&state.pool, &username).await?;
     let display_name = ammonia::clean(&account.display_name);
+    let dn_escaped = html_attr_escape(&display_name);
     let custom_css = load_extra_css(&state.config);
 
     let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
@@ -437,8 +439,8 @@ async fn post_page(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{display_name}: "{og_desc_title_escaped}" — @{username}@{domain}</title>
-<meta property="og:title" content="{display_name} (@{username}@{domain})">
+<title>{dn_escaped}: "{og_desc_title_escaped}" — @{username}@{domain}</title>
+<meta property="og:title" content="{dn_escaped} (@{username}@{domain})">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://{domain}/@{username}/{post_id}">
 <meta property="og:description" content="{og_desc_escaped}">

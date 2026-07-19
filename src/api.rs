@@ -747,7 +747,11 @@ async fn token(
             ));
         }
 
-        if let Some(ref cs) = form.client_secret {
+        let cs = form
+            .client_secret
+            .as_ref()
+            .ok_or_else(|| AppError::bad_request("Missing client_secret"))?;
+        {
             use subtle::ConstantTimeEq;
             if cs.as_bytes().ct_eq(stored_secret.as_bytes()).unwrap_u8() != 1 {
                 return Err(AppError::unauthorized("Invalid client_secret"));

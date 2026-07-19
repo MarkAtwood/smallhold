@@ -93,6 +93,12 @@ impl FederationClient {
         })
     }
 
+    /// Borrow the inner reqwest client for custom requests that need the same
+    /// timeout / TLS / redirect / user-agent settings.
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
     /// Build signed headers for an HTTP GET (draft-cavage-11 HTTP Signatures).
     ///
     /// Signs `(request-target)`, `host`, and `date` with RSA-SHA256.

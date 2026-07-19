@@ -92,9 +92,47 @@ fn extract_archive(archive_path: &Path, dest: &Path) -> Result<()> {
         .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
     let decompressor = flate2::read::GzDecoder::new(file);
     let mut archive = tar::Archive::new(decompressor);
-    archive
-        .unpack(dest)
-        .with_context(|| format!("Failed to extract archive: {}", archive_path.display()))?;
+    let canonical_dest = dest
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize dest: {}", dest.display()))?;
+
+    for entry_result in archive.entries().context("Failed to read tar entries")? {
+        let mut entry = entry_result.context("Failed to read tar entry")?;
+        let entry_path = entry
+            .path()
+            .context("Failed to read entry path")?
+            .into_owned();
+
+        // Reject absolute paths and entries with path traversal components.
+        if entry_path.is_absolute()
+            || entry_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            anyhow::bail!(
+                "tar entry has unsafe path (traversal or absolute): {}",
+                entry_path.display()
+            );
+        }
+
+        let target = canonical_dest.join(&entry_path);
+        // Belt-and-suspenders: verify resolved path stays within dest.
+        if !target.starts_with(&canonical_dest) {
+            anyhow::bail!(
+                "tar entry resolves outside target directory: {}",
+                entry_path.display()
+            );
+        }
+
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create dir: {}", parent.display()))?;
+        }
+
+        entry
+            .unpack(&target)
+            .with_context(|| format!("Failed to extract: {}", entry_path.display()))?;
+    }
     Ok(())
 }
 

@@ -162,7 +162,7 @@ async fn host_meta(State(state): State<Arc<AppState>>) -> Response {
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <XRD xmlns=\"http://docs.oasis-open.org/ns/xri/xrd-1.0\">\n  \
-           <Link rel=\"lrd\" \
+           <Link rel=\"lrdd\" \
                   type=\"application/xrd+xml\" \
                   template=\"https://{domain}/.well-known/webfinger?resource={{uri}}\"/>\n\
          </XRD>"
