@@ -2,3 +2,4 @@
 {"id":"019f7c91-9910-764f-a8de-6d514319215d","issue_id":"smallhold-9ouq.68","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-07-19T22:49:04.528414449Z"}
 {"id":"019f7c91-9915-705e-88e9-264373f5bea1","issue_id":"smallhold-9ouq.68","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-07-19T22:49:04.533024837Z"}
 {"id":"019f7c91-9919-7882-b1b2-e2f1bf3423d0","issue_id":"smallhold-9ouq.68","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:49:04.53755851Z"}
+{"id":"019f7cc4-faa3-7b50-8895-e9df2bacd84f","issue_id":"smallhold-9ouq.68","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Wontfix: Mastodon API documents GET /api/v1/media/:id as unauthenticated. Media URLs must be public for federation.","created_at":"2026-07-19T23:45:11.843742558Z"}

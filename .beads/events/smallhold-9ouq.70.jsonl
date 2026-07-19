@@ -2,3 +2,4 @@
 {"id":"019f7c91-dfa4-799a-a79b-e4470ce56002","issue_id":"smallhold-9ouq.70","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-07-19T22:49:22.596629776Z"}
 {"id":"019f7c91-dfa8-7e80-b617-15d68a75dbe5","issue_id":"smallhold-9ouq.70","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-07-19T22:49:22.600950652Z"}
 {"id":"019f7c91-dfad-720e-82ed-b4f787068e93","issue_id":"smallhold-9ouq.70","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:49:22.605134892Z"}
+{"id":"019f7cc4-df7c-7da2-b5cc-bf34b4350204","issue_id":"smallhold-9ouq.70","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Closed","created_at":"2026-07-19T23:45:04.892894358Z"}

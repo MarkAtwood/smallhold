@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.69",
   "title": "(BUG) Unboost leaves orphan notifications (no FK cascade)",
   "description": "posting.rs unreblog path (line 2382) deletes the boost post with bare `DELETE FROM posts WHERE id = ?` but never cleans up referencing rows in notifications, favourites, or bookmarks. Those tables have no ON DELETE CASCADE on their post_id FK. With foreign_keys=true in the connection, this delete would fail if any notification references the boost post (e.g. a 'reblog' notification). In practice a boost post won't have favourites/bookmarks, but notifications table stores reblog notifications with the boost's post_id — so unboosting a post that triggered a notification to the original author will hit a FK violation error at runtime.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:49:16.918688196Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:49:16.918688196Z",
+  "updated_at": "2026-07-19T23:45:04.83186145Z",
+  "closed_at": "2026-07-19T23:45:04.83186145Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

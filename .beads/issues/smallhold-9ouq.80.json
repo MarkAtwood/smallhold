@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.80",
   "title": "(BUG) generate_id() produces non-monotonic IDs on NTP clock adjustment",
   "description": "id.rs generate_id() uses `SystemTime::now()` for the millisecond component. If the system clock is adjusted backwards (NTP sync, VM migration, leap second smear), `now_ms` can be less than the previously-stored `prev_ms`. The code takes the else branch (since now_ms != prev_ms), sets seq=0, and the CAS succeeds — producing an ID smaller than the previous one. Consequences: (1) IDs are no longer monotonically increasing, breaking pagination that relies on `id \u003e ?` / `id \u003c ?` ordering; (2) if the clock rewinds to a previously-used millisecond, the same (ms, seq=0) pair is reused, producing a duplicate ID that will violate PRIMARY KEY constraints. Fix: before accepting now_ms, clamp it to `max(now_ms, prev_ms)` to guarantee forward progress even when the wall clock goes backwards.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:50:24.665747962Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:50:24.665747962Z",
+  "updated_at": "2026-07-19T23:45:04.457431573Z",
+  "closed_at": "2026-07-19T23:45:04.457431573Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

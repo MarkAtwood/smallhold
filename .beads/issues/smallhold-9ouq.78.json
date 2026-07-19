@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.78",
   "title": "delete_status orphans media files on disk",
   "description": "In posting.rs delete_status (line 1460), media attachments are detached from the deleted post with 'UPDATE media SET post_id = NULL WHERE post_id = ?'. The media DB rows persist with post_id=NULL and the actual files remain on disk in the media directory. There is no background cleanup job for orphaned media. Over time, deleted posts accumulate unreachable media files consuming disk space. The delete path should either: (1) delete the media files and DB rows immediately, or (2) schedule them for deferred cleanup via a periodic task.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:49:56.303329836Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:49:56.303329836Z",
+  "updated_at": "2026-07-19T23:45:04.752182457Z",
+  "closed_at": "2026-07-19T23:45:04.752182457Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

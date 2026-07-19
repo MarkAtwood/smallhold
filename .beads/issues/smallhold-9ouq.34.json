@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.34",
   "title": "410 Gone triggers circuit breaker for entire domain",
   "description": "In delivery.rs deliver_one (line 283-286), a 410 Gone response marks the delivery as dead AND calls circuit_record_failure for the target domain. A 410 means the specific remote actor was deleted -- it does not indicate the domain is failing. If 10+ deliveries to deleted accounts on the same domain accumulate (e.g., a wave of account deletions on a popular instance), the circuit breaker opens and blocks ALL deliveries to that domain for 1 hour, including deliveries to active accounts. Fix: do not call circuit_record_failure on 410 responses. The delivery is correctly marked dead (no retry), and no broader domain penalty is needed.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:36:01.810906368Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:36:01.810906368Z",
+  "updated_at": "2026-07-19T23:45:04.401790133Z",
+  "closed_at": "2026-07-19T23:45:04.401790133Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

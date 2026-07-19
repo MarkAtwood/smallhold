@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.73",
   "title": "Inbox ignores domain_blocks table",
   "description": "The inbox processing code (inbox.rs process_inbox) never consults the domain_blocks table. When an admin blocks a domain via 'smallhold domain-block add', the block is recorded in the database but incoming activities from that domain are still fully processed — follows are accepted, likes generate notifications, posts are stored. The inbox should check domain_blocks at the start of process_inbox and reject activities from suspended domains with a 403.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:49:32.839349788Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:49:32.839349788Z",
+  "updated_at": "2026-07-19T23:45:04.546239178Z",
+  "closed_at": "2026-07-19T23:45:04.546239178Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

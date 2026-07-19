@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.79",
   "title": "(BUG) Remote account self-delete fails on FK: favourites/bookmarks referencing remote_posts",
   "description": "inbox.rs handle_delete for actor self-deletion (lines 1177-1213) deletes remote_posts belonging to the actor, but never cleans up rows in favourites or bookmarks that have remote_post_id referencing those posts. Both tables have `remote_post_id INTEGER REFERENCES remote_posts(id)` without ON DELETE CASCADE. With foreign_keys=true, the `DELETE FROM remote_posts WHERE remote_account_id = ?` will fail with a FK constraint violation if any local user has favourited or bookmarked one of the actor's posts. Additionally, the notification cleanup (line 1177) only deletes by from_remote_account_id — not by remote_post_id — so notifications with a remote_post_id FK to the deleted posts also block the delete.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:50:04.393167689Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:50:04.393167689Z",
+  "updated_at": "2026-07-19T23:45:04.862586286Z",
+  "closed_at": "2026-07-19T23:45:04.862586286Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

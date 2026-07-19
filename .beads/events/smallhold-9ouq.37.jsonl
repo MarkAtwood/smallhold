@@ -2,3 +2,4 @@
 {"id":"019f7c85-ec27-79b8-a1c6-740d78f89569","issue_id":"smallhold-9ouq.37","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: crypto-security","created_at":"2026-07-19T22:36:19.367637384Z"}
 {"id":"019f7c85-ec2c-7dc6-ab40-d43794535fe7","issue_id":"smallhold-9ouq.37","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: untrusted-input","created_at":"2026-07-19T22:36:19.372903339Z"}
 {"id":"019f7c85-ec31-7e4c-ac6f-6f577e72a8db","issue_id":"smallhold-9ouq.37","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-19T22:36:19.377937527Z"}
+{"id":"019f7cc4-de0a-7df4-8b9c-b00e68a80f37","issue_id":"smallhold-9ouq.37","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Closed","created_at":"2026-07-19T23:45:04.522915988Z"}

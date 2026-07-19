@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.47",
   "title": "host-meta uses rel=lrd instead of rel=lrdd",
   "description": "discovery.rs line 165: the host-meta XML response uses rel=\"lrd\" but RFC 6415 specifies rel=\"lrdd\" (Link-based Resource Descriptor Discovery). Older fediverse implementations (GNUSocial, older Mastodon, Friendica) that rely on host-meta for WebFinger discovery will fail to resolve accounts because they look for the lrdd rel type specifically.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:41:18.718573982Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:41:18.718573982Z",
+  "updated_at": "2026-07-19T23:45:04.344614554Z",
+  "closed_at": "2026-07-19T23:45:04.344614554Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"

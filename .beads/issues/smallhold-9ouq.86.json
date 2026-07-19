@@ -2,13 +2,15 @@
   "id": "smallhold-9ouq.86",
   "title": "post_page HTML endpoint leaks private/direct posts",
   "description": "In activitypub.rs post_page (line 391), the GET /@{username}/{post_id} HTML endpoint serves private and direct posts to any unauthenticated browser visitor without any visibility check. The query (line 401-403) only filters by account username and post ID, not by visibility. This is a distinct code path from the API endpoint covered in smallhold-9ouq.66 — it exposes the full content_html of private/direct posts in a public-facing HTML page, complete with OG metadata. The query should add AND visibility IN ('public', 'unlisted') or return 404 for restricted posts.",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:53:13.185354012Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:53:13.185354012Z",
+  "updated_at": "2026-07-19T23:36:32.950533809Z",
+  "closed_at": "2026-07-19T23:36:32.950533809Z",
+  "close_reason": "Closed",
   "labels": [
     "correctness",
     "review"
