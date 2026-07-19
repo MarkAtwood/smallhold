@@ -294,6 +294,7 @@ async fn upload_media_v2(
     auth: AuthenticatedAccount,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<Value>), AppError> {
+    auth.require_scope("write")?;
     let row = process_upload(&state, &auth, multipart).await?;
     let domain = &state.config.server.domain;
     Ok((
@@ -308,6 +309,7 @@ async fn upload_media_v1(
     auth: AuthenticatedAccount,
     multipart: Multipart,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let row = process_upload(&state, &auth, multipart).await?;
     let domain = &state.config.server.domain;
     Ok(Json(media_attachment_json(&row, domain)))

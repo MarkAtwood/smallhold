@@ -292,6 +292,13 @@ async fn send_push_inner(
         return Ok(());
     }
 
+    // SSRF check: validate the push endpoint URL before sending
+    let endpoint_url: url::Url = sub.endpoint.parse()?;
+    if let Err(e) = crate::federation::validate_outbound_url(&endpoint_url) {
+        tracing::warn!(account_id, endpoint = %sub.endpoint, error = %e, "push endpoint failed SSRF validation, skipping");
+        return Ok(());
+    }
+
     // Build payload
     let payload = serde_json::to_vec(&json!({
         "notification_id": generate_id().to_string(),
@@ -307,7 +314,6 @@ async fn send_push_inner(
     let encrypted = encrypt_payload(&sub.key_p256dh, &sub.key_auth, &payload)?;
 
     // Build VAPID JWT
-    let endpoint_url: url::Url = sub.endpoint.parse()?;
     let audience = format!(
         "{}://{}",
         endpoint_url.scheme(),

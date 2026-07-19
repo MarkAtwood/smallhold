@@ -1410,6 +1410,19 @@ async fn handle_move(
         return Err(AppError::bad_request("Move target URI too long"));
     }
 
+    // SSRF check: validate the target URI before fetching
+    let target_url: url::Url = target_uri
+        .parse()
+        .map_err(|_| AppError::bad_request("Move target is not a valid URL"))?;
+    if let Err(e) = crate::federation::validate_outbound_url(&target_url) {
+        tracing::warn!(
+            target = target_uri,
+            error = %e,
+            "Move target failed SSRF validation"
+        );
+        return Ok(());
+    }
+
     // Fetch the old actor to verify alsoKnownAs.
     let old_actor = fetch_and_upsert_actor(state, &remote.actor_uri).await?;
     let _ = old_actor; // We just need the fetch to succeed; verification uses the raw document.

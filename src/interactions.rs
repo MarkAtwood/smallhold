@@ -261,6 +261,7 @@ async fn follow(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     ensure_interaction_tables(&state.pool).await?;
     let domain = &state.config.server.domain;
     let now = now_millis();
@@ -552,6 +553,7 @@ async fn block(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     ensure_interaction_tables(&state.pool).await?;
     let now = now_millis();
 
@@ -669,6 +671,7 @@ async fn mute(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     ensure_interaction_tables(&state.pool).await?;
     let now = now_millis();
 
