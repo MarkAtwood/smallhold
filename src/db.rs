@@ -402,6 +402,30 @@ CREATE TABLE IF NOT EXISTS relays (
     state       TEXT NOT NULL DEFAULT 'pending',
     created_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS link_cards (
+    id            INTEGER PRIMARY KEY,
+    url           TEXT NOT NULL UNIQUE,
+    card_type     TEXT NOT NULL DEFAULT 'link',
+    title         TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image_url     TEXT,
+    author_name   TEXT NOT NULL DEFAULT '',
+    author_url    TEXT NOT NULL DEFAULT '',
+    provider_name TEXT NOT NULL DEFAULT '',
+    provider_url  TEXT NOT NULL DEFAULT '',
+    html          TEXT NOT NULL DEFAULT '',
+    width         INTEGER NOT NULL DEFAULT 0,
+    height        INTEGER NOT NULL DEFAULT 0,
+    fetched_at    INTEGER NOT NULL,
+    failed        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS post_cards (
+    post_id       INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    card_url      TEXT NOT NULL,
+    UNIQUE (post_id)
+);
 "#;
 
 #[cfg(test)]

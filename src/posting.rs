@@ -517,6 +517,7 @@ fn serialize_status(
     mention_values: &[Value],
     tag_values: &[Value],
     reblog: Option<Value>,
+    card: Option<Value>,
     favourited: bool,
     reblogged: bool,
     muted: bool,
@@ -564,7 +565,7 @@ fn serialize_status(
         "mentions": mention_values,
         "tags": tag_values,
         "emojis": [],
-        "card": null,
+        "card": card,
         "poll": null,
         "edited_at": edited
     })
@@ -784,6 +785,8 @@ pub async fn load_status(
         None
     };
 
+    let card = crate::cards::load_card_for_post(pool, post.id).await;
+
     Ok(serialize_status(
         post,
         &account_json,
@@ -795,6 +798,7 @@ pub async fn load_status(
         &mention_vals,
         &tag_vals,
         reblog_value,
+        card,
         favourited,
         reblogged,
         false, // muted
@@ -1309,6 +1313,19 @@ async fn create_status(
                 tracing::error!("Failed to enqueue Create activity to relays: {e}");
             }
         }
+    }
+
+    // Background-fetch link preview card
+    if let Some(card_url) = crate::cards::extract_first_url(&text) {
+        let pool = state.pool.clone();
+        let card_domain = domain.to_string();
+        tokio::spawn(async move {
+            if let Err(e) =
+                crate::cards::fetch_and_cache_card(&pool, post_id, &card_url, &card_domain).await
+            {
+                tracing::debug!("card fetch failed for {card_url}: {e}");
+            }
+        });
     }
 
     // Build response
@@ -3421,6 +3438,7 @@ mod tests {
             &[],
             &[],
             &[],
+            None,
             None,
             false,
             false,

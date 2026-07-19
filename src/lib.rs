@@ -1,5 +1,6 @@
 pub mod activitypub;
 pub mod api;
+pub mod cards;
 pub mod cli;
 pub mod config;
 pub mod db;
