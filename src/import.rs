@@ -423,15 +423,19 @@ fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u16) -> (i64, u1
     (id, seq)
 }
 
-fn determine_visibility(activity: &serde_json::Value, object: &serde_json::Value) -> String {
-    let public_uri = "https://www.w3.org/ns/activitystreams#Public";
+fn is_public(uri: &str) -> bool {
+    uri == "https://www.w3.org/ns/activitystreams#Public"
+        || uri == "as:Public"
+        || uri == "Public"
+}
 
+fn determine_visibility(activity: &serde_json::Value, object: &serde_json::Value) -> String {
     let to = collect_addressing(activity, object, "to");
     let cc = collect_addressing(activity, object, "cc");
 
-    if to.iter().any(|u| u == public_uri) {
+    if to.iter().any(|u| is_public(u)) {
         "public".into()
-    } else if cc.iter().any(|u| u == public_uri) {
+    } else if cc.iter().any(|u| is_public(u)) {
         "unlisted".into()
     } else if to.iter().any(|u| u.ends_with("/followers")) {
         "private".into()
