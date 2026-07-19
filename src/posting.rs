@@ -375,6 +375,27 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
     }
 }
 
+/// Extract URLs from text that look like fediverse post links (FEP-e232 Object Links).
+/// Patterns: /users/X/statuses/Y, /@X/Y (numeric), /notes/X
+fn extract_fediverse_links(text: &str) -> Vec<String> {
+    static FEDI_POST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r#"https://[^\s<>")\]]+/(?:users/[^/\s]+/statuses/\d+|@[^/\s]+/\d+|notes/[a-z0-9]+)"#,
+        )
+        .unwrap()
+    });
+    let mut seen = HashSet::new();
+    FEDI_POST_RE
+        .find_iter(text)
+        .map(|m| {
+            m.as_str()
+                .trim_end_matches(['.', ',', ';', ')', ']', '!', '?'])
+                .to_string()
+        })
+        .filter(|url| seen.insert(url.clone()))
+        .collect()
+}
+
 /// Find `@user@domain` and `@user` patterns in text.
 /// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_mentions(text: &str) -> Vec<ParsedMention> {
@@ -1229,6 +1250,17 @@ async fn create_status(
                     "name": format!("@{}@{domain}", m.username)
                 }));
             }
+        }
+
+        // FEP-e232: Add Link tags for quoted fediverse posts
+        let fedi_links = extract_fediverse_links(&text);
+        for link_url in &fedi_links {
+            mention_tags.push(json!({
+                "type": "Link",
+                "mediaType": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
+                "href": link_url,
+                "name": format!("RE: {link_url}")
+            }));
         }
 
         let in_reply_to_ap = in_reply_to_id.map(|rid| {

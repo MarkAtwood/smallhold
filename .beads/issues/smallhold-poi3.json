@@ -2,11 +2,15 @@
   "id": "smallhold-poi3",
   "title": "FEP-e232: Object Links for quote posts and structured references",
   "description": "Implement FEP-e232 (Object Links). When a post contains a URL that points to another ActivityPub object (another post, another actor), add a structured Link tag to the Note's tag array: {\"type\": \"Link\", \"href\": \"https://remote/post/123\", \"name\": \"RE: ...\", \"mediaType\": \"application/activity+json\"}. This enables quote-post interop with Mastodon, Threads, Pleroma, Sharkey, and 12+ other implementations. Inbound: when receiving a Note with Link tags, render them as quoted/linked content in the Status JSON. ~100-150 lines.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "feature",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T00:40:10.645060734Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T00:40:10.645060734Z"
+  "updated_at": "2026-07-19T01:23:21.85143281Z",
+  "started_at": "2026-07-19T01:20:04.499928863Z",
+  "closed_at": "2026-07-19T01:23:21.85143281Z",
+  "close_reason": "Closed"
 }

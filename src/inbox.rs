@@ -937,6 +937,23 @@ async fn handle_create(
         }
     }
 
+    // FEP-e232: Log any Object Link (quote) tags from the inbound Note.
+    if let Some(tags) = object["tag"].as_array() {
+        for tag in tags {
+            if tag["type"].as_str() == Some("Link") {
+                let media_type = tag["mediaType"].as_str().unwrap_or("");
+                if media_type.contains("application/ld+json")
+                    || media_type.contains("application/activity+json")
+                {
+                    let href = tag["href"].as_str().unwrap_or("");
+                    if !href.is_empty() {
+                        tracing::debug!(quote_uri = href, "inbound post quotes another post");
+                    }
+                }
+            }
+        }
+    }
+
     // Handle direct messages: if visibility is "direct", create mention notifications
     // for local recipients in to/cc that weren't already handled via tags.
     if visibility == "direct" {
