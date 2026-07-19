@@ -1,15 +1,14 @@
-FROM clux/muslrust:stable AS builder
+FROM rust:latest AS builder
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
 
-RUN cargo build --release && strip target/x86_64-unknown-linux-musl/release/smallhold
+RUN cargo build --release && strip target/release/smallhold
 
-FROM scratch
+FROM gcr.io/distroless/cc-debian12
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/smallhold /smallhold
+COPY --from=builder /build/target/release/smallhold /smallhold
 
 EXPOSE 8080
 
