@@ -220,6 +220,20 @@ pub struct AuthenticatedAccount {
     pub token_hash: String,
 }
 
+impl AuthenticatedAccount {
+    /// Check that the token's scopes include the required scope.
+    /// A token with "read write" (full access) passes any check.
+    pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
+        if self.scopes.contains(scope) || self.scopes == "read write" {
+            Ok(())
+        } else {
+            Err(AppError::forbidden(format!(
+                "This action requires the '{scope}' scope"
+            )))
+        }
+    }
+}
+
 impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
     type Rejection = AppError;
 
@@ -1019,7 +1033,7 @@ async fn account_statuses(
         params.get("max_id").and_then(|v| v.parse::<i64>().ok())
     {
         sqlx::query_as(
-                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
+                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
             .bind(account_id)
             .bind(max_id)
@@ -1028,7 +1042,7 @@ async fn account_statuses(
             .await?
     } else if let Some(min_id) = params.get("min_id").and_then(|v| v.parse::<i64>().ok()) {
         sqlx::query_as(
-                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
             )
             .bind(account_id)
             .bind(min_id)
@@ -1037,7 +1051,7 @@ async fn account_statuses(
             .await?
     } else {
         sqlx::query_as(
-                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? ORDER BY id DESC LIMIT ?",
+                "SELECT id, account_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE account_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
             .bind(account_id)
             .bind(limit)
