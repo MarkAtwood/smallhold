@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-7l2y.2",
+  "title": "FEP-e232 regex misses Akkoma/GoToSocial/Pleroma URL patterns and UUID dashes",
+  "description": "The fediverse link regex only covers Mastodon and Misskey patterns. Missing: /objects/UUID (Akkoma), /notice/UUID (Pleroma), ULIDs with uppercase (GoToSocial), /post/N (Lemmy). Also notes/ pattern needs [a-zA-Z0-9_-]+ not [a-z0-9]+ for UUIDs with dashes.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:27:05.5895771Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:29:14.623167536Z",
+  "started_at": "2026-07-19T01:27:13.50869397Z",
+  "closed_at": "2026-07-19T01:29:14.623167536Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-7l2y.2",
+      "depends_on_id": "smallhold-7l2y",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:27:05.618593887Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

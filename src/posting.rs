@@ -380,7 +380,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
 fn extract_fediverse_links(text: &str) -> Vec<String> {
     static FEDI_POST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
-            r#"https://[^\s<>")\]]+/(?:users/[^/\s]+/statuses/\d+|@[^/\s]+/\d+|notes/[a-z0-9]+)"#,
+            r#"https://[^\s<>")\]]+/(?:users/[^/\s]+/statuses/[A-Za-z0-9]+|@[^/\s]+/\d+|notes/[A-Za-z0-9_-]+|objects/[A-Fa-f0-9-]+|notice/[A-Za-z0-9_-]+|post/\d+|comment/\d+|p/[^/\s]+/\d+)"#,
         )
         .unwrap()
     });
@@ -1639,6 +1639,29 @@ async fn edit_status(
             _ => (vec![json!(public)], vec![json!(&followers_url)]),
         };
 
+        // Build mention tags for the Note (local mentions only for now)
+        let mut mention_tags: Vec<Value> = Vec::new();
+        for m in &rendered.mentions {
+            if m.domain.is_none() {
+                mention_tags.push(json!({
+                    "type": "Mention",
+                    "href": format!("https://{domain}/users/{}", m.username),
+                    "name": format!("@{}@{domain}", m.username)
+                }));
+            }
+        }
+
+        // FEP-e232: Add Link tags for quoted fediverse posts
+        let fedi_links = extract_fediverse_links(&text);
+        for link_url in &fedi_links {
+            mention_tags.push(json!({
+                "type": "Link",
+                "mediaType": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
+                "href": link_url,
+                "name": format!("RE: {link_url}")
+            }));
+        }
+
         let activity = json!({
             "@context": "https://www.w3.org/ns/activitystreams",
             "id": format!("{note_id}#updates/{now}"),
@@ -1658,7 +1681,8 @@ async fn edit_status(
                 "published": &published,
                 "updated": &updated,
                 "sensitive": sensitive,
-                "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) }
+                "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) },
+                "tag": &mention_tags
             }
         });
 
