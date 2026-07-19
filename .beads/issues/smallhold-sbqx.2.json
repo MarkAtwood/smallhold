@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-sbqx.2",
+  "title": "resp.bytes() can buffer unbounded data if Content-Length absent",
+  "description": "In fetch_card() (src/cards.rs lines 99-105), the Content-Length pre-check on line 93 only fires when the header is present. If the server omits Content-Length (chunked transfer encoding), resp.bytes().await buffers the entire response into memory before the body.len() check on line 103. A malicious or misconfigured server could stream hundreds of MB before the 10-second timeout kills the connection. Fix: use a streaming approach — read in chunks and abort when cumulative size exceeds 1MB. For example, use resp.chunk() in a loop or wrap the response body in a take() adapter.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:10:45.934239398Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:13:56.828589365Z",
+  "closed_at": "2026-07-19T01:13:56.828589365Z",
+  "close_reason": "Closed",
+  "labels": [
+    "bug",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-sbqx.2",
+      "depends_on_id": "smallhold-sbqx",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:10:45.957348597Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

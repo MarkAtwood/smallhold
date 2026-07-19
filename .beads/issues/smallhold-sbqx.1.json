@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-sbqx.1",
+  "title": "decode_html_entities missing numeric entities and \u0026nbsp;",
+  "description": "decode_html_entities() in src/cards.rs handles only 7 named entities (\u0026amp; \u0026lt; \u0026gt; \u0026quot; \u0026#39; \u0026#x27; \u0026apos;). Missing: \u0026nbsp; (very common), all numeric decimal entities like \u0026#8217; (right single quote), \u0026#160; (non-breaking space), and arbitrary \u0026#xHHHH; hex entities beyond the hardcoded \u0026#x27;. Real-world OG tags from major publishers (NYT, WaPo, Medium) frequently contain these. Users will see literal entity text in card titles/descriptions. Fix: use a proper entity decoder (htmlescape crate or implement decimal/hex numeric entity parsing via regex).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:10:38.944002738Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:13:56.80237064Z",
+  "closed_at": "2026-07-19T01:13:56.80237064Z",
+  "close_reason": "Closed",
+  "labels": [
+    "bug",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-sbqx.1",
+      "depends_on_id": "smallhold-sbqx",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:10:38.967545746Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

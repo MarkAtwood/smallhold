@@ -96,6 +96,8 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         }
     }
 
+    // ponytail: if Content-Length is absent/lying, the 10s timeout provides a
+    // soft cap (~10MB at 1MB/s). The post-download check catches the rest.
     let body = resp
         .bytes()
         .await
@@ -124,7 +126,7 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
     let image_url = tags
         .get("og:image")
         .or_else(|| tags.get("twitter:image"))
-        .cloned()
+        .map(|s| decode_html_entities(s))
         .filter(|s| !s.is_empty());
 
     let og_type = tags.get("og:type").cloned().unwrap_or_default();
@@ -175,13 +177,34 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
 // ---------------------------------------------------------------------------
 
 fn decode_html_entities(s: &str) -> String {
-    s.replace("&amp;", "&")
-     .replace("&lt;", "<")
-     .replace("&gt;", ">")
-     .replace("&quot;", "\"")
-     .replace("&#39;", "'")
-     .replace("&#x27;", "'")
-     .replace("&apos;", "'")
+    static ENTITY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"&#(\d+);|&#x([0-9a-fA-F]+);").unwrap());
+
+    let decoded = s
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ");
+
+    // Decode numeric entities (&#8217; &#x2019; etc.)
+    ENTITY_RE
+        .replace_all(&decoded, |caps: &regex::Captures| {
+            let code = if let Some(dec) = caps.get(1) {
+                dec.as_str().parse::<u32>().ok()
+            } else if let Some(hex) = caps.get(2) {
+                u32::from_str_radix(hex.as_str(), 16).ok()
+            } else {
+                None
+            };
+            code.and_then(char::from_u32)
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| caps[0].to_string())
+        })
+        .into_owned()
 }
 
 /// Parse OpenGraph and Twitter Card meta tags from HTML.

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-sbqx.3",
+  "title": "image_url not entity-decoded; \u0026amp; in OG image URLs breaks image fetch",
+  "description": "In src/cards.rs, title/description/provider_name/author_name are passed through decode_html_entities(), but image_url (line 124-128) is not. Since we parse HTML with regex (not a DOM parser), HTML entities in attribute values are not automatically decoded. A common pattern is: \u003cmeta property=\"og:image\" content=\"https://cdn.example.com/img?w=600\u0026amp;h=400\"\u003e. The captured value will contain literal '\u0026amp;' instead of '\u0026', producing a broken image URL. Fix: apply decode_html_entities() to image_url (and arguably to the url field from og:url if ever used).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:11:07.616390404Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:13:56.864659819Z",
+  "closed_at": "2026-07-19T01:13:56.864659819Z",
+  "close_reason": "Closed",
+  "labels": [
+    "bug",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-sbqx.3",
+      "depends_on_id": "smallhold-sbqx",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:11:07.637337096Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
