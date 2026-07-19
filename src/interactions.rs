@@ -1,5 +1,6 @@
 use crate::api::{
-    account_to_json, fetch_account_row, millis_to_iso, now_millis, AccountRow, AuthenticatedAccount,
+    account_to_json, fetch_account_row, hex_encode, millis_to_iso, now_millis, AccountRow,
+    AuthenticatedAccount,
 };
 use crate::delivery::{enqueue_delivery, enqueue_to_followers};
 use crate::error::AppError;
@@ -304,13 +305,20 @@ async fn follow(
             .execute(&state.pool)
             .await?;
 
-            // Enqueue outbound Follow activity
-            let follow_id = generate_id();
+            // Enqueue outbound Follow activity — derive a stable ID from
+            // actor+object so Undo{Follow} can reference the same URI.
+            let actor_field = format!("https://{domain}/users/{}", auth.username);
+            let follow_hash = {
+                let mut h = Sha256::new();
+                h.update(actor_field.as_bytes());
+                h.update(actor_uri.as_bytes());
+                hex_encode(&h.finalize())
+            };
             let activity = json!({
                 "@context": "https://www.w3.org/ns/activitystreams",
-                "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                "id": format!("https://{domain}/activities/follow-{follow_hash}"),
                 "type": "Follow",
-                "actor": format!("https://{domain}/users/{}", auth.username),
+                "actor": &actor_field,
                 "object": actor_uri
             });
 
@@ -362,18 +370,25 @@ async fn unfollow(
                 .execute(&state.pool)
                 .await?;
 
-            // Enqueue Undo{Follow}
+            // Enqueue Undo{Follow} — derive a stable follow ID from
+            // actor+object so the Undo references the same URI.
             let undo_id = generate_id();
-            let follow_id = generate_id();
+            let actor_field = format!("https://{domain}/users/{}", auth.username);
+            let follow_hash = {
+                let mut h = Sha256::new();
+                h.update(actor_field.as_bytes());
+                h.update(actor_uri.as_bytes());
+                hex_encode(&h.finalize())
+            };
             let activity = json!({
                 "@context": "https://www.w3.org/ns/activitystreams",
                 "id": format!("https://{domain}/activities/undo-{undo_id}"),
                 "type": "Undo",
-                "actor": format!("https://{domain}/users/{}", auth.username),
+                "actor": &actor_field,
                 "object": {
-                    "id": format!("https://{domain}/activities/follow-{follow_id}"),
+                    "id": format!("https://{domain}/activities/follow-{follow_hash}"),
                     "type": "Follow",
-                    "actor": format!("https://{domain}/users/{}", auth.username),
+                    "actor": &actor_field,
                     "object": actor_uri
                 }
             });
@@ -555,6 +570,7 @@ async fn block(
 ) -> Result<Json<Value>, AppError> {
     auth.require_scope("write")?;
     ensure_interaction_tables(&state.pool).await?;
+    let domain = &state.config.server.domain;
     let now = now_millis();
 
     let target = resolve_target(&state.pool, &id).await?;
@@ -591,7 +607,12 @@ async fn block(
                 .await
                 .map(Json)
         }
-        TargetAccount::Remote { id: remote_id, .. } => {
+        TargetAccount::Remote {
+            id: remote_id,
+            actor_uri,
+            inbox_url,
+            shared_inbox_url,
+        } => {
             sqlx::query(
                 "INSERT OR IGNORE INTO blocks (account_id, blocked_remote_id, created_at) \
                  VALUES (?, ?, ?)",
@@ -615,6 +636,20 @@ async fn block(
             .bind(remote_id)
             .execute(&state.pool)
             .await?;
+
+            // Send Block activity to the remote actor's inbox.
+            let block_id = generate_id();
+            let block_activity = json!({
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": format!("https://{domain}/activities/block-{block_id}"),
+                "type": "Block",
+                "actor": format!("https://{domain}/users/{}", auth.username),
+                "object": actor_uri
+            });
+            let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
+            let _ =
+                enqueue_delivery(&state.pool, target_inbox, auth.account_id, &block_activity)
+                    .await;
 
             build_relationship_remote(&state.pool, auth.account_id, remote_id)
                 .await
