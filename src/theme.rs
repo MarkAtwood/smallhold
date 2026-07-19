@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::sync::LazyLock;
 
 /// Maps W3C Design Token names to the CSS custom property names used in PAGE_CSS.
 fn token_to_css_var(name: &str) -> Option<&'static str> {
@@ -82,8 +83,10 @@ pub fn load_theme_css(config: &crate::config::Config) -> String {
 
     // Defense in depth: strip </style> sequences even though token values come from
     // an operator-controlled JSON file. This CSS ends up inside a <style> tag.
-    let re = regex::Regex::new(r"(?i)</\s*style").unwrap();
-    css = re.replace_all(&css, "").to_string();
+    static STYLE_TAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?i)</\s*style").unwrap()
+    });
+    css = STYLE_TAG_RE.replace_all(&css, "").to_string();
 
     css
 }

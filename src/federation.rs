@@ -473,6 +473,8 @@ pub async fn upsert_remote_account(
 
 /// Sign `message` with an RSA private key using PKCS#1 v1.5 + SHA-256.
 /// Returns the signature as base64.
+// ponytail: PEM re-parsed per sign; cache parsed RsaPrivateKey in AppState
+// if delivery throughput exceeds ~100 signs/sec
 fn rsa_sha256_sign(private_key_pem: &str, message: &[u8]) -> anyhow::Result<String> {
     use rsa::pkcs8::DecodePrivateKey;
     use rsa::signature::{SignatureEncoding, Signer};

@@ -7,7 +7,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, OnceLock};
 
 /// Content-Type for ActivityPub JSON responses.
 const AP_CONTENT_TYPE: &str = "application/activity+json; charset=utf-8";
@@ -25,8 +25,8 @@ fn wants_activitypub(headers: &HeaderMap) -> bool {
         })
 }
 
-/// Builds the standard ActivityPub JSON-LD @context array (matches Mastodon).
-fn ap_context() -> Value {
+/// Standard ActivityPub JSON-LD @context array (matches Mastodon), built once.
+static AP_CONTEXT: LazyLock<Value> = LazyLock::new(|| {
     json!([
         "https://www.w3.org/ns/activitystreams",
         "https://w3id.org/security/v1",
@@ -49,6 +49,10 @@ fn ap_context() -> Value {
             "focalPoint": {"@container": "@list", "@id": "toot:focalPoint"}
         }
     ])
+});
+
+fn ap_context() -> Value {
+    AP_CONTEXT.clone()
 }
 
 /// Returns an ActivityPub JSON response with the correct content type.
@@ -204,22 +208,30 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 /// Strip any `</style>` sequences (case-insensitive) to prevent style tag breakout
 /// when CSS is injected into a `<style>` block.
 fn sanitize_css_for_style_tag(css: &mut String) {
-    let re = regex::Regex::new(r"(?i)</\s*style").unwrap();
-    *css = re.replace_all(css, "").to_string();
+    static STYLE_TAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?i)</\s*style").unwrap()
+    });
+    *css = STYLE_TAG_RE.replace_all(css, "").to_string();
 }
 
 /// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
+/// Cached in an OnceLock so disk I/O and regex work happen only on first call.
 fn load_extra_css(config: &crate::config::Config) -> String {
-    let mut css = crate::theme::load_theme_css(config);
-    let custom_path = &config.branding.custom_css_path;
-    if !custom_path.is_empty() {
-        match std::fs::read_to_string(custom_path) {
-            Ok(custom) => css.push_str(&custom),
-            Err(e) => tracing::warn!(path = custom_path, "failed to load custom CSS: {e}"),
-        }
-    }
-    sanitize_css_for_style_tag(&mut css);
-    css
+    static EXTRA_CSS: OnceLock<String> = OnceLock::new();
+    EXTRA_CSS
+        .get_or_init(|| {
+            let mut css = crate::theme::load_theme_css(config);
+            let custom_path = &config.branding.custom_css_path;
+            if !custom_path.is_empty() {
+                match std::fs::read_to_string(custom_path) {
+                    Ok(custom) => css.push_str(&custom),
+                    Err(e) => tracing::warn!(path = custom_path, "failed to load custom CSS: {e}"),
+                }
+            }
+            sanitize_css_for_style_tag(&mut css);
+            css
+        })
+        .clone()
 }
 
 /// GET / — root page listing personas.

@@ -399,12 +399,14 @@ fn extract_fediverse_links(text: &str) -> Vec<String> {
 /// Find `@user@domain` and `@user` patterns in text.
 /// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_mentions(text: &str) -> Vec<ParsedMention> {
-    let re = regex::Regex::new(r"(?:^|[\s>])@([a-zA-Z0-9_-]+)(?:@([a-zA-Z0-9.-]+))?").unwrap();
+    static MENTION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?:^|[\s>])@([a-zA-Z0-9_-]+)(?:@([a-zA-Z0-9.-]+))?").unwrap()
+    });
 
     let mut mentions = Vec::new();
     let mut seen = HashSet::new();
 
-    for caps in re.captures_iter(text) {
+    for caps in MENTION_RE.captures_iter(text) {
         let username = caps[1].to_string();
         let domain = caps.get(2).map(|d| d.as_str().to_string());
 
@@ -422,12 +424,14 @@ fn parse_mentions(text: &str) -> Vec<ParsedMention> {
 /// Find `#word` patterns in text.
 /// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_hashtags(text: &str) -> Vec<String> {
-    let re = regex::Regex::new(r"(?:^|[\s>])#([a-zA-Z0-9_]+)").unwrap();
+    static HASHTAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?:^|[\s>])#([a-zA-Z0-9_]+)").unwrap()
+    });
 
     let mut tags = Vec::new();
     let mut seen = HashSet::new();
 
-    for caps in re.captures_iter(text) {
+    for caps in HASHTAG_RE.captures_iter(text) {
         let tag = caps[1].to_string();
         // Require at least one letter — pure numbers like #5 are not hashtags
         if tag.chars().any(|c| c.is_alphabetic()) {
@@ -444,8 +448,11 @@ fn parse_hashtags(text: &str) -> Vec<String> {
 fn autolink_bare_urls(html: &str) -> String {
     // Match URLs that are NOT preceded by href=" or src=" or >
     // Strategy: split on existing <a>...</a> segments, only linkify in non-anchor text.
+    static URL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"https?://[^\s<>")\]]+"#).unwrap()
+    });
     let mut result = String::with_capacity(html.len());
-    let url_re = regex::Regex::new(r#"https?://[^\s<>")\]]+"#).unwrap();
+    let url_re = &*URL_RE;
 
     let mut last = 0;
     // Track whether we're inside an <a> tag

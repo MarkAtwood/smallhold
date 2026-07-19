@@ -21,10 +21,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // ---------------------------------------------------------------------------
 
 pub fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    const HEX_LUT: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        s.push(HEX_LUT[(b >> 4) as usize] as char);
+        s.push(HEX_LUT[(b & 0x0f) as usize] as char);
+    }
+    s
 }
 
 pub fn now_millis() -> i64 {
+    // SystemTime::now() is always after UNIX_EPOCH on any supported platform
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -32,6 +39,7 @@ pub fn now_millis() -> i64 {
 }
 
 fn now_secs() -> i64 {
+    // SystemTime::now() is always after UNIX_EPOCH on any supported platform
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
