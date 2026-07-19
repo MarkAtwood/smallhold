@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-3515.2",
+  "title": "edit_status Update Note missing inReplyTo and attachment fields",
+  "description": "The Update{Note} is missing inReplyTo and attachment. Remote servers interpret Update as full replacement — missing fields = deleted. Editing a reply loses reply-chain; editing a post with media drops media on federated copies.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T01:30:44.724090126Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T01:33:30.471745709Z",
+  "closed_at": "2026-07-19T01:33:30.471745709Z",
+  "close_reason": "Closed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-3515.2",
+      "depends_on_id": "smallhold-3515",
+      "type": "parent-child",
+      "created_at": "2026-07-19T01:30:44.751224321Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

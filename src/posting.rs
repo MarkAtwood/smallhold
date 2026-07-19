@@ -380,7 +380,7 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
 fn extract_fediverse_links(text: &str) -> Vec<String> {
     static FEDI_POST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
-            r#"https://[^\s<>")\]]+/(?:users/[^/\s]+/statuses/[A-Za-z0-9]+|@[^/\s]+/\d+|notes/[A-Za-z0-9_-]+|objects/[A-Fa-f0-9-]+|notice/[A-Za-z0-9_-]+|post/\d+|comment/\d+|p/[^/\s]+/\d+)"#,
+            r#"https://[^\s<>")\]]+/(?:users/[^/\s]+/statuses/[A-Za-z0-9]+|@[^/\s]+/\d+|notes/[A-Za-z0-9_-]+|objects/[A-Fa-f0-9-]+|notice/[A-Za-z0-9_-]+|p/[^/\s]+/\d+)"#,
         )
         .unwrap()
     });
@@ -1662,6 +1662,55 @@ async fn edit_status(
             }));
         }
 
+        // Query inReplyTo URI
+        let (in_reply_to_uri,): (Option<String>,) = sqlx::query_as(
+            "SELECT in_reply_to_uri FROM posts WHERE id = ?",
+        )
+        .bind(post_id)
+        .fetch_one(&state.pool)
+        .await?;
+
+        // Query media attachments for the AP Note
+        #[allow(clippy::type_complexity)]
+        let ap_media: Vec<(
+            String,
+            String,
+            Option<i32>,
+            Option<i32>,
+            Option<String>,
+            String,
+        )> = sqlx::query_as(
+            "SELECT file_path, mime_type, width, height, blurhash, description \
+                 FROM media WHERE post_id = ? ORDER BY id",
+        )
+        .bind(post_id)
+        .fetch_all(&state.pool)
+        .await?;
+
+        let ap_attachments: Vec<Value> = ap_media
+            .iter()
+            .map(
+                |(file_path, mime_type, width, height, blurhash, description)| {
+                    let mut doc = json!({
+                        "type": "Document",
+                        "mediaType": mime_type,
+                        "url": format!("https://{domain}/media/{file_path}"),
+                        "name": description
+                    });
+                    if let Some(bh) = blurhash {
+                        doc["blurhash"] = json!(bh);
+                    }
+                    if let Some(w) = width {
+                        doc["width"] = json!(w);
+                    }
+                    if let Some(h) = height {
+                        doc["height"] = json!(h);
+                    }
+                    doc
+                },
+            )
+            .collect();
+
         let activity = json!({
             "@context": "https://www.w3.org/ns/activitystreams",
             "id": format!("{note_id}#updates/{now}"),
@@ -1682,7 +1731,9 @@ async fn edit_status(
                 "updated": &updated,
                 "sensitive": sensitive,
                 "summary": if spoiler_text.is_empty() { None } else { Some(&spoiler_text) },
-                "tag": &mention_tags
+                "inReplyTo": in_reply_to_uri,
+                "tag": &mention_tags,
+                "attachment": &ap_attachments
             }
         });
 
