@@ -118,8 +118,17 @@ impl FederationClient {
         );
 
         let mut headers = HeaderMap::new();
-        headers.insert("Date", date.parse().unwrap());
-        headers.insert("Signature", sig_header.parse().unwrap());
+        headers.insert(
+            "Date",
+            date.parse()
+                .map_err(|_| anyhow!("invalid Date header value"))?,
+        );
+        headers.insert(
+            "Signature",
+            sig_header
+                .parse()
+                .map_err(|_| anyhow!("invalid Signature header value"))?,
+        );
         Ok(headers)
     }
 
@@ -159,9 +168,23 @@ impl FederationClient {
         );
 
         let mut headers = HeaderMap::new();
-        headers.insert("Date", date.parse().unwrap());
-        headers.insert("Digest", digest_header.parse().unwrap());
-        headers.insert("Signature", sig_header.parse().unwrap());
+        headers.insert(
+            "Date",
+            date.parse()
+                .map_err(|_| anyhow!("invalid Date header value"))?,
+        );
+        headers.insert(
+            "Digest",
+            digest_header
+                .parse()
+                .map_err(|_| anyhow!("invalid Digest header value"))?,
+        );
+        headers.insert(
+            "Signature",
+            sig_header
+                .parse()
+                .map_err(|_| anyhow!("invalid Signature header value"))?,
+        );
         Ok(headers)
     }
 
