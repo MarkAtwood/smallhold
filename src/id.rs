@@ -14,13 +14,14 @@ pub fn generate_id() -> i64 {
         let prev_ms = prev >> 16;
         let prev_seq = prev & 0xFFFF;
 
-        let (ms, seq) = if now_ms == prev_ms {
+        let (ms, seq) = if now_ms <= prev_ms {
+            // Clock same or went backward (NTP adjustment): stay monotonic
             if prev_seq >= 0xFFFF {
                 // Sequence exhausted for this millisecond, spin
                 std::hint::spin_loop();
                 continue;
             }
-            (now_ms, prev_seq + 1)
+            (prev_ms, prev_seq + 1)
         } else {
             (now_ms, 0)
         };

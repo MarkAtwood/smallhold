@@ -10,7 +10,7 @@ use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(sqlx::FromRow)]
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
@@ -20,6 +20,20 @@ struct DeliveryRow {
     attempts: i32,
     private_key_pem: String,
     username: String,
+}
+
+impl std::fmt::Debug for DeliveryRow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeliveryRow")
+            .field("id", &self.id)
+            .field("target_inbox", &self.target_inbox)
+            .field("sender_account_id", &self.sender_account_id)
+            .field("activity_json", &self.activity_json)
+            .field("attempts", &self.attempts)
+            .field("private_key_pem", &"[REDACTED]")
+            .field("username", &self.username)
+            .finish()
+    }
 }
 
 const MAX_ATTEMPTS: i32 = 6;
@@ -286,9 +300,9 @@ async fn deliver_one(
                 mark_delivered(pool, row.id).await?;
                 circuit_record_success(&target_domain);
             } else if status == 410 {
-                // Gone — remote actor deleted; no point retrying.
+                // Gone — this specific remote actor is deleted; no point retrying.
+                // Don't trigger circuit breaker: 410 is resource-specific, not domain-wide.
                 mark_dead(pool, row.id, "410 Gone").await?;
-                circuit_record_failure(&target_domain, now_ms);
             } else if status.is_client_error() {
                 // Client errors (4xx) are unlikely to succeed on retry.
                 // Give one extra attempt in case of a transient proxy error,
