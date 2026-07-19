@@ -1,1 +1,2 @@
 {"id":"019f7886-88f0-7704-a983-55eb930fb6fc","issue_id":"smallhold-bs1n.6","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T03:58:30.640460729Z"}
+{"id":"019f7ca5-576c-7f35-9688-7cc6385d28e3","issue_id":"smallhold-bs1n.6","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Out of scope — Bluesky directory registration is not part of core DID emission","created_at":"2026-07-19T23:10:38.444997351Z"}

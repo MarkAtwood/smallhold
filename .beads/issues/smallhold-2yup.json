@@ -12,5 +12,15 @@
   "labels": [
     "ponytail",
     "infra-delegation"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-2yup",
+      "depends_on_id": "smallhold-p1ls",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:04:17.17439679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
   ]
 }

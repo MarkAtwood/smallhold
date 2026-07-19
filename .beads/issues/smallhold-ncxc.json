@@ -2,15 +2,29 @@
   "id": "smallhold-ncxc",
   "title": "Strip CSRF token machinery if present, use SameSite cookies",
   "description": "If the OAuth authorize form has hand-rolled CSRF token generation/validation, strip it. SameSite=Strict on the session cookie provides browser-native CSRF protection. Or delegate to Caddy/WAF. The in-memory token store doesn't survive restarts. Reference: gaja commit 3cf3634.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T22:39:18.720434672Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T22:39:18.720434672Z",
+  "updated_at": "2026-07-19T23:12:38.612066148Z",
+  "started_at": "2026-07-19T23:12:27.164080274Z",
+  "closed_at": "2026-07-19T23:12:38.612066148Z",
+  "close_reason": "No CSRF token machinery exists. App uses stateless Bearer auth, no cookies. OAuth form requires admin password, not vulnerable to CSRF.",
   "labels": [
     "ponytail",
     "infra-delegation"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-ncxc",
+      "depends_on_id": "smallhold-gsed",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:04:17.230349205Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
   ]
 }

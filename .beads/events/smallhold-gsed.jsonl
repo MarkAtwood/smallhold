@@ -1,0 +1,2 @@
+{"id":"019f7c9f-6ecb-7561-bc00-b566bace591e","issue_id":"smallhold-gsed","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T23:04:11.211353114Z"}
+{"id":"019f7ca8-6eba-7359-8460-820d30fd5bbb","issue_id":"smallhold-gsed","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Both subtasks complete: ncxc (no CSRF machinery to strip), plvk (design doc produced)","created_at":"2026-07-19T23:14:01.018220082Z"}

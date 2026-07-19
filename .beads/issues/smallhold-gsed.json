@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-gsed",
+  "title": "Security hardening",
+  "description": "Auth posture improvements: cookie security, key storage options.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-19T23:04:11.203625495Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-19T23:14:01.012805897Z",
+  "closed_at": "2026-07-19T23:14:01.012805897Z",
+  "close_reason": "Both subtasks complete: ncxc (no CSRF machinery to strip), plvk (design doc produced)"
+}

@@ -2,11 +2,25 @@
   "id": "smallhold-plvk",
   "title": "Explore HSM/KMS-backed key storage",
   "description": "Investigate hardware security module or key management service integration for actor private keys.\n\n## Problem\n\nCurrent state: private keys stored as plaintext PEM in database. Compromise of database = compromise of all actor keys = ability to impersonate any user.\n\n## Options to explore\n\n### 1. Cloud KMS key wrapping\n- Store keys encrypted with KMS master key\n- Decrypt on demand for signing\n- Keys at rest are protected\n- Providers: AWS KMS, GCP Cloud KMS, Azure Key Vault, Hashicorp Vault\n\n```python\n# Pseudocode\nencrypted_key = kms.encrypt(private_key_pem, master_key_id)\nstore_in_db(encrypted_key)\n\n# On sign\nprivate_key_pem = kms.decrypt(encrypted_key, master_key_id)\nsignature = sign(activity, private_key_pem)\n```\n\nPros: Simple retrofit, keys protected at rest\nCons: Keys still in memory during signing, KMS latency per operation\n\n### 2. Cloud HSM for signing\n- Keys never leave HSM\n- Sign operations happen in HSM\n- Providers: AWS CloudHSM, GCP Cloud HSM, Azure Dedicated HSM\n\nPros: Keys never exposed\nCons: Latency (~10-50ms/sign), cost (~$1.50/hr), limited slots\n\n### 3. Hybrid approach\n- High-value accounts (admin, high-follower) use HSM\n- Regular accounts use KMS-wrapped keys\n- Tiered security based on risk\n\n### 4. Local HSM / TPM\n- Use server TPM for master key\n- Wrap all user keys with TPM-held key\n- No cloud dependency\n\nPros: No cloud cost, low latency\nCons: Single server, no HA, TPM availability varies\n\n### 5. Threshold signatures\n- Split key across N nodes\n- Require K-of-N to sign\n- No single point of compromise\n\nPros: Distributed trust\nCons: Complex, latency, coordination\n\n## Research questions\n\n- [ ] What is realistic HSM latency for Ed25519 vs RSA?\n- [ ] How many signatures/second can CloudHSM sustain?\n- [ ] Cost model for 10k users, 100k activities/day?\n- [ ] Can we batch signatures to amortize HSM latency?\n- [ ] PKCS#11 library options for Python/Rust/Go?\n\n## Success criteria\n\nProduce a design doc with:\n- Recommended approach for small (\u003c1k users) vs large (\u003e10k users) instances\n- Cost estimates\n- Latency impact analysis\n- Migration path from plaintext keys\n\n## Not in scope (yet)\n\n- Actual implementation\n- User-held keys (separate concern)\n- Recovery key HSM storage (recovery keys are user-held)",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "feature",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T04:13:37.850709085Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T04:13:37.850709085Z"
+  "updated_at": "2026-07-19T23:13:55.369361468Z",
+  "started_at": "2026-07-19T23:12:42.953360027Z",
+  "closed_at": "2026-07-19T23:13:55.369361468Z",
+  "close_reason": "Design doc produced at docs/design-key-storage.md. Recommends HKDF+AES-256-GCM at-rest encryption using existing secret_key. Implementation is a separate task.",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-plvk",
+      "depends_on_id": "smallhold-gsed",
+      "type": "parent-child",
+      "created_at": "2026-07-19T23:04:17.285841144Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
 }
