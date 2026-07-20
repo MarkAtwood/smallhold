@@ -101,12 +101,7 @@ impl SearchIndex {
         // just (id, content, persona_id) columns and no persona filter.
         // ponytail: complex projection query not covered by fieldwork module
         let posts: Vec<(i64, String, String)> =
-            // REMAINING: query
-
-            // REMAINING: aggregate or complex query
-            sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
-                .fetch_all(pool)
-                .await?;
+            crate::db_extras::get_all_posts_for_search(pool).await?;
 
         let mut writer = self.writer.lock().await;
         writer.delete_all_documents()?;

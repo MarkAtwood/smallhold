@@ -469,21 +469,14 @@ pub async fn compute_follower_sync_digest(
     // ponytail: this JOIN between followers and remote_accounts filtered by
     // domain is not covered by any fieldwork module. It's a FEP-8fcf-specific
     // query for follower sync digest computation.
-    let uris: Vec<(String,)> = // REMAINING: federation query
- sqlx::query_as(
-        "SELECT ra.actor_uri FROM followers f \
-         JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.persona_id = ? AND ra.domain = ?",
-    )
-    .bind(account_id)
-    .bind(target_domain)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| {
-        tracing::warn!("follower sync digest query failed: {e}");
-        e
-    })
-    .ok()?;
+    let uris_vec = crate::db_extras::get_follower_uris_by_domain(pool, account_id, target_domain)
+        .await
+        .map_err(|e| {
+            tracing::warn!("follower sync digest query failed: {e}");
+            e
+        })
+        .ok()?;
+    let uris: Vec<(String,)> = uris_vec.into_iter().map(|uri| (uri,)).collect();
 
     if uris.is_empty() {
         return None;
@@ -817,15 +810,10 @@ zloXrMaFLBPp2UUN/amDTUIJ
         assert_eq!(id1, id2);
 
         // Verify the update landed
-        let (name,): (String,) =
-            // REMAINING: federation query
-
-            // REMAINING: remote account query — actor_cache has no get_by_id
-            sqlx::query_as("SELECT display_name FROM remote_accounts WHERE id = ?")
-                .bind(id1)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let name = crate::db_extras::get_remote_display_name(&pool, id1)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(name, "Alice Updated");
     }
 
@@ -861,22 +849,8 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Create a local account
         let acct_id = crate::id::generate_id();
-        // REMAINING: federation query
-
-        // REMAINING: admin table — smallhold-specific
-        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES (1000000000001, 'test@test', 'Test', 'admin', 0)")
-            .execute(&pool).await.unwrap();
-        // REMAINING: federation query
-
-        // REMAINING: reason varies
-        sqlx::query(
-            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 1000000000001, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
-        )
-        .bind(&acct_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+        crate::db_extras::test_insert_user(&pool).await.unwrap();
+        crate::db_extras::test_insert_persona(&pool, acct_id).await.unwrap();
 
         // No followers => None
         let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
@@ -889,22 +863,8 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Create a local account
         let acct_id = crate::id::generate_id();
-        // REMAINING: federation query
-
-        // REMAINING: admin table — smallhold-specific
-        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES (1000000000001, 'test@test', 'Test', 'admin', 0)")
-            .execute(&pool).await.unwrap();
-        // REMAINING: federation query
-
-        // REMAINING: reason varies
-        sqlx::query(
-            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 1000000000001, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
-        )
-        .bind(&acct_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+        crate::db_extras::test_insert_user(&pool).await.unwrap();
+        crate::db_extras::test_insert_persona(&pool, acct_id).await.unwrap();
 
         // Create a remote account on remote.example
         let remote_id = crate::id::generate_id();
@@ -927,18 +887,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let rid = upsert_remote_account(&pool, &data).await.unwrap();
 
         // Add follower
-        // REMAINING: federation query
-
-        // REMAINING: remote data query
-        sqlx::query(
-            "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
-        )
-        .bind(&acct_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(rid)
-        .execute(&pool)
-        .await
-        .unwrap();
+        crate::db_extras::test_insert_follower(&pool, acct_id, crate::db::DEFAULT_USER_ID, rid).await.unwrap();
 
         let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
         assert!(result.is_some());
@@ -960,22 +909,8 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         let acct_id = crate::id::generate_id();
-        // REMAINING: federation query
-
-        // REMAINING: admin table — smallhold-specific
-        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES (1000000000001, 'test@test', 'Test', 'admin', 0)")
-            .execute(&pool).await.unwrap();
-        // REMAINING: federation query
-
-        // REMAINING: reason varies
-        sqlx::query(
-            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 1000000000001, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
-        )
-        .bind(&acct_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+        crate::db_extras::test_insert_user(&pool).await.unwrap();
+        crate::db_extras::test_insert_persona(&pool, acct_id).await.unwrap();
 
         // Create two remote followers on the same domain
         for name in &["carol", "dave"] {
@@ -996,18 +931,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
                 bot: false,
             };
             let rid = upsert_remote_account(&pool, &data).await.unwrap();
-            // REMAINING: federation query
-
-            // REMAINING: remote data query
-            sqlx::query(
-                "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
-            )
-            .bind(&acct_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-            .bind(rid)
-            .execute(&pool)
-            .await
-            .unwrap();
+            crate::db_extras::test_insert_follower(&pool, acct_id, crate::db::DEFAULT_USER_ID, rid).await.unwrap();
         }
 
         let digest = compute_follower_sync_digest(&pool, acct_id, "remote.example")
@@ -1035,22 +959,8 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         let acct_id = crate::id::generate_id();
-        // REMAINING: federation query
-
-        // REMAINING: admin table — smallhold-specific
-        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES (1000000000001, 'test@test', 'Test', 'admin', 0)")
-            .execute(&pool).await.unwrap();
-        // REMAINING: federation query
-
-        // REMAINING: reason varies
-        sqlx::query(
-            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 1000000000001, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
-        )
-        .bind(&acct_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+        crate::db_extras::test_insert_user(&pool).await.unwrap();
+        crate::db_extras::test_insert_persona(&pool, acct_id).await.unwrap();
 
         // Follower on remote.example
         let data1 = RemoteActorData {
@@ -1091,18 +1001,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let rid2 = upsert_remote_account(&pool, &data2).await.unwrap();
 
         for rid in [rid1, rid2] {
-            // REMAINING: federation query
-
-            // REMAINING: remote data query
-            sqlx::query(
-                "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
-            )
-            .bind(&acct_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-            .bind(rid)
-            .execute(&pool)
-            .await
-            .unwrap();
+            crate::db_extras::test_insert_follower(&pool, acct_id, crate::db::DEFAULT_USER_ID, rid).await.unwrap();
         }
 
         // Digest for remote.example should only include eve

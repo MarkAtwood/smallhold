@@ -798,12 +798,10 @@ pub async fn load_status(
                 }));
             }
         } else if let Some(rid) = remote_id {
-            let remote: Option<(i64, String, String)> =
-                // REMAINING: remote account by ID — actor_cache has no get_by_id
-                sqlx::query_as("SELECT id, username, domain FROM remote_accounts WHERE id = ?")
-                    .bind(rid)
-                    .fetch_optional(pool)
-                    .await?;
+            let remote: Option<(i64, String, String)> = {
+                let r = crate::db_extras::get_remote_account_by_id(pool, *rid).await?;
+                r.map(|(id, username, domain, _, _)| (id, username, domain))
+            };
             if let Some((id, username, rdomain)) = remote {
                 mention_vals.push(json!({
                     "id": id.to_string(),
@@ -821,23 +819,10 @@ pub async fn load_status(
             &crate::server::fw_pool(pool), viewer, post.id,
         ).await?;
 
-        let boost: (i64,) =
-            // REMAINING: post query — dynamic SQL or transaction
-            sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-                .bind(viewer)
-                .bind(post.id)
-                .fetch_one(pool)
-                .await?;
+        let boost_count = crate::db_extras::count_boosts_by_persona(pool, viewer, post.id).await?;
+        let bmark_count = crate::db_extras::count_bookmarks(pool, viewer, post.id).await?;
 
-        let bmark: (i64,) =
-            // REMAINING: bookmark query
-            sqlx::query_as("SELECT COUNT(*) FROM bookmarks WHERE persona_id = ? AND post_id = ?")
-                .bind(viewer)
-                .bind(post.id)
-                .fetch_one(pool)
-                .await?;
-
-        (fav, boost.0 > 0, bmark.0 > 0)
+        (fav, boost_count > 0, bmark_count > 0)
     } else {
         (false, false, false)
     };
@@ -873,17 +858,7 @@ pub async fn load_status(
         reblogged,
         false, // muted
         bookmarked,
-        {
-            // REMAINING: pinned check — no fieldwork is_pinned function
-            let pinned: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM pinned_posts WHERE persona_id = ? AND post_id = ?",
-            )
-            .bind(post.persona_id)
-            .bind(post.id)
-            .fetch_one(pool)
-            .await?;
-            pinned.0 > 0
-        },
+        crate::db_extras::is_pinned(pool, post.persona_id, post.id).await?,
     ))
 }
 
@@ -957,17 +932,11 @@ async fn fetch_paginated_statuses(
          ORDER BY id {order} LIMIT ?",
     );
 
-    // REMAINING: dynamic SQL pagination — fieldwork has no paginated timeline function
-    let mut query = sqlx::query(&sql);
-    for b in base_binds {
-        query = query.bind(b);
-    }
+    let mut all_binds: Vec<String> = base_binds.to_vec();
     for b in &page_binds {
-        query = query.bind(b);
+        all_binds.push(b.to_string());
     }
-    query = query.bind(limit);
-
-    let rows = query.fetch_all(pool).await?;
+    let rows = crate::db_extras::execute_dynamic_query(pool, &sql, &all_binds, limit).await?;
     let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
@@ -1161,15 +1130,7 @@ async fn create_status(
     // Attach media
     // REMAINING: media attach (UPDATE with WHERE post_id IS NULL) — no fieldwork equivalent
     for mid in &media_ids {
-        // REMAINING: reason varies
-        sqlx::query(
-            "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
-        )
-        .bind(post_id)
-        .bind(mid)
-        .bind(auth.account_id)
-        .execute(&state.pool)
-        .await?;
+        crate::db_extras::attach_media_to_post(&state.pool, post_id, *mid, auth.account_id).await?;
     }
 
     // Insert mentions
@@ -1250,12 +1211,7 @@ async fn create_status(
         fieldwork::idempotency_db::store_key(&fwp, &key_hash, auth.account_id, post_id, now).await?;
     }
 
-    // REMAINING: update last_status_at — no fieldwork equivalent
-    sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
-        .bind(now)
-        .bind(auth.account_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::touch_persona_last_status(&state.pool, auth.account_id, now).await?;
 
     // Enqueue outbound ActivityPub Create{Note} for federation
     {
@@ -1278,15 +1234,8 @@ async fn create_status(
                         }
                         Some(mention_domain) => {
                             // Look up the remote account's actor_uri for the AP `to` field
-                            // REMAINING: remote data query
-                            let remote: Option<(String,)> = sqlx::query_as(
-                                "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
-                            )
-                            .bind(&m.username)
-                            .bind(mention_domain)
-                            .fetch_optional(&state.pool)
-                            .await?;
-                            if let Some((actor_uri,)) = remote {
+                            let remote_uri = crate::db_extras::get_remote_actor_uri_by_webfinger(&state.pool, &m.username, mention_domain).await?;
+                            if let Some(actor_uri) = remote_uri {
                                 to_addrs.push(json!(actor_uri));
                             }
                         }
@@ -1338,13 +1287,8 @@ async fn create_status(
         let in_reply_to_ap = match in_reply_to_id {
             Some(rid) => {
                 // Look up the original post's ap_id rather than constructing it
-                let original_ap_id: Option<(String,)> =
-                    // REMAINING: post query — dynamic SQL or transaction
-                    sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-                        .bind(rid)
-                        .fetch_optional(&state.pool)
-                        .await?;
-                Some(json!(original_ap_id.map(|(ap_id,)| ap_id).unwrap_or_else(
+                let original_ap_id = crate::db_extras::get_post_ap_id(&state.pool, rid).await?;
+                Some(json!(original_ap_id.unwrap_or_else(
                     || format!("https://{domain}/users/{}/statuses/{rid}", auth.username)
                 )))
             }
@@ -1541,31 +1485,7 @@ async fn delete_status(
 
     // Delete related rows then the post, all in a transaction
     let mut tx = state.pool.begin().await?;
-    for table in &[
-        "DELETE FROM pinned_posts WHERE post_id = ?",
-        "DELETE FROM post_tags WHERE post_id = ?",
-        "DELETE FROM mentions WHERE post_id = ?",
-        "DELETE FROM favourites WHERE post_id = ?",
-        "DELETE FROM bookmarks WHERE post_id = ?",
-        "DELETE FROM notifications WHERE post_id = ?",
-        "DELETE FROM idempotency_keys WHERE post_id = ?",
-        "DELETE FROM conversation_read_markers WHERE post_id = ?",
-        "DELETE FROM conversation_hidden WHERE post_id = ?",
-        "DELETE FROM post_cards WHERE post_id = ?",
-    ] {
-        // REMAINING: transaction or DDL query
-        sqlx::query(table).bind(post_id).execute(&mut *tx).await?;
-    }
-    // REMAINING: media query
-    sqlx::query("UPDATE media SET post_id = NULL WHERE post_id = ?")
-        .bind(post_id)
-        .execute(&mut *tx)
-        .await?;
-    // REMAINING: post query — dynamic SQL or transaction
-    sqlx::query("DELETE FROM posts WHERE id = ?")
-        .bind(post_id)
-        .execute(&mut *tx)
-        .await?;
+    crate::db_extras::delete_post_related(&mut tx, post_id).await?;
     tx.commit().await?;
 
     // Remove media files from disk (best-effort, after transaction committed)
@@ -1650,31 +1570,10 @@ async fn edit_status(
     let rendered = render_content(&text, domain);
 
     // Save current version to edit history before overwriting
-    // REMAINING: post_edits INSERT ... SELECT — no fieldwork equivalent for edit history
-    sqlx::query(
-        "INSERT INTO post_edits (id, post_id, content, content_html, spoiler_text, sensitive, created_at) \
-         SELECT ?, id, content, content_html, spoiler_text, sensitive, COALESCE(edited_at, created_at) FROM posts WHERE id = ?",
-    )
-    .bind(generate_id())
-    .bind(post_id)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::save_post_edit_history(&state.pool, generate_id(), post_id).await?;
 
     // Update the post row
-    // REMAINING: extended post update (spoiler, sensitive, language) — fieldwork only has update_post_content
-    sqlx::query(
-        "UPDATE posts SET content = ?, content_html = ?, spoiler_text = ?, \
-         sensitive = ?, language = ?, edited_at = ? WHERE id = ?",
-    )
-    .bind(&text)
-    .bind(&rendered.html)
-    .bind(&spoiler_text)
-    .bind(sensitive)
-    .bind(&language)
-    .bind(now)
-    .bind(post_id)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::update_post_full(&state.pool, post_id, &text, &rendered.html, &spoiler_text, sensitive, &language, now).await?;
 
     // Delete old mentions and tags, re-insert new ones
     let fwp_del = crate::server::fw_pool(&state.pool);
@@ -1905,14 +1804,7 @@ async fn status_history(
     let account_json = account_to_json(&account, domain);
 
     // Fetch previous versions from post_edits, ordered oldest first
-    // REMAINING: reason varies
-    let edits: Vec<(String, String, String, bool, i64)> = sqlx::query_as(
-        "SELECT content, content_html, spoiler_text, sensitive, created_at \
-         FROM post_edits WHERE post_id = ? ORDER BY created_at ASC",
-    )
-    .bind(post_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let edits: Vec<(String, String, String, bool, i64)> = crate::db_extras::get_post_edits(&state.pool, post_id).await?;
 
     let mut history: Vec<Value> = edits
         .iter()
@@ -1991,11 +1883,7 @@ async fn status_context(
          SELECT p.{prefixed_cols} FROM thread t JOIN posts p ON t.id = p.id \
          ORDER BY p.id ASC LIMIT 500",
     );
-    // REMAINING: reason varies
-    let descendants_rows = sqlx::query(&cte_sql)
-        .bind(post_id)
-        .fetch_all(&state.pool)
-        .await
+    let descendants_rows = crate::db_extras::execute_raw_query(&state.pool, &cte_sql, &[post_id.to_string()]).await
         // ponytail: if the CTE alias fails, fall back to the simple form
         .unwrap_or_default();
     let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(sqlx_row_to_post).collect();
@@ -2212,13 +2100,8 @@ async fn reblog(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Check for existing reblog
-    let existing: Option<(i64,)> =
-        // REMAINING: boost existence check — no fieldwork equivalent
-        sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-            .bind(auth.account_id)
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?;
+    let existing: Option<(i64,)> = crate::db_extras::find_boost(&state.pool, auth.account_id, post_id)
+        .await?.map(|id| (id,));
 
     let boost_id = if let Some((eid,)) = existing {
         eid
@@ -2314,26 +2197,15 @@ async fn reblog(
             }
 
             // Also deliver to the post author's inbox if remote
-            let ap_id_row: Option<(String,)> =
-                // REMAINING: post query — dynamic SQL or transaction
-                sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-                    .bind(post_id)
-                    .fetch_optional(&state.pool)
-                    .await?;
+            let ap_id_row: Option<(String,)> = crate::db_extras::get_post_ap_id(&state.pool, post_id)
+                .await?.map(|s| (s,));
             let local_prefix = format!("https://{domain}/");
             if let Some((ref post_ap_id,)) = ap_id_row {
                 if !post_ap_id.starts_with(&local_prefix) {
                     let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                     if let Some(remote_actor) = actor_uri {
-                        // REMAINING: remote data query
-                        let inbox: Option<(String,)> = sqlx::query_as(
-                            "SELECT COALESCE(shared_inbox_url, inbox_url) \
-                             FROM remote_accounts WHERE actor_uri = ?",
-                        )
-                        .bind(remote_actor)
-                        .fetch_optional(&state.pool)
-                        .await?;
-                        if let Some((inbox_url,)) = inbox {
+                        let inbox = crate::db_extras::get_remote_inbox_by_actor(&state.pool, remote_actor).await?;
+                        if let Some(inbox_url) = inbox {
                             if let Err(e) = enqueue_delivery(
                                 &state.pool,
                                 &inbox_url,
@@ -2370,13 +2242,8 @@ async fn unreblog(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let boost: Option<(i64,)> =
-        // REMAINING: boost existence check — no fieldwork equivalent
-        sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-            .bind(auth.account_id)
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?;
+    let boost: Option<(i64,)> = crate::db_extras::find_boost(&state.pool, auth.account_id, post_id)
+        .await?.map(|id| (id,));
 
     if let Some((boost_id,)) = boost {
         // Enqueue outbound Undo{Announce} before deleting
@@ -2420,15 +2287,8 @@ async fn unreblog(
                         let actor_uri =
                             post_ap_id.0.rfind("/statuses/").map(|i| &post_ap_id.0[..i]);
                         if let Some(remote_actor) = actor_uri {
-                            // REMAINING: remote data query
-                            let inbox: Option<(String,)> = sqlx::query_as(
-                                "SELECT COALESCE(shared_inbox_url, inbox_url) \
-                                 FROM remote_accounts WHERE actor_uri = ?",
-                            )
-                            .bind(remote_actor)
-                            .fetch_optional(&state.pool)
-                            .await?;
-                            if let Some((inbox_url,)) = inbox {
+                            let inbox = crate::db_extras::get_remote_inbox_by_actor(&state.pool, remote_actor).await?;
+                            if let Some(inbox_url) = inbox {
                                 if let Err(e) = enqueue_delivery(
                                     &state.pool,
                                     &inbox_url,
@@ -2449,20 +2309,8 @@ async fn unreblog(
         }
 
         // Delete the orphan reblog notification
-        // REMAINING: delete specific notification by kind+from+post — no fieldwork equivalent
-        sqlx::query(
-            "DELETE FROM notifications WHERE kind = 'reblog' AND from_persona_id = ? AND post_id = ?",
-        )
-        .bind(auth.account_id)
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
-
-        // REMAINING: hard delete boost post — fieldwork only has soft-delete
-        sqlx::query("DELETE FROM posts WHERE id = ?")
-            .bind(boost_id)
-            .execute(&state.pool)
-            .await?;
+        crate::db_extras::delete_reblog_notification(&state.pool, auth.account_id, post_id).await?;
+        crate::db_extras::hard_delete_post(&state.pool, boost_id).await?;
     }
 
     let post =
@@ -2584,22 +2432,7 @@ async fn fetch_remote_timeline(
     limit: i64,
     domain: &str,
 ) -> Result<Vec<Value>, AppError> {
-    // REMAINING: remote data query
-    let rows: Vec<(i64, String, String, String, i64, String, Option<String>, i64, i64, String, String, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT rp.id, rp.ap_uri, rp.content_html, rp.visibility, rp.created_at, \
-         rp.spoiler_text, rp.language, rp.remote_account_id, rp.sensitive, \
-         ra.actor_uri, ra.display_name, ra.avatar_url, ra.username \
-         FROM remote_posts rp \
-         JOIN remote_accounts ra ON rp.remote_account_id = ra.id \
-         WHERE rp.remote_account_id IN ( \
-             SELECT followee_remote_id FROM follows WHERE persona_id = ? AND followee_remote_id IS NOT NULL \
-         ) \
-         ORDER BY rp.id DESC LIMIT ?"
-    )
-    .bind(account_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
+    let rows = crate::db_extras::fetch_remote_timeline_posts(pool, account_id, limit).await?;
 
     let statuses: Vec<Value> = rows
         .iter()
@@ -2719,16 +2552,11 @@ async fn timeline_tag(
          ORDER BY id {order} LIMIT ?",
     );
 
-    // REMAINING: reason varies
-    let mut query = sqlx::query(&sql);
-    query = query.bind(&tag_lower);
+    let mut tag_binds = vec![tag_lower.clone()];
     for b in &page_binds {
-        query = query.bind(b);
+        tag_binds.push(b.to_string());
     }
-    query = query.bind(limit);
-
-    // REMAINING: dynamic SQL tag timeline — fieldwork has no tag timeline function
-    let rows = query.fetch_all(&state.pool).await?;
+    let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &tag_binds, limit).await?;
     let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
@@ -2865,14 +2693,7 @@ async fn serialize_notification(
         let a = fetch_account_row(pool, *aid).await?;
         account_to_json(&a, domain)
     } else if let Some(rid) = notif.from_remote_account_id {
-        // REMAINING: remote account by ID — actor_cache has no get_by_id
-        let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
-            "SELECT id, username, domain, display_name, bio_html \
-             FROM remote_accounts WHERE id = ?",
-        )
-        .bind(rid)
-        .fetch_optional(pool)
-        .await?;
+        let remote: Option<(i64, String, String, String, String)> = crate::db_extras::get_remote_account_by_id(pool, rid).await?;
         if let Some((id, username, rdomain, display_name, bio_html)) = remote {
             json!({
                 "id": id.to_string(),
@@ -2950,15 +2771,11 @@ async fn get_notifications(
          ORDER BY id {order} LIMIT ?",
     );
 
-    // REMAINING: paginated notification query — no fieldwork equivalent
-    let mut query = sqlx::query(&sql);
-    query = query.bind(auth.account_id);
+    let mut notif_binds = vec![auth.account_id.to_string()];
     for b in &page_binds {
-        query = query.bind(b);
+        notif_binds.push(b.to_string());
     }
-    query = query.bind(limit);
-
-    let notif_rows = query.fetch_all(&state.pool).await?;
+    let notif_rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &notif_binds, limit).await?;
     let notifs: Vec<NotificationRow> = notif_rows.into_iter().map(NotificationRow::from_sqlx_row).collect();
 
     let mut values = Vec::with_capacity(notifs.len());
@@ -2990,17 +2807,9 @@ async fn get_notification(
 
     let domain = &state.config.server.domain;
 
-    // REMAINING: single notification query — no fieldwork get_notification_by_id
-    let notif_raw = sqlx::query(
-        "SELECT id, persona_id, kind, from_persona_id, from_remote_account_id, \
-         post_id, created_at \
-         FROM notifications WHERE id = ? AND persona_id = ?",
-    )
-    .bind(notif_id)
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Notification not found"))?;
+    let notif_raw = crate::db_extras::get_notification_row(&state.pool, notif_id, auth.account_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Notification not found"))?;
     let notif = NotificationRow::from_sqlx_row(notif_raw);
 
     let value = serialize_notification(&state.pool, &notif, domain, auth.account_id).await?;
@@ -3027,12 +2836,7 @@ async fn dismiss_notification(
         .parse()
         .map_err(|_| AppError::not_found("Notification not found"))?;
 
-    // REMAINING: dismiss single notification — fieldwork only has clear_notifications
-    sqlx::query("DELETE FROM notifications WHERE id = ? AND persona_id = ?")
-        .bind(notif_id)
-        .bind(auth.account_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::dismiss_notification(&state.pool, notif_id, auth.account_id).await?;
 
     Ok(Json(json!({})))
 }
@@ -3302,14 +3106,7 @@ async fn conversation_participants(
                 }
             }
         } else if let Some(rid) = remote_id {
-            // REMAINING: remote data query
-            let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
-                "SELECT id, username, domain, display_name, bio_html \
-                 FROM remote_accounts WHERE id = ?",
-            )
-            .bind(rid)
-            .fetch_optional(pool)
-            .await?;
+            let remote: Option<(i64, String, String, String, String)> = crate::db_extras::get_remote_account_by_id(pool, *rid).await?;
             if let Some((id, username, rdomain, display_name, bio_html)) = remote {
                 accounts.push(json!({
                     "id": id.to_string(),
@@ -3371,18 +3168,15 @@ async fn list_conversations(
          ORDER BY id {order} LIMIT ?",
     );
 
-    // REMAINING: reason varies
-    let mut query = sqlx::query(&sql);
-    query = query.bind(auth.account_id);
-    query = query.bind(auth.account_id);
-    query = query.bind(auth.account_id);
+    let mut conv_binds = vec![
+        auth.account_id.to_string(),
+        auth.account_id.to_string(),
+        auth.account_id.to_string(),
+    ];
     for b in &page_binds {
-        query = query.bind(b);
+        conv_binds.push(b.to_string());
     }
-    query = query.bind(limit);
-
-    // REMAINING: dynamic SQL conversation query — fieldwork has no conversation function
-    let rows = query.fetch_all(&state.pool).await?;
+    let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &conv_binds, limit).await?;
     let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     // TODO(perf): N+1 queries for participants per conversation. The result set is

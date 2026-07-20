@@ -643,19 +643,7 @@ async fn authorize_submit(
     let scope = form.scope.as_deref().unwrap_or("read");
     let expires_at = now_millis() + 600_000; // 10 minutes
 
-    // REMAINING: reason varies
-    sqlx::query(
-        "INSERT INTO oauth_authz_codes (code_hash, app_id, user_id, persona_id, scopes, redirect_uri, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(&code_hash)
-    .bind(app_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(form.account_id)
-    .bind(scope)
-    .bind(&form.redirect_uri)
-    .bind(expires_at)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::insert_authz_code(&state.pool, &code_hash, app_id, crate::db::DEFAULT_USER_ID, form.account_id, scope, &form.redirect_uri, expires_at).await?;
 
     // For OOB redirect, show the code directly
     if form.redirect_uri == "urn:ietf:wg:oauth:2.0:oob" {
@@ -729,14 +717,7 @@ async fn token(
     let now = now_millis();
 
     // Atomically fetch and consume the authorization code (single-use)
-    // REMAINING: authorization code table — not in fieldwork
-    let code_row: Option<(i64, i64, String, String)> = sqlx::query_as(
-        "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, persona_id, scopes, redirect_uri",
-    )
-    .bind(&code_hash)
-    .bind(now)
-    .fetch_optional(&state.pool)
-    .await?;
+    let code_row: Option<(i64, i64, String, String)> = crate::db_extras::consume_authz_code(&state.pool, &code_hash, now).await?;
 
     let (app_id, account_id, scopes, stored_redirect) =
         code_row.ok_or_else(|| AppError::bad_request("Invalid or expired authorization code"))?;
@@ -750,12 +731,7 @@ async fn token(
 
     // Verify client credentials if provided
     if let Some(ref cid) = form.client_id {
-        let app_row: Option<(i64, String)> =
-            // REMAINING: oauth_apps client_secret check — fieldwork returns full row
-            sqlx::query_as("SELECT id, client_secret FROM oauth_apps WHERE client_id = ?")
-                .bind(cid)
-                .fetch_optional(&state.pool)
-                .await?;
+        let app_row: Option<(i64, String)> = crate::db_extras::get_oauth_app_secret(&state.pool, cid).await?;
 
         let (found_app_id, stored_secret) =
             app_row.ok_or_else(|| AppError::bad_request("Unknown client_id"))?;
@@ -1037,34 +1013,11 @@ async fn account_statuses(
     let statuses: Vec<StatusRow> = if let Some(max_id) =
         params.get("max_id").and_then(|v| v.parse::<i64>().ok())
     {
-        // REMAINING: post-related query
-        sqlx::query_as(
-                "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
-            )
-            .bind(account_id)
-            .bind(max_id)
-            .bind(limit)
-            .fetch_all(&state.pool)
-            .await?
+        crate::db_extras::account_statuses_max_id(&state.pool, account_id, max_id, limit).await?
     } else if let Some(min_id) = params.get("min_id").and_then(|v| v.parse::<i64>().ok()) {
-        // REMAINING: post-related query
-        sqlx::query_as(
-                "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
-            )
-            .bind(account_id)
-            .bind(min_id)
-            .bind(limit)
-            .fetch_all(&state.pool)
-            .await?
+        crate::db_extras::account_statuses_min_id(&state.pool, account_id, min_id, limit).await?
     } else {
-        // REMAINING: post-related query
-        sqlx::query_as(
-                "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
-            )
-            .bind(account_id)
-            .bind(limit)
-            .fetch_all(&state.pool)
-            .await?
+        crate::db_extras::account_statuses_default(&state.pool, account_id, limit).await?
     };
 
     let account_row = fetch_account_row(&state.pool, account_id).await?;
@@ -1217,13 +1170,7 @@ async fn verify_app_credentials(
 ) -> Result<Json<Value>, AppError> {
     // Look up the app via the most recently used token for this account.
     // ponytail: single-user server, so most-recent-token heuristic is fine.
-    // REMAINING: reason varies
-    let app_row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT oa.name, oa.website FROM oauth_tokens ot JOIN oauth_apps oa ON ot.app_id = oa.id WHERE ot.persona_id = ? AND ot.revoked_at IS NULL ORDER BY ot.last_used_at DESC LIMIT 1",
-    )
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let app_row: Option<(String, Option<String>)> = crate::db_extras::get_app_for_account(&state.pool, auth.account_id).await?;
 
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
@@ -1296,17 +1243,7 @@ async fn create_list(
     let id = generate_id();
     let now = now_millis();
 
-    // REMAINING: reason varies
-    sqlx::query(
-        "INSERT INTO lists (id, user_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)",
-    )
-    .bind(id)
-    .bind(auth.account_id)
-    .bind(&body.title)
-    .bind(&body.replies_policy)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::create_list(&state.pool, id, auth.account_id, &body.title, &body.replies_policy, now).await?;
 
     Ok((
         StatusCode::OK,
@@ -1374,13 +1311,7 @@ async fn update_list(
         rp = new_rp.clone();
     }
 
-    // REMAINING: list query
-    sqlx::query("UPDATE lists SET title = ?, replies_policy = ? WHERE id = ?")
-        .bind(&title)
-        .bind(&rp)
-        .bind(list_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::update_list(&state.pool, list_id, &title, &rp).await?;
 
     Ok(Json(list_to_json(list_id, &title, &rp)))
 }
@@ -1430,16 +1361,7 @@ async fn get_list_accounts(
     }
 
     let domain = &state.config.server.domain;
-    // REMAINING: reason varies
-    let account_rows: Vec<AccountRow> = sqlx::query_as(
-        "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
-         a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
-         FROM personas a JOIN list_accounts la ON a.id = la.persona_id \
-         WHERE la.list_id = ? ORDER BY a.id",
-    )
-    .bind(list_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let account_rows: Vec<AccountRow> = crate::db_extras::get_list_account_rows(&state.pool, list_id).await?;
 
     let accounts: Vec<Value> = account_rows
         .iter()
@@ -1573,23 +1495,8 @@ fn default_true() -> bool {
 
 /// Build a v2 Filter JSON object with nested keywords.
 async fn filter_to_json(pool: &sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
-    // REMAINING: reason varies
-    let row: (i64, String, String, String, Option<i64>, i64) = sqlx::query_as(
-        "SELECT id, title, context, filter_action, expires_at, created_at \
-         FROM filters WHERE id = ?",
-    )
-    .bind(filter_id)
-    .fetch_one(pool)
-    .await?;
-
-    // REMAINING: filter query — fieldwork has partial coverage
-    let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
-        "SELECT id, keyword, whole_word FROM filter_keywords \
-         WHERE filter_id = ? ORDER BY id",
-    )
-    .bind(filter_id)
-    .fetch_all(pool)
-    .await?;
+    let row: (i64, String, String, String, Option<i64>, i64) = crate::db_extras::get_filter_row(pool, filter_id).await?;
+    let keywords: Vec<(i64, String, bool)> = crate::db_extras::get_filter_keywords(pool, filter_id).await?;
 
     let context: Vec<String> = serde_json::from_str(&row.2).unwrap_or_default();
     let keyword_vals: Vec<Value> = keywords
@@ -1645,35 +1552,11 @@ async fn create_filter_v2(
         serde_json::to_string(&body.context).map_err(|e| AppError::internal(e.to_string()))?;
     let expires_at = body.expires_in.map(|secs| now + secs * 1000);
 
-    // REMAINING: reason varies
-    sqlx::query(
-        "INSERT INTO filters \
-         (id, user_id, title, context, filter_action, expires_at, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(id)
-    .bind(auth.account_id)
-    .bind(&body.title)
-    .bind(&context_json)
-    .bind(&body.filter_action)
-    .bind(expires_at)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::create_filter(&state.pool, id, auth.account_id, &body.title, &context_json, &body.filter_action, expires_at, now).await?;
 
     for kw in &body.keywords_attributes {
         let kw_id = generate_id();
-        // REMAINING: reason varies
-        sqlx::query(
-            "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
-             VALUES (?, ?, ?, ?)",
-        )
-        .bind(kw_id)
-        .bind(id)
-        .bind(&kw.keyword)
-        .bind(kw.whole_word)
-        .execute(&state.pool)
-        .await?;
+        crate::db_extras::insert_filter_keyword(&state.pool, kw_id, id, &kw.keyword, kw.whole_word).await?;
     }
 
     let result = filter_to_json(&state.pool, id).await?;
@@ -1714,15 +1597,7 @@ async fn update_filter_v2(
         .parse()
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
-    // REMAINING: reason varies
-    let row: Option<(i64, String, String, String, Option<i64>)> = sqlx::query_as(
-        "SELECT id, title, context, filter_action, expires_at \
-         FROM filters WHERE id = ? AND user_id = ?",
-    )
-    .bind(filter_id)
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let row: Option<(i64, String, String, String, Option<i64>)> = crate::db_extras::get_filter_for_update(&state.pool, filter_id, auth.account_id).await?;
     let (_fid, cur_title, cur_context, cur_action, cur_expires) =
         row.ok_or_else(|| AppError::not_found("Filter not found"))?;
 
@@ -1738,18 +1613,7 @@ async fn update_filter_v2(
         None => cur_expires,
     };
 
-    // REMAINING: reason varies
-    sqlx::query(
-        "UPDATE filters SET title = ?, context = ?, filter_action = ?, expires_at = ? \
-         WHERE id = ?",
-    )
-    .bind(title)
-    .bind(&context_json)
-    .bind(filter_action)
-    .bind(expires_at)
-    .bind(filter_id)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::update_filter(&state.pool, filter_id, title, &context_json, filter_action, expires_at).await?;
 
     if let Some(kw_attrs) = &body.keywords_attributes {
         // Delete all existing keywords before re-adding
@@ -1763,17 +1627,7 @@ async fn update_filter_v2(
         }
         for kw in kw_attrs {
             let kw_id = generate_id();
-            // REMAINING: reason varies
-            sqlx::query(
-                "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
-                 VALUES (?, ?, ?, ?)",
-            )
-            .bind(kw_id)
-            .bind(filter_id)
-            .bind(&kw.keyword)
-            .bind(kw.whole_word)
-            .execute(&state.pool)
-            .await?;
+            crate::db_extras::insert_filter_keyword(&state.pool, kw_id, filter_id, &kw.keyword, kw.whole_word).await?;
         }
     }
 
@@ -1823,14 +1677,7 @@ async fn list_filter_keywords(
         return Err(AppError::not_found("Filter not found"));
     }
 
-    // REMAINING: filter query — fieldwork has partial coverage
-    let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
-        "SELECT id, keyword, whole_word FROM filter_keywords \
-         WHERE filter_id = ? ORDER BY id",
-    )
-    .bind(filter_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let keywords: Vec<(i64, String, bool)> = crate::db_extras::get_filter_keywords(&state.pool, filter_id).await?;
 
     let vals: Vec<Value> = keywords
         .iter()
@@ -1867,17 +1714,7 @@ async fn add_filter_keyword(
     }
 
     let kw_id = generate_id();
-    // REMAINING: reason varies
-    sqlx::query(
-        "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
-         VALUES (?, ?, ?, ?)",
-    )
-    .bind(kw_id)
-    .bind(filter_id)
-    .bind(&body.keyword)
-    .bind(body.whole_word)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::insert_filter_keyword(&state.pool, kw_id, filter_id, &body.keyword, body.whole_word).await?;
 
     Ok(Json(json!({
         "id": kw_id.to_string(),
@@ -1896,17 +1733,9 @@ async fn delete_filter_keyword(
         .parse()
         .map_err(|_| AppError::not_found("Keyword not found"))?;
 
-    // REMAINING: reason varies
-    let result = sqlx::query(
-        "DELETE FROM filter_keywords WHERE id = ? AND filter_id IN \
-         (SELECT id FROM filters WHERE user_id = ?)",
-    )
-    .bind(keyword_id)
-    .bind(auth.account_id)
-    .execute(&state.pool)
-    .await?;
+    let result = crate::db_extras::delete_filter_keyword_owned(&state.pool, keyword_id, auth.account_id).await?;
 
-    if result.rows_affected() == 0 {
+    if result == 0 {
         return Err(AppError::not_found("Keyword not found"));
     }
     Ok(StatusCode::OK)
@@ -1917,17 +1746,7 @@ async fn list_filters_v1(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    // REMAINING: reason varies
-    let rows: Vec<(i64, String, String, bool, Option<i64>)> = sqlx::query_as(
-        "SELECT fk.id, fk.keyword, f.context, fk.whole_word, f.expires_at \
-         FROM filter_keywords fk \
-         JOIN filters f ON fk.filter_id = f.id \
-         WHERE f.user_id = ? \
-         ORDER BY fk.id",
-    )
-    .bind(auth.account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let rows: Vec<(i64, String, String, bool, Option<i64>)> = crate::db_extras::list_filters_v1(&state.pool, auth.account_id).await?;
 
     let results: Vec<Value> = rows
         .iter()
@@ -1955,17 +1774,7 @@ async fn list_sessions(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    // REMAINING: reason varies
-    let rows: Vec<(i64, String, String, i64, Option<i64>)> = sqlx::query_as(
-        "SELECT t.id, oa.name, t.scopes, t.created_at, t.last_used_at \
-         FROM oauth_tokens t \
-         JOIN oauth_apps oa ON t.app_id = oa.id \
-         WHERE t.persona_id = ? AND t.revoked_at IS NULL \
-         ORDER BY t.created_at",
-    )
-    .bind(auth.account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let rows: Vec<(i64, String, String, i64, Option<i64>)> = crate::db_extras::list_sessions(&state.pool, auth.account_id).await?;
 
     let sessions: Vec<Value> = rows
         .iter()
@@ -1994,17 +1803,9 @@ async fn revoke_session(
         .map_err(|_| AppError::not_found("Session not found"))?;
 
     let now = now_millis();
-    // REMAINING: reason varies
-    let result = sqlx::query(
-        "UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND persona_id = ? AND revoked_at IS NULL",
-    )
-    .bind(now)
-    .bind(token_id)
-    .bind(auth.account_id)
-    .execute(&state.pool)
-    .await?;
+    let result = crate::db_extras::revoke_session(&state.pool, token_id, auth.account_id, now).await?;
 
-    if result.rows_affected() == 0 {
+    if result == 0 {
         return Err(AppError::not_found("Session not found"));
     }
 
@@ -2017,17 +1818,9 @@ async fn revoke_all_sessions(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let now = now_millis();
-    // REMAINING: reason varies
-    let result = sqlx::query(
-        "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND token_hash != ? AND revoked_at IS NULL",
-    )
-    .bind(now)
-    .bind(auth.account_id)
-    .bind(&auth.token_hash)
-    .execute(&state.pool)
-    .await?;
+    let result = crate::db_extras::revoke_all_sessions(&state.pool, auth.account_id, &auth.token_hash, now).await?;
 
-    Ok(Json(json!({ "revoked": result.rows_affected() })))
+    Ok(Json(json!({ "revoked": result })))
 }
 
 // ---------------------------------------------------------------------------

@@ -83,19 +83,11 @@ struct AccountRow {
 
 /// Looks up a local persona by username (with DID data from users table).
 async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
-    let row: AccountRow = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT p.username, p.display_name, p.bio_html, p.public_key_pem,
-                p.is_locked, p.discoverable, p.bot, p.fields_json, p.created_at,
-                u.did_key, u.recovery_pubkey
-         FROM personas p
-         JOIN users u ON p.user_id = u.id
-         WHERE p.username = ? LIMIT 1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Account not found"))?;
+    let raw_row = crate::db_extras::fetch_ap_account(pool, username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+    let row: AccountRow = sqlx::FromRow::from_row(&raw_row)
+        .map_err(|e| AppError::internal(format!("row conversion: {e}")))?;
 
     Ok(row)
 }
@@ -252,12 +244,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
     let custom_css = load_extra_css(&state.config);
 
     let accounts: Vec<(String, String)> =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
-
-        // REMAINING: persona query — fieldwork has partial coverage
-        sqlx::query_as("SELECT username, display_name FROM personas ORDER BY created_at")
-            .fetch_all(&state.pool)
-            .await?;
+        crate::db_extras::list_personas_display(&state.pool).await?;
 
     let mut personas_html = String::new();
     for (username, display_name) in &accounts {
@@ -308,12 +295,9 @@ async fn profile_page(
     ).await?;
     let aid = persona.as_ref().map(|p| p.id).unwrap_or(0);
 
-    let (post_count,): (i64,) = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
-        .bind(aid)
-        .fetch_one(&state.pool)
+    let post_count = crate::db_extras::count_posts_for_persona(&state.pool, aid)
         .await
-        .unwrap_or((0,));
+        .unwrap_or(0);
 
     let follower_count = fieldwork::followers_db::follower_count(
         &fw_pool(&state.pool), aid,
@@ -334,14 +318,12 @@ async fn profile_page(
     }
 
     // Recent posts
-    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT id, content_html, created_at FROM posts WHERE persona_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 20",
-    )
-    .bind(aid)
-    .fetch_all(&state.pool)
-    .await
-    .unwrap_or_default();
+    let post_tuples: Vec<(i64, String, i64)> = crate::db_extras::get_public_feed_posts(&state.pool, aid)
+        .await
+        .unwrap_or_default();
+    let posts: Vec<PostRow> = post_tuples.into_iter().map(|(id, content_html, created_at)| PostRow {
+        id, content_html, context_url: None, created_at,
+    }).collect();
 
     let mut posts_html = String::new();
     for post in &posts {
@@ -418,17 +400,10 @@ async fn post_page(
         .parse()
         .map_err(|_| AppError::not_found("Post not found"))?;
 
-    let post: PostRow = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT p.id, p.content_html, p.created_at FROM posts p \
-         JOIN personas a ON p.persona_id = a.id \
-         WHERE p.id = ? AND a.username = ? AND p.visibility IN ('public', 'unlisted')",
-    )
-    .bind(pid)
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Post not found"))?;
+    let (pid2, ch, ca) = crate::db_extras::get_post_for_page(&state.pool, pid, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Post not found"))?;
+    let post = PostRow { id: pid2, content_html: ch, context_url: None, created_at: ca };
 
     let account = fetch_account(&state.pool, &username).await?;
     let username = html_attr_escape(&username);
@@ -501,40 +476,19 @@ async fn outbox(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let account_row: Option<(i64,)> =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
-
-        // REMAINING: persona query — fieldwork has partial coverage
-        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-            .bind(&username)
-            .fetch_optional(&state.pool)
-            .await?;
-
-    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let account_id = crate::db_extras::get_persona_id(&state.pool, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let domain = &state.config.server.domain;
     let actor_uri = format!("https://{domain}/users/{username}");
 
-    let (total,): (i64,) =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
+    let total = crate::db_extras::count_public_posts(&state.pool, account_id).await?;
 
-        // REMAINING: post query — dynamic SQL or transaction
-        sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND visibility = 'public'")
-            .bind(account_id)
-            .fetch_one(&state.pool)
-            .await?;
-
-    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT id, content_html, context_url, created_at \
-         FROM posts \
-         WHERE persona_id = ? AND visibility = 'public' \
-         ORDER BY created_at DESC \
-         LIMIT 20",
-    )
-    .bind(account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let outbox_tuples = crate::db_extras::get_outbox_posts(&state.pool, account_id).await?;
+    let posts: Vec<PostRow> = outbox_tuples.into_iter().map(|(id, content_html, context_url, created_at)| PostRow {
+        id, content_html, context_url, created_at,
+    }).collect();
 
     let items: Vec<Value> = posts
         .into_iter()
@@ -627,28 +581,16 @@ async fn featured(
     let _ = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
 
-    let account_row: Option<(i64,)> =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
-
-        // REMAINING: persona query — fieldwork has partial coverage
-        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-            .bind(&username)
-            .fetch_optional(&state.pool)
-            .await?;
-    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let account_id = crate::db_extras::get_persona_id(&state.pool, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let actor_uri = format!("https://{domain}/users/{username}");
 
-    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT p.id, p.content_html, p.context_url, p.created_at \
-         FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
-         WHERE pp.persona_id = ? AND p.visibility = 'public' \
-         ORDER BY pp.pinned_at DESC",
-    )
-    .bind(account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let featured_tuples = crate::db_extras::get_featured_posts(&state.pool, account_id).await?;
+    let posts: Vec<PostRow> = featured_tuples.into_iter().map(|(id, content_html, context_url, created_at)| PostRow {
+        id, content_html, context_url, created_at,
+    }).collect();
 
     let items: Vec<Value> = posts
         .iter()
@@ -709,15 +651,9 @@ async fn ap_context_collection(
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
     // Verify account exists.
-    let account_row: Option<(i64,)> =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
-
-        // REMAINING: persona query — fieldwork has partial coverage
-        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-            .bind(&username)
-            .fetch_optional(&state.pool)
-            .await?;
-    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+    let account_id = crate::db_extras::get_persona_id(&state.pool, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let post_id: i64 = id
         .parse()
@@ -733,16 +669,7 @@ async fn ap_context_collection(
     }
 
     // Verify the post exists and belongs to this account.
-    let post_exists: Option<(i64,)> =
-        // REMAINING: ActivityPub query — can be converted to fieldwork
-
-        // REMAINING: post query — dynamic SQL or transaction
-        sqlx::query_as("SELECT id FROM posts WHERE id = ? AND user_id = ?")
-            .bind(post_id)
-            .bind(account_id)
-            .fetch_optional(&state.pool)
-            .await?;
-    if post_exists.is_none() {
+    if !crate::db_extras::post_exists_for_user(&state.pool, post_id, account_id).await? {
         return Err(AppError::not_found("Post not found"));
     }
 
@@ -757,18 +684,10 @@ async fn ap_context_collection(
         username: String,
     }
 
-    let posts: Vec<ContextPostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
- sqlx::query_as(
-        "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
-         FROM posts p \
-         JOIN personas a ON p.persona_id = a.id \
-         WHERE p.context_url = ? \
-           AND p.visibility IN ('public', 'unlisted') \
-         ORDER BY p.created_at ASC",
-    )
-    .bind(&context_url)
-    .fetch_all(&state.pool)
-    .await?;
+    let ctx_tuples = crate::db_extras::get_context_posts(&state.pool, &context_url).await?;
+    let posts: Vec<ContextPostRow> = ctx_tuples.into_iter().map(|(id, content_html, context_url, created_at, username)| ContextPostRow {
+        id, content_html, context_url, created_at, username,
+    }).collect();
 
     let items: Vec<Value> = posts
         .iter()

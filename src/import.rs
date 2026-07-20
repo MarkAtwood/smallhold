@@ -20,13 +20,9 @@ pub async fn import_mastodon_archive(
     username: &str,
     archive_path: &Path,
 ) -> Result<ImportStats> {
-    let account: (i64,) = // REMAINING: import query — can be converted to fieldwork
- sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-        .bind(username)
-        .fetch_optional(pool)
+    let account_id = crate::db_extras::get_persona_id_for_import(pool, username)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
-    let account_id = account.0;
     let domain = &config.server.domain;
 
     let tmp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
@@ -189,20 +185,7 @@ async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) ->
         "[]".into()
     };
 
-    // REMAINING: import query — can be converted to fieldwork
-
-
-    // REMAINING: reason varies
-    sqlx::query(
-        "UPDATE personas SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
-    )
-    .bind(&display_name)
-    .bind(&bio)
-    .bind(&bio_html)
-    .bind(&fields_json)
-    .bind(account_id)
-    .execute(pool)
-    .await?;
+    crate::db_extras::update_persona_profile_import(pool, account_id, &display_name, &bio, &bio_html, &fields_json).await?;
 
     Ok(true)
 }
@@ -338,25 +321,11 @@ async fn import_outbox(
         let context_url = format!("{ap_id}/context");
 
         // Insert the post
-        let result = // REMAINING: import query — can be converted to fieldwork
- sqlx::query(
-            "INSERT INTO posts (id, user_id, persona_id, ap_id, in_reply_to_uri, context_url, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(account_id)
-        .bind(&ap_id)
-        .bind(in_reply_to_uri.as_deref())
-        .bind(&context_url)
-        .bind(&content_clean)
-        .bind(&content_html)
-        .bind(&spoiler_text)
-        .bind(&visibility)
-        .bind(sensitive as i32)
-        .bind(language.as_deref())
-        .bind(published_ms)
-        .execute(&mut *tx)
-        .await;
+        let result = crate::db_extras::import_insert_post(
+            &mut tx, id, crate::db::DEFAULT_USER_ID, account_id, &ap_id,
+            in_reply_to_uri.as_deref(), &context_url, &content_clean, &content_html,
+            &spoiler_text, &visibility, sensitive, language.as_deref(), published_ms,
+        ).await;
 
         if let Err(e) = result {
             tracing::warn!("Skipping post {published_str}: {e}");
@@ -379,40 +348,19 @@ async fn import_outbox(
                         .collect::<String>()
                         .to_lowercase();
                     if !tag_name.is_empty() {
-                        let _ = // REMAINING: import query — can be converted to fieldwork
- sqlx::query(
-                            "INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)",
-                        )
-                        .bind(id)
-                        .bind(&tag_name)
-                        .execute(&mut *tx)
-                        .await;
+                        let _ = crate::db_extras::import_insert_tag(&mut tx, id, &tag_name).await;
                     }
                 }
 
                 // Best-effort mention insertion
                 if tag_type == "Mention" {
                     if let Some(href) = tag.get("href").and_then(|v| v.as_str()) {
-                        // Try to find this account in our DB by actor URI
-                        let remote: Option<(i64,)> =
-                            // REMAINING: import query — can be converted to fieldwork
+                        let remote = crate::db_extras::import_find_remote_by_uri(&mut tx, href)
+                            .await
+                            .unwrap_or(None);
 
-                            // REMAINING: remote account query — actor_cache has no get_by_id
-                            sqlx::query_as("SELECT id FROM remote_accounts WHERE actor_uri = ?")
-                                .bind(href)
-                                .fetch_optional(&mut *tx)
-                                .await
-                                .unwrap_or(None);
-
-                        if let Some((remote_id,)) = remote {
-                            let _ = // REMAINING: import query — can be converted to fieldwork
- sqlx::query(
-                                "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) VALUES (?, ?)",
-                            )
-                            .bind(id)
-                            .bind(remote_id)
-                            .execute(&mut *tx)
-                            .await;
+                        if let Some(remote_id) = remote {
+                            let _ = crate::db_extras::import_insert_mention(&mut tx, id, remote_id).await;
                         }
                     }
                 }
@@ -453,21 +401,10 @@ async fn import_outbox(
                             .map(|m| m.len() as i64)
                             .unwrap_or(0);
 
-                        let _ = // REMAINING: import query — can be converted to fieldwork
- sqlx::query(
-                            "INSERT INTO media (id, user_id, persona_id, post_id, file_path, mime_type, file_size, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        )
-                        .bind(media_id)
-                        .bind(crate::db::DEFAULT_USER_ID)
-                        .bind(account_id)
-                        .bind(id)
-                        .bind(&dest_filename)
-                        .bind(media_type)
-                        .bind(file_size)
-                        .bind(description)
-                        .bind(published_ms)
-                        .execute(&mut *tx)
-                        .await;
+                        let _ = crate::db_extras::import_insert_media(
+                            &mut tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
+                            &dest_filename, media_type, file_size, description, published_ms,
+                        ).await;
 
                         stats.media_imported += 1;
                     }

@@ -34,40 +34,13 @@ async fn build_relationship(
     // REMAINING: relationship queries use follow/block/mute tables with local persona IDs.
     // fieldwork has is_following_remote but not is_following_local. These queries check
     // local-to-local relationships which fieldwork doesn't fully cover.
-    let (following_count,): (i64,) =
-        // REMAINING: follow/follower query — fieldwork has partial coverage
-        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-            .bind(source_account_id)
-            .bind(target_persona_id)
-            .fetch_one(pool)
-            .await?;
+    let following_count = crate::db_extras::count_follows_local(pool, source_account_id, target_persona_id).await?;
+    let followed_by_count = crate::db_extras::count_follows_local(pool, target_persona_id, source_account_id).await?;
 
-    let (followed_by_count,): (i64,) =
-        // REMAINING: follow/follower query — fieldwork has partial coverage
-        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-            .bind(target_persona_id)
-            .bind(source_account_id)
-            .fetch_one(pool)
-            .await?;
-
-    // REMAINING: show_reblogs/notify are follow-row fields — no fieldwork accessor
-    let show_reblogs_row: Option<(bool,)> = sqlx::query_as(
-        "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_persona_id = ?",
-    )
-    .bind(source_account_id)
-    .bind(target_persona_id)
-    .fetch_optional(pool)
-    .await?;
-    let showing_reblogs = show_reblogs_row.map(|(v,)| v).unwrap_or(true);
-
-    let notify_row: Option<(bool,)> =
-        // REMAINING: follow/follower query — fieldwork has partial coverage
-        sqlx::query_as("SELECT notify FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-            .bind(source_account_id)
-            .bind(target_persona_id)
-            .fetch_optional(pool)
-            .await?;
-    let notifying = notify_row.map(|(v,)| v).unwrap_or(false);
+    let showing_reblogs = crate::db_extras::get_follow_show_reblogs(pool, source_account_id, target_persona_id)
+        .await?.unwrap_or(true);
+    let notifying = crate::db_extras::get_follow_notify(pool, source_account_id, target_persona_id)
+        .await?.unwrap_or(false);
 
     let blocking = fieldwork::interactions_db::is_blocked(
         &fwp, source_account_id, Some(target_persona_id), None,
@@ -120,15 +93,8 @@ async fn build_relationship_remote(
         &fwp, source_account_id, target_remote_id,
     ).await?;
 
-    // REMAINING: show_reblogs is a follow-row field — no fieldwork accessor
-    let show_reblogs_row: Option<(bool,)> = sqlx::query_as(
-        "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_remote_id = ?",
-    )
-    .bind(source_account_id)
-    .bind(target_remote_id)
-    .fetch_optional(pool)
-    .await?;
-    let showing_reblogs = show_reblogs_row.map(|(v,)| v).unwrap_or(true);
+    let showing_reblogs = crate::db_extras::get_follow_show_reblogs_remote(pool, source_account_id, target_remote_id)
+        .await?.unwrap_or(true);
 
     let blocking = fieldwork::interactions_db::is_blocked(
         &fwp, source_account_id, None, Some(target_remote_id),
@@ -182,13 +148,7 @@ async fn resolve_target(pool: &sqlx::SqlitePool, id_str: &str) -> Result<TargetA
     let id: i64 = id_str
         .parse()
         .map_err(|_| AppError::not_found("Account not found"))?;
-    // REMAINING: actor_cache has no get_by_id — only get_by_actor_uri/key_id/webfinger
-    let remote: Option<(i64, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT id, actor_uri, inbox_url, shared_inbox_url FROM remote_accounts WHERE id = ?",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
+    let remote: Option<(i64, String, String, Option<String>)> = crate::db_extras::get_remote_account_full(pool, id).await?;
 
     match remote {
         Some((rid, actor_uri, inbox_url, shared_inbox_url)) => Ok(TargetAccount::Remote {
@@ -352,28 +312,8 @@ async fn followers_list(
         .min(80);
 
     // Local followers (other local accounts following this account)
-    // REMAINING: followers/following lists need JOINs — no fieldwork equivalent
-    let local_followers: Vec<AccountRow> = sqlx::query_as(
-        "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
-         a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
-         FROM follows f JOIN personas a ON f.persona_id = a.id \
-         WHERE f.followee_persona_id = ? ORDER BY f.created_at DESC LIMIT ?",
-    )
-    .bind(account_id)
-    .bind(limit)
-    .fetch_all(&state.pool)
-    .await?;
-
-    // REMAINING: follow/follower query — fieldwork has partial coverage
-    let remote_followers: Vec<(i64, String, String, String, String)> = sqlx::query_as(
-        "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
-         FROM followers f JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.persona_id = ? ORDER BY f.accepted_at DESC LIMIT ?",
-    )
-    .bind(account_id)
-    .bind(limit)
-    .fetch_all(&state.pool)
-    .await?;
+    let local_followers: Vec<AccountRow> = crate::db_extras::get_local_followers(&state.pool, account_id, limit).await?;
+    let remote_followers: Vec<(i64, String, String, String, String)> = crate::db_extras::get_remote_followers(&state.pool, account_id, limit).await?;
 
     let mut accounts: Vec<Value> = local_followers
         .iter()
@@ -428,31 +368,10 @@ async fn following_list(
         .min(80);
 
     // Local following
-    // REMAINING: follow/follower query — fieldwork has partial coverage
-    let local_following: Vec<AccountRow> = sqlx::query_as(
-        "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
-         a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
-         FROM follows f JOIN personas a ON f.followee_persona_id = a.id \
-         WHERE f.persona_id = ? AND f.followee_persona_id IS NOT NULL \
-         ORDER BY f.created_at DESC LIMIT ?",
-    )
-    .bind(account_id)
-    .bind(limit)
-    .fetch_all(&state.pool)
-    .await?;
+    let local_following: Vec<AccountRow> = crate::db_extras::get_local_following(&state.pool, account_id, limit).await?;
 
     // Remote following
-    // REMAINING: follow/follower query — fieldwork has partial coverage
-    let remote_following: Vec<(i64, String, String, String, String)> = sqlx::query_as(
-        "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
-         FROM follows f JOIN remote_accounts ra ON f.followee_remote_id = ra.id \
-         WHERE f.persona_id = ? AND f.followee_remote_id IS NOT NULL \
-         ORDER BY f.created_at DESC LIMIT ?",
-    )
-    .bind(account_id)
-    .bind(limit)
-    .fetch_all(&state.pool)
-    .await?;
+    let remote_following: Vec<(i64, String, String, String, String)> = crate::db_extras::get_remote_following(&state.pool, account_id, limit).await?;
 
     let mut accounts: Vec<Value> = local_following
         .iter()
@@ -829,26 +748,11 @@ async fn follow_requests(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    // REMAINING: remote data query
-    let requests: Vec<(i64, i64, i64)> = sqlx::query_as(
-        "SELECT fr.id, fr.requester_remote_id, fr.created_at \
-         FROM follow_requests fr WHERE fr.target_persona_id = ? \
-         ORDER BY fr.created_at DESC",
-    )
-    .bind(auth.account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let requests: Vec<(i64, i64, i64)> = crate::db_extras::get_follow_requests(&state.pool, auth.account_id).await?;
 
     let mut accounts = Vec::with_capacity(requests.len());
     for (_req_id, remote_id, _created_at) in &requests {
-        // REMAINING: remote data query
-        let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
-            "SELECT id, username, domain, display_name, bio_html \
-             FROM remote_accounts WHERE id = ?",
-        )
-        .bind(remote_id)
-        .fetch_optional(&state.pool)
-        .await?;
+        let remote: Option<(i64, String, String, String, String)> = crate::db_extras::get_remote_account_by_id(&state.pool, *remote_id).await?;
 
         if let Some((rid, username, rdomain, display_name, bio_html)) = remote {
             accounts.push(json!({
@@ -892,15 +796,7 @@ async fn authorize_follow(
     let domain = &state.config.server.domain;
 
     // Find and validate the follow request
-    // REMAINING: remote data query
-    let request: Option<(i64, String)> = sqlx::query_as(
-        "SELECT id, ap_id FROM follow_requests \
-         WHERE requester_remote_id = ? AND target_persona_id = ?",
-    )
-    .bind(remote_id)
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let request: Option<(i64, String)> = crate::db_extras::find_follow_request(&state.pool, remote_id, auth.account_id).await?;
 
     let (req_id, follow_ap_id) =
         request.ok_or_else(|| AppError::not_found("Follow request not found"))?;
@@ -913,20 +809,10 @@ async fn authorize_follow(
     ).await?;
 
     // Remove from follow_requests
-    // REMAINING: follow request delete — can use fieldwork::follow_requests_db::delete_request
-    sqlx::query("DELETE FROM follow_requests WHERE id = ?")
-        .bind(req_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::delete_follow_request(&state.pool, req_id).await?;
 
     // Send Accept activity
-    // REMAINING: remote data query
-    let remote_row: Option<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT actor_uri, inbox_url, shared_inbox_url FROM remote_accounts WHERE id = ?",
-    )
-    .bind(remote_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let remote_row: Option<(String, String, Option<String>)> = crate::db_extras::get_remote_inbox(&state.pool, remote_id).await?;
 
     if let Some((actor_uri, inbox_url, shared_inbox_url)) = remote_row {
         let accept_id = generate_id();
@@ -965,34 +851,16 @@ async fn reject_follow(
     let domain = &state.config.server.domain;
 
     // Find and validate the follow request
-    // REMAINING: remote data query
-    let request: Option<(i64, String)> = sqlx::query_as(
-        "SELECT id, ap_id FROM follow_requests \
-         WHERE requester_remote_id = ? AND target_persona_id = ?",
-    )
-    .bind(remote_id)
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let request: Option<(i64, String)> = crate::db_extras::find_follow_request(&state.pool, remote_id, auth.account_id).await?;
 
     let (req_id, follow_ap_id) =
         request.ok_or_else(|| AppError::not_found("Follow request not found"))?;
 
     // Remove from follow_requests
-    // REMAINING: follow request delete — can use fieldwork::follow_requests_db::delete_request
-    sqlx::query("DELETE FROM follow_requests WHERE id = ?")
-        .bind(req_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::delete_follow_request(&state.pool, req_id).await?;
 
     // Send Reject activity
-    // REMAINING: remote data query
-    let remote_row: Option<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT actor_uri, inbox_url, shared_inbox_url FROM remote_accounts WHERE id = ?",
-    )
-    .bind(remote_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let remote_row: Option<(String, String, Option<String>)> = crate::db_extras::get_remote_inbox(&state.pool, remote_id).await?;
 
     if let Some((actor_uri, inbox_url, shared_inbox_url)) = remote_row {
         let reject_id = generate_id();
@@ -1064,13 +932,7 @@ async fn search(
                 match fed_client.resolve_webfinger(acct).await {
                     Ok(actor_uri) => {
                         // Get signing credentials
-                        // REMAINING: signing key lookup — fieldwork::persona_db could work but returns full row
-                        let signing: Option<(String, String)> = sqlx::query_as(
-                            "SELECT username, private_key_pem FROM personas WHERE id = ?",
-                        )
-                        .bind(auth.account_id)
-                        .fetch_optional(&state.pool)
-                        .await?;
+                        let signing: Option<(String, String)> = crate::db_extras::get_persona_signing_key(&state.pool, auth.account_id).await?;
 
                         if let Some((username, private_key_pem)) = signing {
                             let key_id = format!("https://{domain}/users/{username}#main-key");
@@ -1139,19 +1001,7 @@ async fn search(
             .replace('%', "\\%")
             .replace('_', "\\_");
         let like_pattern = format!("%{escaped_query}%");
-        // REMAINING: LIKE search on personas — no fieldwork search function
-        let local_matches: Vec<AccountRow> = sqlx::query_as(
-            "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, \
-             bot, fields_json, created_at, last_status_at \
-             FROM personas \
-             WHERE username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' \
-             LIMIT ?",
-        )
-        .bind(&like_pattern)
-        .bind(&like_pattern)
-        .bind(limit)
-        .fetch_all(&state.pool)
-        .await?;
+        let local_matches: Vec<AccountRow> = crate::db_extras::search_local_personas(&state.pool, &like_pattern, limit).await?;
 
         for row in &local_matches {
             result_accounts.push(account_to_json(row, domain));
@@ -1159,18 +1009,7 @@ async fn search(
 
         // Remote account search (reuses escaped like_pattern from above)
         let remote_matches: Vec<(i64, String, String, String, String, bool, bool)> =
-            // REMAINING: LIKE search on remote_accounts — no fieldwork search function
-            sqlx::query_as(
-                "SELECT id, username, domain, display_name, bio_html, is_locked, bot \
-                 FROM remote_accounts \
-                 WHERE username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' \
-                 LIMIT ?",
-            )
-            .bind(&like_pattern)
-            .bind(&like_pattern)
-            .bind(limit)
-            .fetch_all(&state.pool)
-            .await?;
+            crate::db_extras::search_remote_accounts(&state.pool, &like_pattern, limit).await?;
 
         for (rid, username, rdomain, display_name, bio_html, is_locked, bot) in &remote_matches {
             result_accounts.push(json!({
@@ -1210,16 +1049,9 @@ async fn search(
             .replace('_', "\\_");
         let like_pattern = format!("%{escaped_tag}%");
 
-        // REMAINING: LIKE search on post_tags — no fieldwork search function
-        let tags: Vec<(String,)> = sqlx::query_as(
-            "SELECT DISTINCT tag FROM post_tags WHERE tag LIKE ? ESCAPE '\\' LIMIT ?",
-        )
-        .bind(&like_pattern)
-        .bind(limit)
-        .fetch_all(&state.pool)
-        .await?;
+        let tags_vec: Vec<String> = crate::db_extras::search_tags(&state.pool, &like_pattern, limit).await?;
 
-        for (tag,) in &tags {
+        for tag in &tags_vec {
             result_hashtags.push(json!({
                 "name": tag,
                 "url": format!("https://{domain}/tags/{tag}"),

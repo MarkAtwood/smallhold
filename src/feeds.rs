@@ -29,17 +29,8 @@ async fn fetch_public_posts(
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by
     // visibility or exclude boosts. Custom query needed for feed generation.
-    let rows: Vec<(i64, String, i64)> = // REMAINING: query
- sqlx::query_as(
-        "SELECT id, content_html, created_at \
-         FROM posts \
-         WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
-         ORDER BY created_at DESC \
-         LIMIT 20",
-    )
-    .bind(account_id)
-    .fetch_all(pool)
-    .await?;
+    let rows: Vec<(i64, String, i64)> =
+        crate::db_extras::get_public_feed_posts(pool, account_id).await?;
     Ok(rows.into_iter().map(|(id, content_html, created_at)| FeedPost { id, content_html, created_at }).collect())
 }
 

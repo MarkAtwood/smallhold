@@ -125,20 +125,19 @@ async fn process_batch(
     // ponytail: this JOIN between delivery_queue and personas is not covered
     // by fieldwork::delivery_db::fetch_pending (which doesn't include persona
     // fields). Kept as inline SQL for the JOIN projection.
-    let rows: Vec<DeliveryRow> = // REMAINING: delivery query
- sqlx::query_as(
-        "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
-                a.private_key_pem, a.username \
-         FROM delivery_queue d \
-         JOIN personas a ON d.sender_persona_id = a.id \
-         WHERE d.delivered_at IS NULL AND d.dead_at IS NULL AND d.next_attempt_at <= ? \
-         ORDER BY d.next_attempt_at \
-         LIMIT ?",
-    )
-    .bind(now)
-    .bind(config.federation.delivery_concurrency as i64)
-    .fetch_all(pool)
-    .await?;
+    let raw_rows = crate::db_extras::fetch_pending_deliveries(pool, now, config.federation.delivery_concurrency as i64).await?;
+    let rows: Vec<DeliveryRow> = raw_rows.into_iter().map(|row| {
+        use sqlx::Row;
+        DeliveryRow {
+            id: row.get(0),
+            target_inbox: row.get(1),
+            sender_persona_id: row.get(2),
+            activity_json: row.get(3),
+            attempts: row.get(4),
+            private_key_pem: row.get(5),
+            username: row.get(6),
+        }
+    }).collect();
 
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(
         config.federation.delivery_concurrency,
@@ -390,15 +389,7 @@ async fn create_scheduled_post(
     for mid in &media_ids {
         // REMAINING: delivery query
 
-        // REMAINING: reason varies
-        sqlx::query(
-            "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
-        )
-        .bind(post_id)
-        .bind(mid)
-        .bind(account_id)
-        .execute(pool)
-        .await?;
+        crate::db_extras::attach_media_to_post(pool, post_id, *mid, account_id).await?;
     }
 
     // Insert tags
@@ -427,12 +418,7 @@ async fn create_scheduled_post(
     // This is a single-column timestamp bump, not worth a new fieldwork function.
     // REMAINING: delivery query
 
-    // REMAINING: persona query — fieldwork has partial coverage
-    sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
-        .bind(now_ms)
-        .bind(account_id)
-        .execute(pool)
-        .await?;
+    crate::db_extras::touch_persona_last_status(pool, account_id, now_ms).await?;
 
     // Query media attachments for the AP Note
     let ap_media = fieldwork::media_db::attachments_for_post(&fw_pool(pool), post_id)

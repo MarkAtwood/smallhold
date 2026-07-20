@@ -717,18 +717,7 @@ async fn handle_follow(
         }
         let req_id = generate_id();
 
-        // REMAINING: remote data query
-        sqlx::query(
-            "INSERT OR IGNORE INTO follow_requests (id, requester_remote_id, target_persona_id, ap_id, created_at)
-             VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(req_id)
-        .bind(remote.id)
-        .bind(&account_id)
-        .bind(&ap_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        crate::db_extras::insert_follow_request(&state.pool, req_id, remote.id, account_id, &ap_id, now).await?;
 
         tracing::info!(
             follower = %remote.actor_uri,
@@ -843,14 +832,7 @@ async fn handle_undo_follow(
         ).await?;
 
         // Also remove any pending follow request.
-        // REMAINING: remote data query
-        sqlx::query(
-            "DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?",
-        )
-        .bind(remote.id)
-        .bind(&account_id)
-        .execute(&state.pool)
-        .await?;
+        crate::db_extras::delete_follow_request_by_remote(&state.pool, remote.id, account_id).await?;
 
         tracing::info!(
             follower = %remote.actor_uri,
@@ -871,25 +853,10 @@ async fn handle_undo_like(
     // The inner object's `object` field is the URI of the liked post.
     let liked_uri = object_id(&inner["object"]).unwrap_or("");
     if !liked_uri.is_empty() {
-        // Find local post by ap_id, then delete the favourite notification.
-        let post_row: Option<(i64, i64)> =
-            // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
-            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
-                .bind(liked_uri)
-                .fetch_optional(&state.pool)
-                .await?;
+        let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, liked_uri).await?;
 
         if let Some((post_id, account_id)) = post_row {
-            // REMAINING: remote data query
-            sqlx::query(
-                "DELETE FROM notifications
-                 WHERE persona_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
-            )
-            .bind(&account_id)
-            .bind(remote.id)
-            .bind(post_id)
-            .execute(&state.pool)
-            .await?;
+            crate::db_extras::delete_favourite_notification(&state.pool, account_id, remote.id, post_id).await?;
         }
     }
 
@@ -904,24 +871,10 @@ async fn handle_undo_announce(
 ) -> Result<(), AppError> {
     let boosted_uri = object_id(&inner["object"]).unwrap_or("");
     if !boosted_uri.is_empty() {
-        let post_row: Option<(i64, i64)> =
-            // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
-            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
-                .bind(boosted_uri)
-                .fetch_optional(&state.pool)
-                .await?;
+        let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, boosted_uri).await?;
 
         if let Some((post_id, account_id)) = post_row {
-            // REMAINING: remote data query
-            sqlx::query(
-                "DELETE FROM notifications
-                 WHERE persona_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
-            )
-            .bind(&account_id)
-            .bind(remote.id)
-            .bind(post_id)
-            .execute(&state.pool)
-            .await?;
+            crate::db_extras::delete_remote_reblog_notification(&state.pool, account_id, remote.id, post_id).await?;
         }
     }
 
@@ -989,43 +942,18 @@ async fn handle_create(
 
     let post_id = generate_id();
 
-    // REMAINING: remote post insert — fieldwork::remote_posts_db::insert_remote_post could work
-        sqlx::query(
-        "INSERT OR IGNORE INTO remote_posts
-         (id, ap_uri, remote_account_id, in_reply_to_uri, context_url, content_html, spoiler_text, visibility, sensitive, language, created_at, fetched_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(post_id)
-    .bind(ap_uri)
-    .bind(remote.id)
-    .bind(&in_reply_to_uri)
-    .bind(&context_url)
-    .bind(&content_html)
-    .bind(&spoiler_text)
-    .bind(&visibility)
-    .bind(sensitive)
-    .bind(&language)
-    .bind(published)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    crate::db_extras::insert_remote_post(
+        &state.pool, post_id, ap_uri, remote.id,
+        in_reply_to_uri.as_deref(), context_url.as_deref(),
+        &content_html, &spoiler_text, &visibility, sensitive, &language, published, now,
+    ).await?;
 
     // FEP-f228: log when backfill could be triggered.
     // If this is a reply to an unknown post and a context URL is present,
     // a future implementation would fetch the context collection to backfill the thread.
     if let Some(ref reply_uri) = in_reply_to_uri {
-        let known_local: Option<(i64,)> =
-            // REMAINING: post exists check by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
-            sqlx::query_as("SELECT id FROM posts WHERE ap_id = ? LIMIT 1")
-                .bind(reply_uri)
-                .fetch_optional(&state.pool)
-                .await?;
-        let known_remote: Option<(i64,)> =
-            // REMAINING: remote post exists check — can use fieldwork::remote_posts_db::get_by_uri
-            sqlx::query_as("SELECT id FROM remote_posts WHERE ap_uri = ? LIMIT 1")
-                .bind(reply_uri)
-                .fetch_optional(&state.pool)
-                .await?;
+        let known_local = crate::db_extras::post_exists_by_ap_id(&state.pool, reply_uri).await?;
+        let known_remote = crate::db_extras::remote_post_exists_by_uri(&state.pool, reply_uri).await?;
 
         if known_local.is_none() && known_remote.is_none() {
             if let Some(ref ctx) = context_url {
@@ -1062,15 +990,7 @@ async fn handle_create(
             if let Some((persona_id, _, _)) =
                 resolve_local_account(&state.pool, domain, href).await?
             {
-                // REMAINING: remote data query
-                sqlx::query(
-                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
-                     VALUES (?, ?)",
-                )
-                .bind(post_id)
-                .bind(&persona_id)
-                .execute(&state.pool)
-                .await?;
+                crate::db_extras::insert_remote_mention(&state.pool, post_id, persona_id).await?;
 
                 // Create a mention notification (unless blocked/muted).
                 if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
@@ -1144,29 +1064,12 @@ async fn handle_create(
             if let Some((persona_id, _, _)) =
                 resolve_local_account(&state.pool, domain, uri).await?
             {
-                // Insert mention (ignore if already exists from tag processing).
-                // REMAINING: remote data query
-                sqlx::query(
-                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
-                     VALUES (?, ?)",
-                )
-                .bind(post_id)
-                .bind(&persona_id)
-                .execute(&state.pool)
-                .await?;
+                crate::db_extras::insert_remote_mention(&state.pool, post_id, persona_id).await?;
 
                 // Check if notification already exists for this account+post before inserting.
-                // REMAINING: remote data query
-                let exists: (i64,) = sqlx::query_as(
-                    "SELECT COUNT(*) FROM notifications
-                     WHERE persona_id = ? AND kind = 'mention' AND remote_post_id = ?",
-                )
-                .bind(&persona_id)
-                .bind(post_id)
-                .fetch_one(&state.pool)
-                .await?;
+                let exists = crate::db_extras::mention_notification_exists(&state.pool, persona_id, post_id).await?;
 
-                if exists.0 == 0
+                if !exists
                     && !is_blocked_or_muted(&state.pool, persona_id, remote.id).await?
                 {
                     let notif_id = generate_id();
@@ -1304,21 +1207,9 @@ async fn handle_update(
             let now = chrono::Utc::now().timestamp();
 
             // Only update if the post belongs to this remote account (anti-spoofing).
-            // REMAINING: post-related query
-            let result = sqlx::query(
-                "UPDATE remote_posts SET content_html = ?, spoiler_text = ?, sensitive = ?, fetched_at = ?
-                 WHERE ap_uri = ? AND remote_account_id = ?",
-            )
-            .bind(&content_html)
-            .bind(&spoiler_text)
-            .bind(sensitive)
-            .bind(now)
-            .bind(ap_uri)
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
+            let result = crate::db_extras::update_remote_post(&state.pool, ap_uri, remote.id, &content_html, &spoiler_text, sensitive, now).await?;
 
-            if result.rows_affected() == 0 {
+            if result == 0 {
                 tracing::debug!(
                     ap_uri,
                     actor = %remote.actor_uri,
@@ -1368,93 +1259,22 @@ async fn handle_delete(
         // Remove all their data in dependency order: notifications, favourites,
         // bookmarks, mentions, remote_posts, followers, follow_requests, follows,
         // then the account itself.
-        // REMAINING: cascade delete from notifications — no fieldwork batch delete
-        sqlx::query("DELETE FROM notifications WHERE from_remote_account_id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
-
-        // REMAINING: remote data query
-        sqlx::query(
-            "DELETE FROM favourites WHERE remote_post_id IN
-             (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
-        )
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
-
-        // REMAINING: remote data query
-        sqlx::query(
-            "DELETE FROM bookmarks WHERE remote_post_id IN
-             (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
-        )
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
-
-        // REMAINING: remote data query
-        sqlx::query(
-            "DELETE FROM mentions WHERE remote_post_id IN
-             (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
-        )
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
-
-        // REMAINING: cascade delete from remote_posts — no fieldwork batch delete
-        sqlx::query("DELETE FROM remote_posts WHERE remote_account_id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
-
-        // REMAINING: cascade delete from followers — no fieldwork batch delete
-        sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
-
-        // REMAINING: cascade delete from follow_requests — no fieldwork batch delete
-        sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
-
-        // REMAINING: cascade delete from follows — no fieldwork batch delete
-        sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
-
-        // REMAINING: cascade delete from remote_accounts — no fieldwork batch delete
-        sqlx::query("DELETE FROM remote_accounts WHERE id = ?")
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
+        crate::db_extras::cascade_delete_remote_account(&state.pool, remote.id).await?;
 
         return Ok(());
     }
 
     // Otherwise, try to delete a post — only if owned by this actor.
-    let result = // REMAINING: cascade delete from remote_posts — no fieldwork batch delete
-        sqlx::query("DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?")
-        .bind(deleted_uri)
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
+    let result = crate::db_extras::delete_remote_post(&state.pool, deleted_uri, remote.id).await?;
 
-    if result.rows_affected() > 0 {
+    if result > 0 {
         tracing::info!(
             ap_uri = deleted_uri,
             actor = %remote.actor_uri,
             "remote post deleted"
         );
         // Clean up mentions referencing the deleted post.
-        // REMAINING: post-related query
-        sqlx::query(
-            "DELETE FROM mentions WHERE remote_post_id NOT IN (SELECT id FROM remote_posts)",
-        )
-        .execute(&state.pool)
-        .await?;
+        crate::db_extras::cleanup_orphan_mentions(&state.pool).await?;
     }
 
     Ok(())
@@ -1472,12 +1292,7 @@ async fn handle_like(
     }
 
     // Look up the local post.
-    let post_row: Option<(i64, i64)> =
-        // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
-            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
-            .bind(liked_uri)
-            .fetch_optional(&state.pool)
-            .await?;
+    let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, liked_uri).await?;
 
     if let Some((post_id, account_id)) = post_row {
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
@@ -1546,12 +1361,7 @@ async fn handle_announce(
     }
 
     // Look up the local post being boosted.
-    let post_row: Option<(i64, i64)> =
-        // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
-            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
-            .bind(boosted_uri)
-            .fetch_optional(&state.pool)
-            .await?;
+    let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, boosted_uri).await?;
 
     if let Some((post_id, account_id)) = post_row {
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
@@ -1615,25 +1425,9 @@ async fn handle_block(
     remote: &RemoteAccountRow,
 ) -> Result<(), AppError> {
     // Remove them as a follower of any local account.
-    // REMAINING: cascade delete from followers — no fieldwork batch delete
-        sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
-
-    // Remove any follow we have on them.
-    // REMAINING: cascade delete from follows — no fieldwork batch delete
-        sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
-
-    // Remove pending follow requests from them.
-    // REMAINING: cascade delete from follow_requests — no fieldwork batch delete
-        sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::delete_followers_by_remote(&state.pool, remote.id).await?;
+    crate::db_extras::delete_follows_to_remote(&state.pool, remote.id).await?;
+    crate::db_extras::delete_follow_requests_from_remote(&state.pool, remote.id).await?;
 
     tracing::info!(actor = %remote.actor_uri, "blocked by remote actor");
 
@@ -1736,16 +1530,7 @@ async fn handle_move(
 
     // Migrate follows: for each local account following the old remote account,
     // create a follow on the new account and enqueue a Follow activity.
-    // REMAINING: follower sync query with JOIN — no fieldwork equivalent
-    let local_followers: Vec<(i64, String, String)> = sqlx::query_as(
-        "SELECT a.id, a.username, a.private_key_pem
-         FROM follows f
-         JOIN personas a ON a.id = f.persona_id
-         WHERE f.followee_remote_id = ?",
-    )
-    .bind(remote.id)
-    .fetch_all(&state.pool)
-    .await?;
+    let local_followers: Vec<(i64, String, String)> = crate::db_extras::get_local_followers_of_remote(&state.pool, remote.id).await?;
 
     let domain = &state.config.server.domain;
     let now = chrono::Utc::now().timestamp();
@@ -1775,11 +1560,7 @@ async fn handle_move(
     }
 
     // Remove old follows.
-    // REMAINING: cascade delete from follows — no fieldwork batch delete
-        sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::delete_follows_to_remote(&state.pool, remote.id).await?;
 
     tracing::info!(
         old_actor = %remote.actor_uri,
