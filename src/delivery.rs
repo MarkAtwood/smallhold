@@ -14,7 +14,6 @@ use crate::posting::render_content;
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
-    #[allow(dead_code)]
     sender_account_id: i64,
     activity_json: String,
     attempts: i32,
@@ -278,10 +277,23 @@ async fn deliver_one(
     let key_id = format!("https://{domain}/users/{}#main-key", row.username);
     let body = row.activity_json.as_bytes();
 
-    let headers =
+    let mut headers =
         FederationClient::sign_post_headers(&row.private_key_pem, &key_id, &target_url, body)?;
 
     let target_domain = target_url.host_str().unwrap_or("unknown").to_owned();
+
+    // FEP-8fcf: Include Collection-Synchronization header with follower digest
+    // for the target domain so the remote server can detect follower drift.
+    if let Some(digest) =
+        crate::federation::compute_follower_sync_digest(pool, row.sender_account_id, &target_domain)
+            .await
+    {
+        let sync_val =
+            crate::federation::format_collection_sync_header(domain, &row.username, &digest);
+        if let Ok(hv) = sync_val.parse() {
+            headers.insert("Collection-Synchronization", hv);
+        }
+    }
 
     let result = client
         .post(target_url.as_str())
@@ -445,15 +457,18 @@ async fn create_scheduled_post(
     let rendered = render_content(text, domain);
     let post_id = generate_id();
     let ap_id = format!("https://{domain}/users/{username}/statuses/{post_id}");
+    // FEP-f228: scheduled posts are always originals (no in_reply_to), so they get their own context.
+    let context_url = format!("{ap_id}/context");
 
     sqlx::query(
-        "INSERT INTO posts (id, account_id, ap_id, content, content_html, \
+        "INSERT INTO posts (id, account_id, ap_id, context_url, content, content_html, \
          spoiler_text, visibility, sensitive, language, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(post_id)
     .bind(account_id)
     .bind(&ap_id)
+    .bind(&context_url)
     .bind(text)
     .bind(&rendered.html)
     .bind(spoiler_text)
@@ -624,6 +639,7 @@ async fn create_scheduled_post(
             "id": &note_id,
             "type": "Note",
             "attributedTo": &actor,
+            "context": &context_url,
             "content": &rendered.html,
             "url": format!("https://{domain}/@{username}/{post_id}"),
             "to": &to,

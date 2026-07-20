@@ -161,7 +161,7 @@ async fn process_inbox(
     );
     tracing::trace!(body = %String::from_utf8_lossy(body), "full activity body");
 
-    match activity_type {
+    let result = match activity_type {
         "Follow" => handle_follow(state, &activity, &remote_account).await,
         "Undo" => handle_undo(state, &activity, &remote_account).await,
         "Create" => handle_create(state, &activity, &remote_account).await,
@@ -177,6 +177,111 @@ async fn process_inbox(
             tracing::debug!("ignoring unknown activity type: {activity_type}");
             Ok(())
         }
+    };
+
+    // FEP-8fcf: Check Collection-Synchronization header for follower drift.
+    // This runs after activity dispatch so follower state reflects the activity.
+    if let Some(sync_header) = headers.get("collection-synchronization") {
+        if let Ok(sync_val) = sync_header.to_str() {
+            check_follower_sync(state, sync_val, actor_uri).await;
+        }
+    }
+
+    result
+}
+
+/// FEP-8fcf: Compare an inbound Collection-Synchronization digest against our
+/// local follower state. Logs a warning on mismatch. Full reconciliation
+/// (fetching the remote followers list) is deferred to a future implementation.
+async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str) {
+    let (collection_id, remote_digest, _url) =
+        match crate::federation::parse_collection_sync_header(header_val) {
+            Some(parsed) => parsed,
+            None => {
+                tracing::debug!("malformed Collection-Synchronization header");
+                return;
+            }
+        };
+
+    // Extract the username from collectionId (https://domain/users/{username}/followers).
+    let domain = &state.config.server.domain;
+    let prefix = format!("https://{domain}/users/");
+    let suffix = "/followers";
+    let username = match collection_id
+        .strip_prefix(&prefix)
+        .and_then(|s| s.strip_suffix(suffix))
+    {
+        Some(u) => u,
+        None => {
+            tracing::debug!(
+                collection_id,
+                "Collection-Synchronization: collection not on our domain"
+            );
+            return;
+        }
+    };
+
+    // Look up local account.
+    let account_row: Option<(i64,)> =
+        match sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+            .bind(username)
+            .fetch_optional(&state.pool)
+            .await
+        {
+            Ok(row) => row,
+            Err(_) => return,
+        };
+    let account_id = match account_row {
+        Some((id,)) => id,
+        None => return,
+    };
+
+    // Extract the remote actor's domain.
+    let actor_domain = match url::Url::parse(actor_uri)
+        .ok()
+        .and_then(|u| u.host_str().map(String::from))
+    {
+        Some(d) => d,
+        None => return,
+    };
+
+    // Compute our local digest for followers from the remote actor's domain.
+    let local_digest = match crate::federation::compute_follower_sync_digest(
+        &state.pool,
+        account_id,
+        &actor_domain,
+    )
+    .await
+    {
+        Some(d) => d,
+        None => {
+            // No followers from that domain — any non-empty remote digest is a mismatch.
+            if !remote_digest.is_empty() {
+                tracing::warn!(
+                    actor = actor_uri,
+                    local_account = username,
+                    remote_digest,
+                    "FEP-8fcf follower sync mismatch: we have no followers from their domain"
+                );
+            }
+            return;
+        }
+    };
+
+    if local_digest != remote_digest {
+        tracing::warn!(
+            actor = actor_uri,
+            local_account = username,
+            local_digest,
+            remote_digest,
+            "FEP-8fcf follower sync digest mismatch (reconciliation not yet implemented)"
+        );
+    } else {
+        tracing::debug!(
+            actor = actor_uri,
+            local_account = username,
+            "FEP-8fcf follower sync digest matches"
+        );
     }
 }
 
@@ -688,8 +793,8 @@ async fn handle_follow(
                     &actor,
                     None,
                     &push_domain,
-            )
-            .await;
+                )
+                .await;
             });
         }
 
@@ -861,7 +966,9 @@ async fn handle_create(
     }
 
     let raw_content = object["content"].as_str().unwrap_or("");
-    let content_html = html_sanitizer().clean(truncate_str(raw_content, MAX_CONTENT_LEN)).to_string();
+    let content_html = html_sanitizer()
+        .clean(truncate_str(raw_content, MAX_CONTENT_LEN))
+        .to_string();
 
     let spoiler_text = object["summary"]
         .as_str()
@@ -880,6 +987,12 @@ async fn handle_create(
         .filter(|s| s.len() <= MAX_URI_LEN)
         .map(String::from);
 
+    // FEP-f228: extract context URL from inbound Note.
+    let context_url = object["context"]
+        .as_str()
+        .filter(|s| s.len() <= MAX_URI_LEN)
+        .map(String::from);
+
     // Determine visibility from addressing.
     let visibility = determine_visibility(activity, object);
 
@@ -894,13 +1007,14 @@ async fn handle_create(
 
     sqlx::query(
         "INSERT OR IGNORE INTO remote_posts
-         (id, ap_uri, remote_account_id, in_reply_to_uri, content_html, spoiler_text, visibility, sensitive, language, created_at, fetched_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, ap_uri, remote_account_id, in_reply_to_uri, context_url, content_html, spoiler_text, visibility, sensitive, language, created_at, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(post_id)
     .bind(ap_uri)
     .bind(remote.id)
     .bind(&in_reply_to_uri)
+    .bind(&context_url)
     .bind(&content_html)
     .bind(&spoiler_text)
     .bind(&visibility)
@@ -910,6 +1024,32 @@ async fn handle_create(
     .bind(now)
     .execute(&state.pool)
     .await?;
+
+    // FEP-f228: log when backfill could be triggered.
+    // If this is a reply to an unknown post and a context URL is present,
+    // a future implementation would fetch the context collection to backfill the thread.
+    if let Some(ref reply_uri) = in_reply_to_uri {
+        let known_local: Option<(i64,)> =
+            sqlx::query_as("SELECT id FROM posts WHERE ap_id = ? LIMIT 1")
+                .bind(reply_uri)
+                .fetch_optional(&state.pool)
+                .await?;
+        let known_remote: Option<(i64,)> =
+            sqlx::query_as("SELECT id FROM remote_posts WHERE ap_uri = ? LIMIT 1")
+                .bind(reply_uri)
+                .fetch_optional(&state.pool)
+                .await?;
+
+        if known_local.is_none() && known_remote.is_none() {
+            if let Some(ref ctx) = context_url {
+                tracing::info!(
+                    in_reply_to = reply_uri,
+                    context = ctx,
+                    "FEP-f228: reply to unknown post with context URL; backfill candidate"
+                );
+            }
+        }
+    }
 
     // Publish to public streaming timeline
     if visibility == "public" || visibility == "unlisted" {
@@ -1150,7 +1290,9 @@ async fn handle_update(
             }
 
             let raw_content = object["content"].as_str().unwrap_or("");
-            let content_html = html_sanitizer().clean(truncate_str(raw_content, MAX_CONTENT_LEN)).to_string();
+            let content_html = html_sanitizer()
+                .clean(truncate_str(raw_content, MAX_CONTENT_LEN))
+                .to_string();
 
             let spoiler_text = object["summary"]
                 .as_str()

@@ -471,6 +471,87 @@ pub async fn upsert_remote_account(
     Ok(result)
 }
 
+// ---------------------------------------------------------------------------
+// FEP-8fcf: Follower Collection Synchronization
+// ---------------------------------------------------------------------------
+
+/// Compute the FEP-8fcf follower sync digest for a local account's followers
+/// on a specific remote domain.
+///
+/// The digest is the XOR of SHA-256 hashes of all follower actor URIs on
+/// `target_domain`. Returns `None` if there are no followers on that domain.
+pub async fn compute_follower_sync_digest(
+    pool: &SqlitePool,
+    account_id: i64,
+    target_domain: &str,
+) -> Option<String> {
+    let uris: Vec<(String,)> = sqlx::query_as(
+        "SELECT ra.actor_uri FROM followers f \
+         JOIN remote_accounts ra ON f.remote_account_id = ra.id \
+         WHERE f.local_account_id = ? AND ra.domain = ?",
+    )
+    .bind(account_id)
+    .bind(target_domain)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        tracing::warn!("follower sync digest query failed: {e}");
+        e
+    })
+    .ok()?;
+
+    if uris.is_empty() {
+        return None;
+    }
+
+    use sha2::Digest;
+    let mut xor_hash = [0u8; 32];
+    for (uri,) in &uris {
+        let hash = sha2::Sha256::digest(uri.as_bytes());
+        for (x, h) in xor_hash.iter_mut().zip(hash.iter()) {
+            *x ^= h;
+        }
+    }
+
+    Some(format!(
+        "sha-256={}",
+        base64::engine::general_purpose::STANDARD.encode(xor_hash)
+    ))
+}
+
+/// Build the `Collection-Synchronization` header value for FEP-8fcf.
+pub fn format_collection_sync_header(domain: &str, username: &str, digest: &str) -> String {
+    let followers_url = format!("https://{domain}/users/{username}/followers");
+    format!("collectionId=\"{followers_url}\", digest=\"{digest}\", url=\"{followers_url}\"")
+}
+
+/// Parse a `Collection-Synchronization` header value into its components.
+/// Returns `(collection_id, digest, url)` if all three fields are present.
+// ponytail: naive comma split breaks on commas inside quoted values. URLs
+// rarely contain commas so this is acceptable. If it ever matters, upgrade
+// to a proper quoted-string-aware parser.
+pub fn parse_collection_sync_header(header_val: &str) -> Option<(String, String, String)> {
+    let mut collection_id = None;
+    let mut digest = None;
+    let mut url = None;
+
+    for part in header_val.split(',') {
+        let part = part.trim();
+        if let Some((key, val)) = part.split_once('=') {
+            let key = key.trim();
+            let val = val.trim().trim_matches('"');
+            match key {
+                "collectionId" => collection_id = Some(val.to_string()),
+                "digest" => digest = Some(val.to_string()),
+                "url" => url = Some(val.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    Some((collection_id?, digest?, url?))
+}
+
 /// Sign `message` with an RSA private key using PKCS#1 v1.5 + SHA-256.
 /// Returns the signature as base64.
 // ponytail: PEM re-parsed per sign; cache parsed RsaPrivateKey in AppState
@@ -758,5 +839,264 @@ zloXrMaFLBPp2UUN/amDTUIJ
                 .await
                 .unwrap();
         assert_eq!(name, "Alice Updated");
+    }
+
+    // -- FEP-8fcf tests --
+
+    #[test]
+    fn format_collection_sync_header_roundtrip() {
+        let header = format_collection_sync_header("local.example", "alice", "sha-256=AAAA");
+        assert_eq!(
+            header,
+            "collectionId=\"https://local.example/users/alice/followers\", \
+             digest=\"sha-256=AAAA\", \
+             url=\"https://local.example/users/alice/followers\""
+        );
+
+        let (cid, digest, url) = parse_collection_sync_header(&header).unwrap();
+        assert_eq!(cid, "https://local.example/users/alice/followers");
+        assert_eq!(digest, "sha-256=AAAA");
+        assert_eq!(url, "https://local.example/users/alice/followers");
+    }
+
+    #[test]
+    fn parse_collection_sync_header_missing_field_returns_none() {
+        // Missing url field
+        assert!(parse_collection_sync_header("collectionId=\"x\", digest=\"y\"").is_none());
+        // Empty string
+        assert!(parse_collection_sync_header("").is_none());
+    }
+
+    #[tokio::test]
+    async fn compute_follower_sync_digest_no_followers() {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+
+        // Create a local account
+        let acct_id = crate::id::generate_id();
+        sqlx::query(
+            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+        )
+        .bind(acct_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // No followers => None
+        let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn compute_follower_sync_digest_single_follower() {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+
+        // Create a local account
+        let acct_id = crate::id::generate_id();
+        sqlx::query(
+            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+        )
+        .bind(acct_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create a remote account on remote.example
+        let remote_id = crate::id::generate_id();
+        let data = RemoteActorData {
+            actor_uri: "https://remote.example/users/bob".into(),
+            username: "bob".into(),
+            domain: "remote.example".into(),
+            display_name: "Bob".into(),
+            bio_html: "".into(),
+            avatar_url: None,
+            header_url: None,
+            public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".into(),
+            public_key_id: format!("https://remote.example/users/bob#main-key-{remote_id}"),
+            inbox_url: "https://remote.example/users/bob/inbox".into(),
+            shared_inbox_url: None,
+            followers_url: None,
+            is_locked: false,
+            bot: false,
+        };
+        let rid = upsert_remote_account(&pool, &data).await.unwrap();
+
+        // Add follower
+        sqlx::query(
+            "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+        )
+        .bind(acct_id)
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
+        assert!(result.is_some());
+        let digest = result.unwrap();
+        assert!(digest.starts_with("sha-256="));
+
+        // Verify independently: SHA-256 of a single URI, base64-encoded
+        use sha2::Digest;
+        let expected_hash = sha2::Sha256::digest(b"https://remote.example/users/bob");
+        let expected = format!(
+            "sha-256={}",
+            base64::engine::general_purpose::STANDARD.encode(expected_hash)
+        );
+        assert_eq!(digest, expected);
+    }
+
+    #[tokio::test]
+    async fn compute_follower_sync_digest_xor_is_commutative() {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+
+        let acct_id = crate::id::generate_id();
+        sqlx::query(
+            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+        )
+        .bind(acct_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create two remote followers on the same domain
+        for name in &["carol", "dave"] {
+            let data = RemoteActorData {
+                actor_uri: format!("https://remote.example/users/{name}"),
+                username: name.to_string(),
+                domain: "remote.example".into(),
+                display_name: name.to_string(),
+                bio_html: "".into(),
+                avatar_url: None,
+                header_url: None,
+                public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".into(),
+                public_key_id: format!("https://remote.example/users/{name}#main-key"),
+                inbox_url: format!("https://remote.example/users/{name}/inbox"),
+                shared_inbox_url: None,
+                followers_url: None,
+                is_locked: false,
+                bot: false,
+            };
+            let rid = upsert_remote_account(&pool, &data).await.unwrap();
+            sqlx::query(
+                "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+            )
+            .bind(acct_id)
+            .bind(rid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let digest = compute_follower_sync_digest(&pool, acct_id, "remote.example")
+            .await
+            .unwrap();
+
+        // Compute expected: XOR of SHA-256("https://remote.example/users/carol")
+        // and SHA-256("https://remote.example/users/dave")
+        use sha2::Digest;
+        let h1 = sha2::Sha256::digest(b"https://remote.example/users/carol");
+        let h2 = sha2::Sha256::digest(b"https://remote.example/users/dave");
+        let mut xor = [0u8; 32];
+        for i in 0..32 {
+            xor[i] = h1[i] ^ h2[i];
+        }
+        let expected = format!(
+            "sha-256={}",
+            base64::engine::general_purpose::STANDARD.encode(xor)
+        );
+        assert_eq!(digest, expected);
+    }
+
+    #[tokio::test]
+    async fn compute_follower_sync_digest_filters_by_domain() {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+
+        let acct_id = crate::id::generate_id();
+        sqlx::query(
+            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+        )
+        .bind(acct_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Follower on remote.example
+        let data1 = RemoteActorData {
+            actor_uri: "https://remote.example/users/eve".into(),
+            username: "eve".into(),
+            domain: "remote.example".into(),
+            display_name: "Eve".into(),
+            bio_html: "".into(),
+            avatar_url: None,
+            header_url: None,
+            public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".into(),
+            public_key_id: "https://remote.example/users/eve#main-key".into(),
+            inbox_url: "https://remote.example/users/eve/inbox".into(),
+            shared_inbox_url: None,
+            followers_url: None,
+            is_locked: false,
+            bot: false,
+        };
+        let rid1 = upsert_remote_account(&pool, &data1).await.unwrap();
+
+        // Follower on other.example
+        let data2 = RemoteActorData {
+            actor_uri: "https://other.example/users/frank".into(),
+            username: "frank".into(),
+            domain: "other.example".into(),
+            display_name: "Frank".into(),
+            bio_html: "".into(),
+            avatar_url: None,
+            header_url: None,
+            public_key_pem: "-----BEGIN PUBLIC KEY-----\nfake2\n-----END PUBLIC KEY-----".into(),
+            public_key_id: "https://other.example/users/frank#main-key".into(),
+            inbox_url: "https://other.example/users/frank/inbox".into(),
+            shared_inbox_url: None,
+            followers_url: None,
+            is_locked: false,
+            bot: false,
+        };
+        let rid2 = upsert_remote_account(&pool, &data2).await.unwrap();
+
+        for rid in [rid1, rid2] {
+            sqlx::query(
+                "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+            )
+            .bind(acct_id)
+            .bind(rid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        // Digest for remote.example should only include eve
+        let digest_remote = compute_follower_sync_digest(&pool, acct_id, "remote.example")
+            .await
+            .unwrap();
+        use sha2::Digest;
+        let eve_hash = sha2::Sha256::digest(b"https://remote.example/users/eve");
+        let expected_remote = format!(
+            "sha-256={}",
+            base64::engine::general_purpose::STANDARD.encode(eve_hash)
+        );
+        assert_eq!(digest_remote, expected_remote);
+
+        // Digest for other.example should only include frank
+        let digest_other = compute_follower_sync_digest(&pool, acct_id, "other.example")
+            .await
+            .unwrap();
+        let frank_hash = sha2::Sha256::digest(b"https://other.example/users/frank");
+        let expected_other = format!(
+            "sha-256={}",
+            base64::engine::general_purpose::STANDARD.encode(frank_hash)
+        );
+        assert_eq!(digest_other, expected_other);
+
+        // Different domains produce different digests
+        assert_ne!(digest_remote, digest_other);
     }
 }
