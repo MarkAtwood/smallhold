@@ -77,13 +77,16 @@ struct AccountRow {
     bot: bool,
     fields_json: String,
     created_at: i64,
+    did_key: Option<String>,
+    recovery_pubkey: Option<String>,
 }
 
 /// Looks up a local account by username, returning 404 if not found.
 async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
     let row: AccountRow = sqlx::query_as(
         "SELECT username, display_name, bio_html, public_key_pem,
-                is_locked, discoverable, bot, fields_json, created_at
+                is_locked, discoverable, bot, fields_json, created_at,
+                did_key, recovery_pubkey
          FROM accounts WHERE username = ? LIMIT 1",
     )
     .bind(username)
@@ -133,7 +136,16 @@ async fn actor(
         })
         .collect();
 
-    let doc = json!({
+    // Build alsoKnownAs array with profile URL and DID identifiers
+    let mut also_known_as: Vec<Value> = Vec::new();
+    also_known_as.push(json!(format!("https://{domain}/@{username}")));
+    if let Some(ref dk) = account.did_key {
+        also_known_as.push(json!(dk));
+    }
+    let did_web_val = crate::did::did_web(domain, &username);
+    also_known_as.push(json!(did_web_val));
+
+    let mut doc = json!({
         "@context": ap_context(),
         "id": actor_uri,
         "type": actor_type,
@@ -150,6 +162,7 @@ async fn actor(
         "manuallyApprovesFollowers": account.is_locked,
         "discoverable": account.discoverable,
         "published": published,
+        "alsoKnownAs": also_known_as,
         "endpoints": {
             "sharedInbox": format!("https://{domain}/inbox")
         },
@@ -163,6 +176,11 @@ async fn actor(
         "attachment": attachment,
         "tag": []
     });
+
+    // Add did:key for DID-aware peers
+    if let Some(ref dk) = account.did_key {
+        doc["did"] = json!(dk);
+    }
 
     Ok(ap_response(doc))
 }
@@ -784,6 +802,52 @@ async fn ap_context_collection(
     })))
 }
 
+/// GET /users/{username}/did.json — DID document for did:web resolution.
+async fn did_document(
+    State(state): State<Arc<AppState>>,
+    Path(username): Path<String>,
+) -> Result<Response, AppError> {
+    let account = fetch_account(&state.pool, &username).await?;
+    let domain = &state.config.server.domain;
+
+    // Build alsoKnownAs list
+    let mut also_known_as: Vec<String> = Vec::new();
+    if let Some(ref dk) = account.did_key {
+        also_known_as.push(dk.clone());
+    }
+    also_known_as.push(format!("https://{domain}/@{username}"));
+
+    // Decode recovery pubkey from hex for the DID document
+    let recovery_pub: Option<[u8; 32]> = match &account.recovery_pubkey {
+        Some(hex) if !hex.is_empty() => {
+            let bytes = crate::api::hex_decode(hex)
+                .map_err(|_| AppError::internal("Corrupt recovery_pubkey in database"))?;
+            if bytes.len() != 32 {
+                return Err(AppError::internal("Invalid recovery_pubkey length"));
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            Some(arr)
+        }
+        _ => None,
+    };
+
+    let doc = crate::did::did_web_document(
+        domain,
+        &username,
+        &account.public_key_pem,
+        recovery_pub.as_ref(),
+        &also_known_as,
+    );
+
+    Ok((
+        StatusCode::OK,
+        [(CONTENT_TYPE, "application/did+json")],
+        doc.to_string(),
+    )
+        .into_response())
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(index_page))
@@ -795,6 +859,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/users/{username}/following", get(following_collection))
         .route("/users/{username}/collections/featured", get(featured))
         .route("/users/{username}/collections/tags", get(featured_tags))
+        .route("/users/{username}/did.json", get(did_document))
         .route(
             "/users/{username}/statuses/{id}/context",
             get(ap_context_collection),

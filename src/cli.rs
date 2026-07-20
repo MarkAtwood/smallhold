@@ -74,6 +74,10 @@ pub enum Commands {
     /// Manage relay subscriptions
     #[command(subcommand)]
     Relay(RelayCommands),
+
+    /// DID identity management
+    #[command(subcommand)]
+    Did(DidCommands),
 }
 
 #[derive(Subcommand)]
@@ -184,6 +188,14 @@ pub enum ImportCommands {
 }
 
 #[derive(Subcommand)]
+pub enum DidCommands {
+    /// Recover an account using a BIP-39 mnemonic phrase (read from stdin)
+    Recover,
+    /// Backfill DID keys for existing accounts that lack them
+    Backfill,
+}
+
+#[derive(Subcommand)]
 pub enum RelayCommands {
     /// Subscribe to a relay
     Add {
@@ -221,6 +233,7 @@ impl Cli {
             Commands::Import(cmd) => cmd_import(cmd, &self.config).await,
             Commands::Census => cmd_census(&self.config).await,
             Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
+            Commands::Did(cmd) => cmd_did(cmd, &self.config).await,
         }
     }
 }
@@ -471,9 +484,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
             use rsa::RsaPrivateKey;
 
-            let mut rng = rand::thread_rng();
             let private_key =
-                RsaPrivateKey::new(&mut rng, 2048).context("Failed to generate RSA keypair")?;
+                RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048).context("Failed to generate RSA keypair")?;
             let private_key_pem = private_key
                 .to_pkcs8_pem(LineEnding::LF)
                 .context("Failed to encode private key")?;
@@ -482,6 +494,12 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
                 .to_public_key_pem(LineEnding::LF)
                 .context("Failed to encode public key")?;
 
+            // Generate Ed25519 recovery keypair for DID
+            let (recovery_priv, recovery_pub) = crate::did::generate_recovery_keypair();
+            let did_key = crate::did::ed25519_to_did_key(&recovery_pub);
+            let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
+            let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
+
             let id = generate_id();
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -489,7 +507,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             sqlx::query(
-                "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, is_locked, bot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, is_locked, bot, created_at, did_key, recovery_pubkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(id)
             .bind(&username)
@@ -499,11 +517,17 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             .bind(locked as i32)
             .bind(bot as i32)
             .bind(now)
+            .bind(&did_key)
+            .bind(&recovery_pubkey_hex)
             .execute(&pool)
             .await
             .context("Failed to create persona (username may already exist)")?;
 
             eprintln!("Created persona: @{username} (id: {id})");
+            eprintln!("  DID: {did_key}");
+            eprintln!();
+            eprintln!("RECOVERY PHRASE (save this — it will NOT be shown again):");
+            eprintln!("{recovery_phrase}");
         }
         PersonaCommands::List => {
             let rows: Vec<(i64, String, String, i64)> = sqlx::query_as(
@@ -980,6 +1004,94 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
     Ok(())
 }
 
+async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    match cmd {
+        DidCommands::Recover => {
+            eprint!("Enter recovery phrase: ");
+            let mnemonic = {
+                use std::io::BufRead;
+                let stdin = std::io::stdin();
+                stdin.lock().lines().next()
+                    .ok_or_else(|| anyhow::anyhow!("No input"))?
+                    .context("Failed to read recovery phrase")?
+                    .trim().to_string()
+            };
+            let priv_key = crate::did::mnemonic_to_private_key(&mnemonic)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let pub_key = crate::did::ed25519_public_from_private(&priv_key);
+            let did_key = crate::did::ed25519_to_did_key(&pub_key);
+
+            let account: Option<(i64, String, String)> = sqlx::query_as(
+                "SELECT id, username, display_name FROM accounts WHERE did_key = ?",
+            )
+            .bind(&did_key)
+            .fetch_optional(&pool)
+            .await?;
+
+            match account {
+                Some((id, username, display_name)) => {
+                    eprintln!("Found account:");
+                    eprintln!("  ID: {id}");
+                    eprintln!("  Username: @{username}");
+                    eprintln!("  Display name: {display_name}");
+                    eprintln!("  DID: {did_key}");
+                    eprintln!();
+                    eprintln!("To reset the admin password, run:");
+                    eprintln!("  smallhold admin set-password");
+                }
+                None => {
+                    eprintln!("No account found for DID: {did_key}");
+                    eprintln!("The recovery phrase may be for a different instance.");
+                }
+            }
+        }
+        DidCommands::Backfill => {
+            let rows: Vec<(i64, String)> = sqlx::query_as(
+                "SELECT id, username FROM accounts WHERE did_key IS NULL",
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            if rows.is_empty() {
+                eprintln!("All accounts already have DID keys.");
+                return Ok(());
+            }
+
+            eprintln!("Backfilling {} account(s)...", rows.len());
+            eprintln!();
+
+            for (id, username) in &rows {
+                let (recovery_priv, recovery_pub) = crate::did::generate_recovery_keypair();
+                let did_key = crate::did::ed25519_to_did_key(&recovery_pub);
+                let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
+                let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
+
+                sqlx::query(
+                    "UPDATE accounts SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
+                )
+                .bind(&did_key)
+                .bind(&recovery_pubkey_hex)
+                .bind(id)
+                .execute(&pool)
+                .await
+                .with_context(|| format!("Failed to update @{username}"))?;
+
+                eprintln!("@{username}:");
+                eprintln!("  DID: {did_key}");
+                eprintln!("  RECOVERY PHRASE (save this — it will NOT be shown again):");
+                eprintln!("  {recovery_phrase}");
+                eprintln!();
+            }
+
+            eprintln!("Backfill complete.");
+        }
+    }
+    Ok(())
+}
+
 async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
     let config = Config::load(config_path)?;
     let pool = db::create_pool(&config.storage.database_path).await?;
@@ -1048,11 +1160,12 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             eprintln!("Subscribed to relay (pending acceptance): {url}");
         }
         RelayCommands::Remove { url } => {
-            let relay: Option<(i64, String, String, String)> =
-                sqlx::query_as("SELECT id, inbox_url, actor_uri, follow_id FROM relays WHERE actor_uri = ?")
-                    .bind(&url)
-                    .fetch_optional(&pool)
-                    .await?;
+            let relay: Option<(i64, String, String, String)> = sqlx::query_as(
+                "SELECT id, inbox_url, actor_uri, follow_id FROM relays WHERE actor_uri = ?",
+            )
+            .bind(&url)
+            .fetch_optional(&pool)
+            .await?;
 
             let (_, inbox_url, _, stored_follow_id) =
                 relay.ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;

@@ -30,6 +30,19 @@ pub fn hex_encode(bytes: &[u8]) -> String {
     s
 }
 
+pub fn hex_decode(s: &str) -> Result<Vec<u8>, AppError> {
+    if s.len() % 2 != 0 {
+        return Err(AppError::bad_request("Invalid hex string length"));
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&s[i..i + 2], 16)
+                .map_err(|_| AppError::bad_request("Invalid hex character"))
+        })
+        .collect()
+}
+
 pub fn now_millis() -> i64 {
     // SystemTime::now() is always after UNIX_EPOCH on any supported platform
     SystemTime::now()
