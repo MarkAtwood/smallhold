@@ -27,6 +27,43 @@ async fn initialize_schema(pool: &SqlitePool) -> Result<()> {
         .execute(pool)
         .await
         .context("Failed to initialize database schema")?;
+
+    run_migrations(pool).await?;
+    Ok(())
+}
+
+/// Run idempotent schema migrations for columns added after initial release.
+async fn run_migrations(pool: &SqlitePool) -> Result<()> {
+    // FEP-f228: add context_url to posts and remote_posts.
+    // SQLite errors on duplicate ADD COLUMN, so check first.
+    let has_context_url: bool = sqlx::query_scalar::<_, String>(
+        "SELECT name FROM pragma_table_info('posts') WHERE name = 'context_url'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+
+    if !has_context_url {
+        sqlx::raw_sql("ALTER TABLE posts ADD COLUMN context_url TEXT")
+            .execute(pool)
+            .await
+            .context("migration: add posts.context_url")?;
+    }
+
+    let has_remote_context_url: bool = sqlx::query_scalar::<_, String>(
+        "SELECT name FROM pragma_table_info('remote_posts') WHERE name = 'context_url'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+
+    if !has_remote_context_url {
+        sqlx::raw_sql("ALTER TABLE remote_posts ADD COLUMN context_url TEXT")
+            .execute(pool)
+            .await
+            .context("migration: add remote_posts.context_url")?;
+    }
+
     Ok(())
 }
 
@@ -93,6 +130,7 @@ CREATE TABLE IF NOT EXISTS posts (
     visibility        TEXT NOT NULL,
     sensitive         INTEGER NOT NULL DEFAULT 0,
     language          TEXT,
+    context_url       TEXT,
     created_at        INTEGER NOT NULL,
     edited_at         INTEGER
 );
@@ -109,6 +147,7 @@ CREATE TABLE IF NOT EXISTS remote_posts (
     visibility        TEXT NOT NULL,
     sensitive         INTEGER NOT NULL DEFAULT 0,
     language          TEXT,
+    context_url       TEXT,
     created_at        INTEGER NOT NULL,
     fetched_at        INTEGER NOT NULL
 );

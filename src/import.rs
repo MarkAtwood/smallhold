@@ -327,14 +327,20 @@ async fn import_outbox(
                 }
             });
 
+        // FEP-f228: imported posts get their own context URL.
+        // ponytail: imports don't resolve reply chains for context inheritance; each post
+        // gets its own context. A future `reindex-contexts` command could fix this.
+        let context_url = format!("{ap_id}/context");
+
         // Insert the post
         let result = sqlx::query(
-            "INSERT INTO posts (id, account_id, ap_id, in_reply_to_uri, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO posts (id, account_id, ap_id, in_reply_to_uri, context_url, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(account_id)
         .bind(&ap_id)
         .bind(in_reply_to_uri.as_deref())
+        .bind(&context_url)
         .bind(&content_clean)
         .bind(&content_html)
         .bind(&spoiler_text)
@@ -474,9 +480,7 @@ fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u32) -> (i64, u3
 }
 
 fn is_public(uri: &str) -> bool {
-    uri == "https://www.w3.org/ns/activitystreams#Public"
-        || uri == "as:Public"
-        || uri == "Public"
+    uri == "https://www.w3.org/ns/activitystreams#Public" || uri == "as:Public" || uri == "Public"
 }
 
 fn determine_visibility(activity: &serde_json::Value, object: &serde_json::Value) -> String {

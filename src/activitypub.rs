@@ -208,9 +208,8 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 /// Strip any `</style>` sequences (case-insensitive) to prevent style tag breakout
 /// when CSS is injected into a `<style>` block.
 fn sanitize_css_for_style_tag(css: &mut String) {
-    static STYLE_TAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?i)</\s*style").unwrap()
-    });
+    static STYLE_TAG_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?i)</\s*style").unwrap());
     *css = STYLE_TAG_RE.replace_all(css, "").to_string();
 }
 
@@ -481,6 +480,8 @@ async fn post_page(
 struct PostRow {
     id: i64,
     content_html: String,
+    #[sqlx(default)]
+    context_url: Option<String>,
     created_at: i64,
 }
 
@@ -507,7 +508,7 @@ async fn outbox(
             .await?;
 
     let posts: Vec<PostRow> = sqlx::query_as(
-        "SELECT id, content_html, created_at \
+        "SELECT id, content_html, context_url, created_at \
          FROM posts \
          WHERE account_id = ? AND visibility = 'public' \
          ORDER BY created_at DESC \
@@ -522,21 +523,25 @@ async fn outbox(
         .map(|p| {
             let published = crate::api::millis_to_iso(p.created_at);
             let status_uri = format!("{actor_uri}/statuses/{}", p.id);
+            let mut note = json!({
+                "id": &status_uri,
+                "type": "Note",
+                "content": p.content_html,
+                "attributedTo": &actor_uri,
+                "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                "cc": [format!("{actor_uri}/followers")],
+                "published": &published,
+                "url": format!("https://{domain}/@{username}/{}", p.id)
+            });
+            if let Some(ref ctx) = p.context_url {
+                note["context"] = json!(ctx);
+            }
             json!({
                 "id": format!("{status_uri}/activity"),
                 "type": "Create",
                 "actor": &actor_uri,
                 "published": &published,
-                "object": {
-                    "id": &status_uri,
-                    "type": "Note",
-                    "content": p.content_html,
-                    "attributedTo": &actor_uri,
-                    "to": ["https://www.w3.org/ns/activitystreams#Public"],
-                    "cc": [format!("{actor_uri}/followers")],
-                    "published": &published,
-                    "url": format!("https://{domain}/@{username}/{}", p.id)
-                }
+                "object": note
             })
         })
         .collect();
@@ -623,7 +628,7 @@ async fn featured(
     let actor_uri = format!("https://{domain}/users/{username}");
 
     let posts: Vec<PostRow> = sqlx::query_as(
-        "SELECT p.id, p.content_html, p.created_at \
+        "SELECT p.id, p.content_html, p.context_url, p.created_at \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
          WHERE pp.account_id = ? AND p.visibility = 'public' \
          ORDER BY pp.pinned_at DESC",
@@ -637,7 +642,7 @@ async fn featured(
         .map(|p| {
             let published = crate::api::millis_to_iso(p.created_at);
             let status_uri = format!("{actor_uri}/statuses/{}", p.id);
-            json!({
+            let mut note = json!({
                 "id": &status_uri,
                 "type": "Note",
                 "content": p.content_html,
@@ -646,7 +651,11 @@ async fn featured(
                 "cc": [format!("{actor_uri}/followers")],
                 "published": &published,
                 "url": format!("https://{domain}/@{username}/{}", p.id)
-            })
+            });
+            if let Some(ref ctx) = p.context_url {
+                note["context"] = json!(ctx);
+            }
+            note
         })
         .collect();
 
@@ -676,6 +685,105 @@ async fn featured_tags(
     })))
 }
 
+/// GET /users/{username}/statuses/{id}/context — FEP-f228 conversation context collection.
+///
+/// Returns an OrderedCollection of all posts in the same conversation, ordered
+/// chronologically. Only public/unlisted posts are included; the originating
+/// post is identified by its `context_url` column.
+async fn ap_context_collection(
+    State(state): State<Arc<AppState>>,
+    Path((username, id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    // Verify account exists.
+    let account_row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await?;
+    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
+
+    let post_id: i64 = id
+        .parse()
+        .map_err(|_| AppError::not_found("Post not found"))?;
+
+    let domain = &state.config.server.domain;
+    let context_url = format!("https://{domain}/users/{username}/statuses/{post_id}/context");
+
+    // If the client does not want AP, redirect to the Mastodon API context endpoint.
+    if !wants_activitypub(&headers) {
+        let api_url = format!("/api/v1/statuses/{post_id}/context");
+        return Ok((StatusCode::SEE_OTHER, [(LOCATION, api_url)]).into_response());
+    }
+
+    // Verify the post exists and belongs to this account.
+    let post_exists: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM posts WHERE id = ? AND account_id = ?")
+            .bind(post_id)
+            .bind(account_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    if post_exists.is_none() {
+        return Err(AppError::not_found("Post not found"));
+    }
+
+    // Collect all posts sharing the same context_url, ordered chronologically.
+    // Join to accounts so each post uses its actual author, not the URL path username.
+    #[derive(sqlx::FromRow)]
+    struct ContextPostRow {
+        id: i64,
+        content_html: String,
+        context_url: Option<String>,
+        created_at: i64,
+        username: String,
+    }
+
+    let posts: Vec<ContextPostRow> = sqlx::query_as(
+        "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
+         FROM posts p \
+         JOIN accounts a ON p.account_id = a.id \
+         WHERE p.context_url = ? \
+           AND p.visibility IN ('public', 'unlisted') \
+         ORDER BY p.created_at ASC",
+    )
+    .bind(&context_url)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let items: Vec<Value> = posts
+        .iter()
+        .map(|p| {
+            let published = crate::api::millis_to_iso(p.created_at);
+            let post_actor_uri = format!("https://{domain}/users/{}", p.username);
+            let status_uri = format!("{post_actor_uri}/statuses/{}", p.id);
+            let mut note = json!({
+                "id": &status_uri,
+                "type": "Note",
+                "content": &p.content_html,
+                "attributedTo": &post_actor_uri,
+                "context": &context_url,
+                "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                "cc": [format!("{post_actor_uri}/followers")],
+                "published": &published,
+                "url": format!("https://{domain}/@{}/{}", p.username, p.id)
+            });
+            // Only add context if it differs from the collection URL (shouldn't, but defensive).
+            if let Some(ref ctx) = p.context_url {
+                note["context"] = json!(ctx);
+            }
+            note
+        })
+        .collect();
+
+    Ok(ap_response(json!({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": &context_url,
+        "type": "OrderedCollection",
+        "totalItems": items.len(),
+        "orderedItems": items
+    })))
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(index_page))
@@ -687,4 +795,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/users/{username}/following", get(following_collection))
         .route("/users/{username}/collections/featured", get(featured))
         .route("/users/{username}/collections/tags", get(featured_tags))
+        .route(
+            "/users/{username}/statuses/{id}/context",
+            get(ap_context_collection),
+        )
 }

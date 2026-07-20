@@ -424,9 +424,8 @@ fn parse_mentions(text: &str) -> Vec<ParsedMention> {
 /// Find `#word` patterns in text.
 /// Uses word/tag boundary matching to avoid false positives inside URLs or HTML.
 fn parse_hashtags(text: &str) -> Vec<String> {
-    static HASHTAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?:^|[\s>])#([a-zA-Z0-9_]+)").unwrap()
-    });
+    static HASHTAG_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?:^|[\s>])#([a-zA-Z0-9_]+)").unwrap());
 
     let mut tags = Vec::new();
     let mut seen = HashSet::new();
@@ -448,9 +447,8 @@ fn parse_hashtags(text: &str) -> Vec<String> {
 fn autolink_bare_urls(html: &str) -> String {
     // Match URLs that are NOT preceded by href=" or src=" or >
     // Strategy: split on existing <a>...</a> segments, only linkify in non-anchor text.
-    static URL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r#"https?://[^\s<>")\]]+"#).unwrap()
-    });
+    static URL_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"https?://[^\s<>")\]]+"#).unwrap());
     let mut result = String::with_capacity(html.len());
     let url_re = &*URL_RE;
 
@@ -517,6 +515,7 @@ pub struct PostRow {
     account_id: i64,
     in_reply_to_id: Option<i64>,
     boost_of_id: Option<i64>,
+    context_url: Option<String>,
     #[allow(dead_code)]
     content: String,
     content_html: String,
@@ -529,7 +528,7 @@ pub struct PostRow {
 }
 
 pub const POST_COLUMNS: &str =
-    "id, account_id, in_reply_to_id, boost_of_id, content, content_html, \
+    "id, account_id, in_reply_to_id, boost_of_id, context_url, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
 
 /// Build the Mastodon Status JSON for a local post.
@@ -1017,18 +1016,14 @@ async fn create_status(
         .sensitive
         .unwrap_or(state.config.defaults.default_sensitive);
     let spoiler_text = body.spoiler_text.as_deref().unwrap_or("").to_string();
-    let language = body
-        .language
-        .clone()
-        .filter(|l| !l.is_empty())
-        .or_else(|| {
-            let detected = detect_language(&text);
-            if detected != "en" {
-                Some(detected.to_string())
-            } else {
-                Some(state.config.defaults.default_language.clone())
-            }
-        });
+    let language = body.language.clone().filter(|l| !l.is_empty()).or_else(|| {
+        let detected = detect_language(&text);
+        if detected != "en" {
+            Some(detected.to_string())
+        } else {
+            Some(state.config.defaults.default_language.clone())
+        }
+    });
 
     // Check for scheduled_at — if present and >= 5 min in the future, store
     // as a scheduled post instead of creating immediately.
@@ -1085,15 +1080,33 @@ async fn create_status(
         auth.username
     );
 
+    // FEP-f228: compute context_url. Replies inherit parent's context; originals get their own.
+    let context_url = match in_reply_to_id {
+        Some(parent_id) => {
+            let parent_ctx: Option<(Option<String>, String, i64)> =
+                sqlx::query_as("SELECT context_url, ap_id, account_id FROM posts WHERE id = ?")
+                    .bind(parent_id)
+                    .fetch_optional(&state.pool)
+                    .await?;
+            match parent_ctx {
+                Some((Some(url), _, _)) => url,
+                Some((None, parent_ap_id, _)) => format!("{parent_ap_id}/context"),
+                None => format!("{ap_id}/context"),
+            }
+        }
+        None => format!("{ap_id}/context"),
+    };
+
     sqlx::query(
-        "INSERT INTO posts (id, account_id, ap_id, in_reply_to_id, content, content_html, \
+        "INSERT INTO posts (id, account_id, ap_id, in_reply_to_id, context_url, content, content_html, \
          spoiler_text, visibility, sensitive, language, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(post_id)
     .bind(auth.account_id)
     .bind(&ap_id)
     .bind(in_reply_to_id)
+    .bind(&context_url)
     .bind(&text)
     .bind(&rendered.html)
     .bind(&spoiler_text)
@@ -1312,12 +1325,9 @@ async fn create_status(
                         .bind(rid)
                         .fetch_optional(&state.pool)
                         .await?;
-                Some(json!(original_ap_id
-                    .map(|(ap_id,)| ap_id)
-                    .unwrap_or_else(|| format!(
-                        "https://{domain}/users/{}/statuses/{rid}",
-                        auth.username
-                    ))))
+                Some(json!(original_ap_id.map(|(ap_id,)| ap_id).unwrap_or_else(
+                    || format!("https://{domain}/users/{}/statuses/{rid}", auth.username)
+                )))
             }
             None => None,
         };
@@ -1375,6 +1385,7 @@ async fn create_status(
                 "id": &note_id,
                 "type": "Note",
                 "attributedTo": &actor,
+                "context": &context_url,
                 "content": &rendered.html,
                 "url": format!("https://{domain}/@{}/{post_id}", auth.username),
                 "to": &to,
@@ -1400,7 +1411,10 @@ async fn create_status(
                     .fetch_optional(&state.pool)
                     .await?;
                     if let Some((inbox_url,)) = remote {
-                        if let Err(e) = enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity).await {
+                        if let Err(e) =
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
+                                .await
+                        {
                             tracing::error!("Failed to enqueue DM delivery to {}: {e}", inbox_url);
                         }
                     }
@@ -1536,10 +1550,7 @@ async fn delete_status(
         "DELETE FROM conversation_hidden WHERE post_id = ?",
         "DELETE FROM post_cards WHERE post_id = ?",
     ] {
-        sqlx::query(table)
-            .bind(post_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(table).bind(post_id).execute(&mut *tx).await?;
     }
     sqlx::query("UPDATE media SET post_id = NULL WHERE post_id = ?")
         .bind(post_id)
@@ -1624,18 +1635,14 @@ async fn edit_status(
         .sensitive
         .unwrap_or(state.config.defaults.default_sensitive);
     let spoiler_text = body.spoiler_text.as_deref().unwrap_or("").to_string();
-    let language = body
-        .language
-        .clone()
-        .filter(|l| !l.is_empty())
-        .or_else(|| {
-            let detected = detect_language(&text);
-            if detected != "en" {
-                Some(detected.to_string())
-            } else {
-                Some(state.config.defaults.default_language.clone())
-            }
-        });
+    let language = body.language.clone().filter(|l| !l.is_empty()).or_else(|| {
+        let detected = detect_language(&text);
+        if detected != "en" {
+            Some(detected.to_string())
+        } else {
+            Some(state.config.defaults.default_language.clone())
+        }
+    });
 
     let rendered = render_content(&text, domain);
 
@@ -1781,12 +1788,11 @@ async fn edit_status(
         }
 
         // Query inReplyTo URI
-        let (in_reply_to_uri,): (Option<String>,) = sqlx::query_as(
-            "SELECT in_reply_to_uri FROM posts WHERE id = ?",
-        )
-        .bind(post_id)
-        .fetch_one(&state.pool)
-        .await?;
+        let (in_reply_to_uri,): (Option<String>,) =
+            sqlx::query_as("SELECT in_reply_to_uri FROM posts WHERE id = ?")
+                .bind(post_id)
+                .fetch_one(&state.pool)
+                .await?;
 
         // Query media attachments for the AP Note
         #[allow(clippy::type_complexity)]
@@ -1841,6 +1847,7 @@ async fn edit_status(
                 "id": &note_id,
                 "type": "Note",
                 "attributedTo": &actor,
+                "context": &post.context_url,
                 "content": &rendered.html,
                 "url": format!("https://{domain}/@{}/{post_id}", auth.username),
                 "to": &to,
@@ -3655,6 +3662,7 @@ mod tests {
             account_id: 1,
             in_reply_to_id: None,
             boost_of_id: None,
+            context_url: None,
             content: "Hello world".into(),
             content_html: "<p>Hello world</p>".into(),
             spoiler_text: String::new(),
