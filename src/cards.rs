@@ -1,12 +1,10 @@
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use serde_json::{json, Value};
-use crate::sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::server::fw_pool;
 
 // ---------------------------------------------------------------------------
 // Shared HTTP client for card fetching
@@ -284,12 +282,12 @@ pub fn card_to_json(card: &CardData) -> Value {
 
 /// Fetch card for a URL (or use cache) and link it to a post.
 pub async fn fetch_and_cache_card(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     post_id: i64,
     url: &str,
     own_domain: &str,
 ) -> Result<()> {
-    let fwp = fw_pool(pool);
+    let fwp = pool.clone();
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     // Check if already cached and fresh (< 24h)
@@ -368,8 +366,8 @@ pub async fn fetch_and_cache_card(
 // ponytail: batch card loading available via load_cards_for_posts().
 // Currently cards loaded per-status in load_status(). Acceptable for
 // timeline sizes (max 40 posts). Wire batch loading if this becomes a bottleneck.
-pub async fn load_card_for_post(pool: &SqlitePool, post_id: i64) -> Option<Value> {
-    let cards = fieldwork::cards_db::cards_for_post(&fw_pool(pool), post_id)
+pub async fn load_card_for_post(pool: &fieldwork::db::Pool, post_id: i64) -> Option<Value> {
+    let cards = fieldwork::cards_db::cards_for_post(pool, post_id)
         .await
         .ok()?;
 
@@ -392,7 +390,7 @@ pub async fn load_card_for_post(pool: &SqlitePool, post_id: i64) -> Option<Value
 }
 
 /// Batch load cards for multiple posts. Returns a map of post_id -> card JSON.
-pub async fn load_cards_for_posts(pool: &SqlitePool, post_ids: &[i64]) -> HashMap<i64, Value> {
+pub async fn load_cards_for_posts(pool: &fieldwork::db::Pool, post_ids: &[i64]) -> HashMap<i64, Value> {
     if post_ids.is_empty() {
         return HashMap::new();
     }
@@ -400,7 +398,7 @@ pub async fn load_cards_for_posts(pool: &SqlitePool, post_ids: &[i64]) -> HashMa
     // ponytail: iterates per-post via fieldwork::cards_db::cards_for_post.
     // Timeline pages are <=40 posts so N+1 is acceptable. Upgrade to batch
     // query if this becomes a bottleneck.
-    let fwp = fw_pool(pool);
+    let fwp = pool.clone();
     let mut map = HashMap::new();
     for &post_id in post_ids {
         if let Ok(cards) = fieldwork::cards_db::cards_for_post(&fwp, post_id).await {

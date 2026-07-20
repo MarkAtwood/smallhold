@@ -1,7 +1,7 @@
 use crate::api::{now_millis, AuthenticatedAccount};
 use crate::error::AppError;
 use crate::id::generate_id;
-use crate::server::{fw_pool, AppState};
+use crate::server::AppState;
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
@@ -275,7 +275,7 @@ async fn process_upload(
     let file_size = clean_data.len() as i64;
 
     fieldwork::media_db::insert_media(
-        &fw_pool(&state.pool),
+        &state.pool,
         &fieldwork::media_db::MediaRow {
             id,
             user_id: crate::db::DEFAULT_USER_ID,
@@ -347,7 +347,7 @@ async fn update_media(
     // ponytail: fieldwork::media_db::get_media doesn't filter by user_id
     // (ownership). Single-user smallhold doesn't need it, but we check persona_id
     // for safety via the fieldwork row.
-    let fw_row = fieldwork::media_db::get_media(&fw_pool(&state.pool), media_id)
+    let fw_row = fieldwork::media_db::get_media(&state.pool, media_id)
         .await?
         .ok_or_else(|| AppError::not_found("Media not found"))?;
 
@@ -384,7 +384,7 @@ async fn get_media(
         .parse()
         .map_err(|_| AppError::not_found("Media not found"))?;
 
-    let fw_row = fieldwork::media_db::get_media(&fw_pool(&state.pool), media_id)
+    let fw_row = fieldwork::media_db::get_media(&state.pool, media_id)
         .await?
         .ok_or_else(|| AppError::not_found("Media not found"))?;
 

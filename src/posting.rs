@@ -14,7 +14,6 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use crate::sqlx::SqlitePool;
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
@@ -87,7 +86,7 @@ struct ActiveKeyword {
 
 /// Load all active (non-expired) filters for the given account and context.
 async fn load_active_filters(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     account_id: i64,
     context: &str,
 ) -> Result<Vec<ActiveFilter>, AppError> {
@@ -96,7 +95,7 @@ async fn load_active_filters(
     // and the filter has not expired.
     // ponytail: LIKE on JSON array is fine for small cardinality contexts
     // (home, notifications, public, thread, account). Upgrade: json_each().
-    let fwp = crate::server::fw_pool(pool);
+    let fwp = pool;
     let all_filters = fieldwork::filters_db::get_filters(&fwp, account_id).await?;
 
     let mut filters = Vec::new();
@@ -549,15 +548,15 @@ pub fn fw_to_local_post(p: &fieldwork::posts_db::PostRow) -> PostRow {
 }
 
 /// Fetch a local post by ID using fieldwork, returning our local PostRow.
-pub async fn get_local_post(pool: &SqlitePool, id: i64) -> Result<Option<PostRow>, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+pub async fn get_local_post(pool: &fieldwork::db::Pool, id: i64) -> Result<Option<PostRow>, AppError> {
+    let fwp = pool;
     let fw_post = fieldwork::posts_db::get_post(&fwp, id).await?;
     Ok(fw_post.map(|p| fw_to_local_post(&p)))
 }
 
 /// Fetch a local post by AP ID using fieldwork.
-pub async fn get_local_post_by_ap_id(pool: &SqlitePool, ap_id: &str) -> Result<Option<PostRow>, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+pub async fn get_local_post_by_ap_id(pool: &fieldwork::db::Pool, ap_id: &str) -> Result<Option<PostRow>, AppError> {
+    let fwp = pool;
     let fw_post = fieldwork::posts_db::get_post_by_ap_id(&fwp, ap_id).await?;
     Ok(fw_post.map(|p| fw_to_local_post(&p)))
 }
@@ -569,31 +568,6 @@ pub async fn get_local_post_by_ap_id(pool: &SqlitePool, ap_id: &str) -> Result<O
 pub const POST_COLUMNS: &str =
     "id, persona_id, ap_id, in_reply_to_id, in_reply_to_uri, boost_of_id, context_url, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
-
-pub fn sqlx_row_to_post_pub(row: crate::sqlx::sqlite::SqliteRow) -> PostRow {
-    sqlx_row_to_post(row)
-}
-
-fn sqlx_row_to_post(row: crate::sqlx::sqlite::SqliteRow) -> PostRow {
-    use crate::sqlx::Row;
-    PostRow {
-        id: row.get(0),
-        persona_id: row.get(1),
-        ap_id: row.get(2),
-        in_reply_to_id: row.get(3),
-        in_reply_to_uri: row.get(4),
-        boost_of_id: row.get(5),
-        context_url: row.get(6),
-        content: row.get(7),
-        content_html: row.get(8),
-        spoiler_text: row.get(9),
-        visibility: row.get(10),
-        sensitive: row.get(11),
-        language: row.get(12),
-        created_at: row.get(13),
-        edited_at: row.get(14),
-    }
-}
 
 /// Build the Mastodon Status JSON for a local post.
 #[allow(clippy::too_many_arguments)]
@@ -740,7 +714,7 @@ fn media_type_from_mime(mime: &str) -> &str {
 /// Fetch a post and build a full Status JSON for it.
 #[allow(clippy::type_complexity)]
 pub async fn load_status(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     post: &PostRow,
     domain: &str,
     viewer_account_id: Option<i64>,
@@ -749,7 +723,7 @@ pub async fn load_status(
     let account_json = account_to_json(&account, domain);
 
     // Fetch media attachments
-    let fwp_media = crate::server::fw_pool(pool);
+    let fwp_media = pool.clone();
     let media = fieldwork::media_db::attachments_for_post(&fwp_media, post.id).await?;
 
     let media_values: Vec<Value> = media
@@ -774,12 +748,12 @@ pub async fn load_status(
         .collect();
 
     // Fetch tags
-    let fwp_tags = crate::server::fw_pool(pool);
+    let fwp_tags = pool.clone();
     let tag_strings = fieldwork::post_tags_db::get_tags(&fwp_tags, post.id).await?;
     let tag_vals = tag_values_for_post(&tag_strings, domain);
 
     // Fetch mentions for display
-    let fwp_mentions = crate::server::fw_pool(pool);
+    let fwp_mentions = pool.clone();
     let fw_mentions = fieldwork::mentions_db::get_mentions(&fwp_mentions, post.id).await?;
     let mention_rows: Vec<(Option<i64>, Option<i64>)> = fw_mentions
         .into_iter()
@@ -816,7 +790,7 @@ pub async fn load_status(
     // Check viewer interactions
     let (favourited, reblogged, bookmarked) = if let Some(viewer) = viewer_account_id {
         let fav = fieldwork::interactions_db::is_favourited(
-            &crate::server::fw_pool(pool), viewer, post.id,
+            &pool.clone(), viewer, post.id,
         ).await?;
 
         let boost_count = crate::db_extras::count_boosts_by_persona(pool, viewer, post.id).await?;
@@ -910,7 +884,7 @@ fn pagination_clause(params: &PaginationParams) -> (String, Vec<i64>) {
 
 /// Fetch posts with dynamic pagination and return Status JSON values.
 async fn fetch_paginated_statuses(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     base_where: &str,
     base_binds: &[String],
     params: &PaginationParams,
@@ -937,7 +911,7 @@ async fn fetch_paginated_statuses(
         all_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(pool, &sql, &all_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
@@ -969,7 +943,7 @@ async fn create_status(
     if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
         let existing = fieldwork::idempotency_db::check_key(
-            &crate::server::fw_pool(&state.pool),
+            &state.pool,
             &key_hash,
             auth.account_id,
         )
@@ -1051,7 +1025,7 @@ async fn create_status(
                 serde_json::to_string(&body).map_err(|e| AppError::internal(e.to_string()))?;
 
             fieldwork::scheduled_db::create_scheduled(
-                &crate::server::fw_pool(&state.pool),
+                &state.pool,
                 &fieldwork::scheduled_db::ScheduledRow {
                     id: sched_id,
                     user_id: crate::db::DEFAULT_USER_ID,
@@ -1103,7 +1077,7 @@ async fn create_status(
     };
 
     fieldwork::posts_db::create_post(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         &fieldwork::posts_db::PostRow {
             id: post_id,
             user_id: crate::db::DEFAULT_USER_ID,
@@ -1138,12 +1112,12 @@ async fn create_status(
         match &m.domain {
             None => {
                 let local_persona = fieldwork::persona_db::get_persona_by_username(
-                    &crate::server::fw_pool(&state.pool), &m.username,
+                    &state.pool, &m.username,
                 ).await?;
                 let local: Option<(i64,)> = local_persona.map(|p| (p.id,));
                 if let Some((aid,)) = local {
                     fieldwork::mentions_db::add_mention(
-                        &crate::server::fw_pool(&state.pool),
+                        &state.pool,
                         post_id, None, Some(aid),
                     ).await?;
 
@@ -1152,7 +1126,7 @@ async fn create_status(
                     if aid != auth.account_id {
                         let notif_id = generate_id();
                         fieldwork::notifications_db::create_notification(
-                            &crate::server::fw_pool(&state.pool),
+                            &state.pool,
                             &fieldwork::notifications_db::NotificationRow {
                                 id: notif_id,
                                 user_id: crate::db::DEFAULT_USER_ID,
@@ -1188,12 +1162,12 @@ async fn create_status(
             }
             Some(mention_domain) => {
                 let remote_acct = fieldwork::actor_cache::get_by_webfinger(
-                    &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                    &state.pool, &m.username, mention_domain,
                 ).await?;
                 let remote: Option<(i64,)> = remote_acct.map(|r| (r.id,));
                 if let Some((rid,)) = remote {
                     fieldwork::mentions_db::add_mention(
-                        &crate::server::fw_pool(&state.pool),
+                        &state.pool,
                         post_id, Some(rid), None,
                     ).await?;
                 }
@@ -1202,7 +1176,7 @@ async fn create_status(
     }
 
     // Insert tags
-    let fwp = crate::server::fw_pool(&state.pool);
+    let fwp = state.pool.clone();
     fieldwork::post_tags_db::add_tags(&fwp, post_id, &rendered.tags).await?;
 
     // Store idempotency key
@@ -1259,7 +1233,7 @@ async fn create_status(
                 }
                 Some(mention_domain) => {
                     let remote_acct = fieldwork::actor_cache::get_by_webfinger(
-                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                        &state.pool, &m.username, mention_domain,
                     ).await?;
                     if let Some(ref ra) = remote_acct {
                         let actor_uri = ra.actor_uri.clone();
@@ -1296,7 +1270,7 @@ async fn create_status(
         };
 
         // Query media attachments for the AP Note
-        let fwp_apm = crate::server::fw_pool(&state.pool);
+        let fwp_apm = state.pool.clone();
         let ap_media_rows = fieldwork::media_db::attachments_for_post(&fwp_apm, post_id).await?;
         let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
             ap_media_rows.iter().map(|m| (
@@ -1359,7 +1333,7 @@ async fn create_status(
             for m in &rendered.mentions {
                 if let Some(ref mention_domain) = m.domain {
                     let remote_acct = fieldwork::actor_cache::get_by_webfinger(
-                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                        &state.pool, &m.username, mention_domain,
                     ).await?;
                     if let Some(ref ra) = remote_acct {
                         let inbox_url = ra.inbox_url.clone();
@@ -1478,13 +1452,13 @@ async fn delete_status(
     // Query media files before deletion so we can clean up from disk
     let media_paths: Vec<(String,)> =
         {
-            let fwp_md = crate::server::fw_pool(&state.pool);
+            let fwp_md = state.pool.clone();
             let media_rows = fieldwork::media_db::attachments_for_post(&fwp_md, post_id).await?;
             media_rows.into_iter().map(|m| (m.file_path,)).collect()
         };
 
     // Delete related rows then the post, all in a transaction
-    let mut tx = state.pool.begin().await?;
+    let mut tx = crate::db::begin_tx(&state.pool).await?;
     crate::db_extras::delete_post_related(&mut tx, post_id).await?;
     tx.commit().await?;
 
@@ -1576,11 +1550,11 @@ async fn edit_status(
     crate::db_extras::update_post_full(&state.pool, post_id, &text, &rendered.html, &spoiler_text, sensitive, &language, now).await?;
 
     // Delete old mentions and tags, re-insert new ones
-    let fwp_del = crate::server::fw_pool(&state.pool);
+    let fwp_del = state.pool.clone();
     fieldwork::mentions_db::remove_mentions(&fwp_del, post_id).await?;
     fieldwork::post_tags_db::remove_tags(&fwp_del, post_id).await?;
 
-    let fwp_edit = crate::server::fw_pool(&state.pool);
+    let fwp_edit = state.pool.clone();
     for m in &rendered.mentions {
         match &m.domain {
             None => {
@@ -1629,7 +1603,7 @@ async fn edit_status(
                 }
                 Some(mention_domain) => {
                     let remote_acct = fieldwork::actor_cache::get_by_webfinger(
-                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                        &state.pool, &m.username, mention_domain,
                     ).await?;
                     if let Some(ref ra) = remote_acct {
                         let actor_uri = ra.actor_uri.clone();
@@ -1660,7 +1634,7 @@ async fn edit_status(
         let in_reply_to_uri = reply_post.in_reply_to_uri;
 
         // Query media attachments for the AP Note
-        let fwp_apm = crate::server::fw_pool(&state.pool);
+        let fwp_apm = state.pool.clone();
         let ap_media_rows = fieldwork::media_db::attachments_for_post(&fwp_apm, post_id).await?;
         let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
             ap_media_rows.iter().map(|m| (
@@ -1886,7 +1860,7 @@ async fn status_context(
     let descendants_rows = crate::db_extras::execute_raw_query(&state.pool, &cte_sql, &[post_id.to_string()]).await
         // ponytail: if the CTE alias fails, fall back to the simple form
         .unwrap_or_default();
-    let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(sqlx_row_to_post).collect();
+    let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
 
     let mut descendants = Vec::with_capacity(descendants_posts.len());
     for p in &descendants_posts {
@@ -1921,14 +1895,14 @@ async fn favourite(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::favourite(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         crate::db::DEFAULT_USER_ID, auth.account_id, Some(post_id), None, now,
     ).await?;
 
     if post.persona_id != auth.account_id {
         let notif_id = generate_id();
         fieldwork::notifications_db::create_notification(
-            &crate::server::fw_pool(&state.pool),
+            &state.pool,
             &fieldwork::notifications_db::NotificationRow {
                 id: notif_id,
                 user_id: crate::db::DEFAULT_USER_ID,
@@ -1991,7 +1965,7 @@ async fn favourite(
                 let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(actor) = actor_uri {
                     let ra = fieldwork::actor_cache::get_by_actor_uri(
-                        &crate::server::fw_pool(&state.pool), actor,
+                        &state.pool, actor,
                     ).await?;
                     let inbox: Option<(String,)> = ra.map(|r| {
                         (r.shared_inbox_url.unwrap_or(r.inbox_url),)
@@ -2028,7 +2002,7 @@ async fn unfavourite(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unfavourite(
-        &crate::server::fw_pool(&state.pool), auth.account_id, Some(post_id), None,
+        &state.pool, auth.account_id, Some(post_id), None,
     ).await?;
 
     // Enqueue outbound Undo{Like} activity
@@ -2061,7 +2035,7 @@ async fn unfavourite(
                 let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(remote_actor) = actor_uri {
                     let ra = fieldwork::actor_cache::get_by_actor_uri(
-                        &crate::server::fw_pool(&state.pool), remote_actor,
+                        &state.pool, remote_actor,
                     ).await?;
                     let inbox: Option<(String,)> = ra.map(|r| {
                         (r.shared_inbox_url.unwrap_or(r.inbox_url),)
@@ -2110,7 +2084,7 @@ async fn reblog(
         let ap_id = format!("https://{domain}/users/{}/statuses/{new_id}", auth.username);
 
         fieldwork::posts_db::create_post(
-            &crate::server::fw_pool(&state.pool),
+            &state.pool,
             &fieldwork::posts_db::PostRow {
                 id: new_id,
                 user_id: crate::db::DEFAULT_USER_ID,
@@ -2137,7 +2111,7 @@ async fn reblog(
         if original.persona_id != auth.account_id {
             let notif_id = generate_id();
             fieldwork::notifications_db::create_notification(
-                &crate::server::fw_pool(&state.pool),
+                &state.pool,
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
                     user_id: crate::db::DEFAULT_USER_ID,
@@ -2338,7 +2312,7 @@ async fn bookmark(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::bookmark(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         crate::db::DEFAULT_USER_ID, auth.account_id, Some(post_id), None, now,
     ).await?;
 
@@ -2361,7 +2335,7 @@ async fn unbookmark(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unbookmark(
-        &crate::server::fw_pool(&state.pool), auth.account_id, Some(post_id), None,
+        &state.pool, auth.account_id, Some(post_id), None,
     ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
@@ -2427,7 +2401,7 @@ async fn timeline_home(
 
 /// Fetch remote posts from accounts the user follows.
 async fn fetch_remote_timeline(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     account_id: i64,
     limit: i64,
     domain: &str,
@@ -2557,7 +2531,7 @@ async fn timeline_tag(
         tag_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &tag_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
@@ -2591,7 +2565,7 @@ async fn timeline_list(
 
     // Verify list ownership
     let list = fieldwork::lists_db::get_list(
-        &crate::server::fw_pool(&state.pool), list_id,
+        &state.pool, list_id,
     ).await?
     .ok_or_else(|| AppError::not_found("List not found"))?;
 
@@ -2656,35 +2630,10 @@ async fn timeline_list(
 // Notifications
 // ---------------------------------------------------------------------------
 
-// REMAINING: NotificationRow used for dynamic paginated queries — no fieldwork equivalent
-struct NotificationRow {
-    id: i64,
-    #[allow(dead_code)]
-    persona_id: i64,
-    kind: String,
-    from_persona_id: Option<i64>,
-    from_remote_account_id: Option<i64>,
-    post_id: Option<i64>,
-    created_at: i64,
-}
-
-impl NotificationRow {
-    fn from_sqlx_row(row: crate::sqlx::sqlite::SqliteRow) -> Self {
-        use crate::sqlx::Row;
-        NotificationRow {
-            id: row.get(0),
-            persona_id: row.get(1),
-            kind: row.get(2),
-            from_persona_id: row.get(3),
-            from_remote_account_id: row.get(4),
-            post_id: row.get(5),
-            created_at: row.get(6),
-        }
-    }
-}
+use crate::db_extras::NotificationRow;
 
 async fn serialize_notification(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     notif: &NotificationRow,
     domain: &str,
     viewer_account_id: i64,
@@ -2821,7 +2770,7 @@ async fn clear_notifications(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     fieldwork::notifications_db::clear_notifications(
-        &crate::server::fw_pool(&state.pool), auth.account_id,
+        &state.pool, auth.account_id,
     ).await?;
 
     Ok(Json(json!({})))
@@ -2866,7 +2815,7 @@ async fn pin_status(
     }
 
     fieldwork::interactions_db::pin_post(
-        &crate::server::fw_pool(&state.pool), auth.account_id, post_id, now,
+        &state.pool, auth.account_id, post_id, now,
     ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
@@ -2892,7 +2841,7 @@ async fn unpin_status(
     }
 
     fieldwork::interactions_db::unpin_post(
-        &crate::server::fw_pool(&state.pool), auth.account_id, post_id,
+        &state.pool, auth.account_id, post_id,
     ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
@@ -2967,7 +2916,7 @@ async fn list_scheduled_statuses(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let sched_rows = fieldwork::scheduled_db::list_scheduled(
-        &crate::server::fw_pool(&state.pool), auth.account_id,
+        &state.pool, auth.account_id,
     ).await?;
 
     let items: Vec<Value> = sched_rows
@@ -2991,7 +2940,7 @@ async fn get_scheduled_status(
         .map_err(|_| AppError::not_found("Scheduled status not found"))?;
 
     let sched = fieldwork::scheduled_db::get_scheduled(
-        &crate::server::fw_pool(&state.pool), sched_id,
+        &state.pool, sched_id,
     ).await?
     .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
@@ -3033,7 +2982,7 @@ async fn update_scheduled_status(
     }
 
     let sched = fieldwork::scheduled_db::get_scheduled(
-        &crate::server::fw_pool(&state.pool), sched_id,
+        &state.pool, sched_id,
     ).await?
     .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
@@ -3042,7 +2991,7 @@ async fn update_scheduled_status(
     }
 
     fieldwork::scheduled_db::update_scheduled(
-        &crate::server::fw_pool(&state.pool), sched_id, Some(scheduled_ms), None,
+        &state.pool, sched_id, Some(scheduled_ms), None,
     ).await?;
 
     Ok(Json(scheduled_row_to_json(sched.id, scheduled_ms, &sched.params_json)))
@@ -3060,7 +3009,7 @@ async fn delete_scheduled_status(
 
     // Verify existence and ownership before deleting
     let sched = fieldwork::scheduled_db::get_scheduled(
-        &crate::server::fw_pool(&state.pool), sched_id,
+        &state.pool, sched_id,
     ).await?
     .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
@@ -3069,7 +3018,7 @@ async fn delete_scheduled_status(
     }
 
     fieldwork::scheduled_db::delete_scheduled(
-        &crate::server::fw_pool(&state.pool), sched_id,
+        &state.pool, sched_id,
     ).await?;
 
     Ok(StatusCode::OK)
@@ -3081,7 +3030,7 @@ async fn delete_scheduled_status(
 
 /// Build the accounts (participants) array for a conversation, excluding the current user.
 async fn conversation_participants(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     post: &PostRow,
     domain: &str,
     current_account_id: i64,
@@ -3092,7 +3041,7 @@ async fn conversation_participants(
         accounts.push(account_to_json(&author, domain));
     }
     // Add mentioned accounts (excluding current user)
-    let fwp_cp = crate::server::fw_pool(pool);
+    let fwp_cp = pool.clone();
     let cp_mentions = fieldwork::mentions_db::get_mentions(&fwp_cp, post.id).await?;
     let mention_rows: Vec<(Option<i64>, Option<i64>)> = cp_mentions
         .into_iter()
@@ -3177,7 +3126,7 @@ async fn list_conversations(
         conv_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &conv_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
 
     // TODO(perf): N+1 queries for participants per conversation. The result set is
     // already bounded by LIMIT (max 40), so this is acceptable for now. Batch-loading
@@ -3188,7 +3137,7 @@ async fn list_conversations(
 
         // Determine unread: not in conversation_read_markers
         let is_read = fieldwork::conversations_db::is_read(
-            &crate::server::fw_pool(&state.pool), auth.account_id, p.id,
+            &state.pool, auth.account_id, p.id,
         ).await?;
         let unread = !is_read && p.persona_id != auth.account_id;
 
@@ -3235,7 +3184,7 @@ async fn mark_conversation_read(
     }
 
     let is_involved = post.persona_id == auth.account_id || {
-        let fwp_m = crate::server::fw_pool(&state.pool);
+        let fwp_m = state.pool.clone();
         let m_rows = fieldwork::mentions_db::get_mentions(&fwp_m, post_id).await?;
         m_rows.iter().any(|m| m.mentioned_persona_id == Some(auth.account_id))
     };
@@ -3246,7 +3195,7 @@ async fn mark_conversation_read(
 
     // Mark as read
     fieldwork::conversations_db::mark_read(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         auth.account_id,
         post_id,
     )
@@ -3275,7 +3224,7 @@ async fn delete_conversation(
 
     // Mark as hidden for this user (don't delete the actual post)
     fieldwork::conversations_db::hide(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         auth.account_id,
         post_id,
     )

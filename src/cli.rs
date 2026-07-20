@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::db;
 use crate::id::generate_id;
-use crate::server::fw_pool;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -543,13 +542,13 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             bio,
         } => {
             let persona = fieldwork::persona_db::get_persona_by_username(
-                &fw_pool(&pool), &username,
+                &pool, &username,
             ).await?
             .ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
 
             let bio_html = bio.as_ref().map(|b| render_bio(b));
             fieldwork::persona_db::update_persona_profile(
-                &fw_pool(&pool),
+                &pool,
                 persona.id,
                 display_name.as_deref(),
                 bio.as_deref(),
@@ -639,7 +638,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             let account: Option<(i64,)> =
                 
                 {
-                    let p = fieldwork::persona_db::get_persona_by_username(&fw_pool(&pool), &username).await?;
+                    let p = fieldwork::persona_db::get_persona_by_username(&pool, &username).await?;
                     p.map(|p| (p.id,))
                 };
 
@@ -666,7 +665,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             fieldwork::oauth_db::create_token(
-                &fw_pool(&pool),
+                &pool,
                 id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, account_id, &scopes, now,
             ).await?;
 
@@ -737,7 +736,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             let accounts: Vec<(i64, String)> =
                 
                 {
-                    let personas = fieldwork::persona_db::list_personas(&fw_pool(&pool)).await?;
+                    let personas = fieldwork::persona_db::list_personas(&pool).await?;
                     personas.iter().map(|p| (p.id, p.username.clone())).collect::<Vec<_>>()
                 };
 
@@ -764,7 +763,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn get_or_create_cli_app(pool: &crate::sqlx::SqlitePool) -> Result<i64> {
+async fn get_or_create_cli_app(pool: &fieldwork::db::Pool) -> Result<i64> {
     let existing: Option<(i64,)> = crate::db_extras::get_cli_app_id(pool)
         .await?
         .map(|id| (id,));
@@ -815,7 +814,7 @@ async fn cmd_domain_block(cmd: DomainBlockCommands, config_path: &Path) -> Resul
         DomainBlockCommands::Remove { domain } => {
             
             fieldwork::domain_blocks_db::unblock_domain(
-                &fw_pool(&pool), &domain,
+                &pool, &domain,
             ).await?;
             eprintln!("Unblocked domain: {domain}");
         }
@@ -1053,7 +1052,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             eprintln!("Subscribed to relay (pending acceptance): {url}");
         }
         RelayCommands::Remove { url } => {
-            let relay = fieldwork::relay::find_by_actor(&fw_pool(&pool), &url)
+            let relay = fieldwork::relay::find_by_actor(&pool, &url)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;
 
@@ -1086,7 +1085,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 .await
                 .context("Failed to enqueue Undo activity")?;
 
-            fieldwork::relay::unsubscribe(&fw_pool(&pool), relay.id).await?;
+            fieldwork::relay::unsubscribe(&pool, relay.id).await?;
 
             eprintln!("Unsubscribed from relay: {url}");
         }

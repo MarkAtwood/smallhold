@@ -116,25 +116,6 @@ pub struct AccountRow {
     pub last_status_at: Option<i64>,
 }
 
-impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for AccountRow {
-    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
-        use crate::sqlx::Row;
-        Ok(Self {
-            id: row.try_get("id")?,
-            username: row.try_get("username")?,
-            display_name: row.try_get("display_name")?,
-            bio: row.try_get("bio")?,
-            bio_html: row.try_get("bio_html")?,
-            is_locked: row.try_get("is_locked")?,
-            discoverable: row.try_get("discoverable")?,
-            bot: row.try_get("bot")?,
-            fields_json: row.try_get("fields_json")?,
-            created_at: row.try_get("created_at")?,
-            last_status_at: row.try_get("last_status_at")?,
-        })
-    }
-}
-
 pub struct StatusRow {
     pub id: i64,
     pub persona_id: i64,
@@ -146,24 +127,6 @@ pub struct StatusRow {
     pub language: Option<String>,
     pub created_at: i64,
     pub edited_at: Option<i64>,
-}
-
-impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for StatusRow {
-    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
-        use crate::sqlx::Row;
-        Ok(Self {
-            id: row.try_get("id")?,
-            persona_id: row.try_get("persona_id")?,
-            ap_id: row.try_get("ap_id")?,
-            content_html: row.try_get("content_html")?,
-            spoiler_text: row.try_get("spoiler_text")?,
-            visibility: row.try_get("visibility")?,
-            sensitive: row.try_get("sensitive")?,
-            language: row.try_get("language")?,
-            created_at: row.try_get("created_at")?,
-            edited_at: row.try_get("edited_at")?,
-        })
-    }
 }
 
 pub fn account_to_json(row: &AccountRow, domain: &str) -> Value {
@@ -204,8 +167,8 @@ pub fn account_to_json_with_counts(
     })
 }
 
-pub async fn fetch_account_counts(pool: &crate::sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
-    let fwp = crate::server::fw_pool(pool);
+pub async fn fetch_account_counts(pool: &fieldwork::db::Pool, account_id: i64) -> (i64, i64, i64) {
+    let fwp = pool;
     let followers = fieldwork::followers_db::follower_count(&fwp, account_id)
         .await
         .unwrap_or(0);
@@ -221,8 +184,8 @@ pub async fn fetch_account_counts(pool: &crate::sqlx::SqlitePool, account_id: i6
     (followers, following, statuses)
 }
 
-pub async fn fetch_account_row(pool: &crate::sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+pub async fn fetch_account_row(pool: &fieldwork::db::Pool, id: i64) -> Result<AccountRow, AppError> {
+    let fwp = pool;
     let persona = fieldwork::persona_db::get_persona_by_id(&fwp, id).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona_to_account_row(&persona))
@@ -245,17 +208,17 @@ fn persona_to_account_row(p: &fieldwork::persona_db::PersonaRow) -> AccountRow {
 }
 
 async fn fetch_account_row_by_username(
-    pool: &crate::sqlx::SqlitePool,
+    pool: &fieldwork::db::Pool,
     username: &str,
 ) -> Result<AccountRow, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+    let fwp = pool;
     let persona = fieldwork::persona_db::get_persona_by_username(&fwp, username).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona_to_account_row(&persona))
 }
 
-async fn load_contact_account(pool: &crate::sqlx::SqlitePool, domain: &str) -> Result<Value, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+async fn load_contact_account(pool: &fieldwork::db::Pool, domain: &str) -> Result<Value, AppError> {
+    let fwp = pool;
     let personas = fieldwork::persona_db::list_personas(&fwp).await?;
     let row = personas.first().map(persona_to_account_row);
     match row {
@@ -315,7 +278,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
         // need to brute-force the hash, not the token. Constant-time comparison
         // of the hash would require fetching all rows, which is worse.
         let row = fieldwork::oauth_db::verify_token(
-            &crate::server::fw_pool(&state.pool), &token_hash,
+            &state.pool, &token_hash,
         )
         .await
         .map_err(AppError::from)?;
@@ -377,7 +340,7 @@ async fn create_app(
     let now = now_millis();
 
     fieldwork::oauth_db::create_app(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         &fieldwork::oauth_db::OAuthAppRow {
             id,
             client_id: client_id.clone(),
@@ -426,7 +389,7 @@ async fn authorize_form(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AuthorizeQuery>,
 ) -> Result<Html<String>, AppError> {
-    let fwp = crate::server::fw_pool(&state.pool);
+    let fwp = state.pool.clone();
     let personas = fieldwork::persona_db::list_personas(&fwp).await?;
     let accounts: Vec<(i64, String, String)> = personas
         .iter()
@@ -650,7 +613,7 @@ async fn authorize_submit(
     }
 
     // Verify account exists
-    let fwp_ae = crate::server::fw_pool(&state.pool);
+    let fwp_ae = state.pool.clone();
     let account_exists = fieldwork::persona_db::get_persona_by_id(&fwp_ae, form.account_id).await?;
     if account_exists.is_none() {
         return Err(AppError::bad_request("Account not found"));
@@ -659,7 +622,7 @@ async fn authorize_submit(
     // Verify app exists and redirect_uri matches registered URI
     let app_row: Option<(i64, String)> =
         {
-            let fwp_oa = crate::server::fw_pool(&state.pool);
+            let fwp_oa = state.pool.clone();
             let app = fieldwork::oauth_db::get_app_by_client_id(&fwp_oa, &form.client_id).await?;
             app.map(|a| (a.id, a.redirect_uri))
         };
@@ -795,7 +758,7 @@ async fn token(
     let id = generate_id();
 
     fieldwork::oauth_db::create_token(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, account_id, &scopes, now,
     ).await?;
 
@@ -833,7 +796,7 @@ async fn revoke(
     if let Some(token_id) = token_id {
         let now = now_millis();
         fieldwork::oauth_db::revoke_token(
-            &crate::server::fw_pool(&state.pool), token_id, now,
+            &state.pool, token_id, now,
         ).await?;
     }
 
@@ -1241,7 +1204,7 @@ async fn get_lists(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    let fwp_l = crate::server::fw_pool(&state.pool);
+    let fwp_l = state.pool.clone();
     let list_rows = fieldwork::lists_db::get_lists(&fwp_l, auth.account_id).await?;
     let rows: Vec<(i64, String, String)> = list_rows.iter().map(|l| (l.id, l.title.clone(), l.replies_policy.clone())).collect();
 
@@ -1297,7 +1260,7 @@ async fn get_list(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let list = fieldwork::lists_db::get_list(
-        &crate::server::fw_pool(&state.pool), list_id,
+        &state.pool, list_id,
     ).await?;
     let row: Option<(i64, String, String)> = list
         .filter(|l| l.user_id == auth.account_id)
@@ -1327,7 +1290,7 @@ async fn update_list(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let list = fieldwork::lists_db::get_list(
-        &crate::server::fw_pool(&state.pool), list_id,
+        &state.pool, list_id,
     ).await?;
     let row: Option<(i64, String, String)> = list
         .filter(|l| l.user_id == auth.account_id)
@@ -1362,13 +1325,13 @@ async fn delete_list(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let del_list = fieldwork::lists_db::get_list(
-        &crate::server::fw_pool(&state.pool), list_id,
+        &state.pool, list_id,
     ).await?;
     if del_list.as_ref().map(|l| l.user_id) != Some(auth.account_id) {
         return Err(AppError::not_found("List not found"));
     }
     fieldwork::lists_db::delete_list(
-        &crate::server::fw_pool(&state.pool), list_id,
+        &state.pool, list_id,
     ).await?;
 
     Ok(StatusCode::OK)
@@ -1386,7 +1349,7 @@ async fn get_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let fwp_lv = state.pool.clone();
             let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
@@ -1424,7 +1387,7 @@ async fn add_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let fwp_lv = state.pool.clone();
             let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
@@ -1436,7 +1399,7 @@ async fn add_list_accounts(
     for aid_str in &body.account_ids {
         let aid: i64 = aid_str.parse().map_err(|_| AppError::bad_request("Invalid account ID"))?;
         fieldwork::lists_db::add_to_list(
-            &crate::server::fw_pool(&state.pool), list_id, Some(aid), None,
+            &state.pool, list_id, Some(aid), None,
         ).await?;
     }
 
@@ -1456,7 +1419,7 @@ async fn remove_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let fwp_lv = state.pool.clone();
             let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
@@ -1468,7 +1431,7 @@ async fn remove_list_accounts(
     for aid_str in &body.account_ids {
         let aid: i64 = aid_str.parse().map_err(|_| AppError::bad_request("Invalid account ID"))?;
         fieldwork::lists_db::remove_from_list(
-            &crate::server::fw_pool(&state.pool), list_id, Some(aid), None,
+            &state.pool, list_id, Some(aid), None,
         ).await?;
     }
 
@@ -1529,7 +1492,7 @@ fn default_true() -> bool {
 }
 
 /// Build a v2 Filter JSON object with nested keywords.
-async fn filter_to_json(pool: &crate::sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
+async fn filter_to_json(pool: &fieldwork::db::Pool, filter_id: i64) -> Result<Value, AppError> {
     let row: (i64, String, String, String, Option<i64>, i64) = crate::db_extras::get_filter_row(pool, filter_id).await?;
     let keywords: Vec<(i64, String, bool)> = crate::db_extras::get_filter_keywords(pool, filter_id).await?;
 
@@ -1563,7 +1526,7 @@ async fn list_filters_v2(
 ) -> Result<Json<Value>, AppError> {
     let filter_ids: Vec<(i64,)> =
         {
-            let fwp_fl = crate::server::fw_pool(&state.pool);
+            let fwp_fl = state.pool.clone();
             let filters = fieldwork::filters_db::get_filters(&fwp_fl, auth.account_id).await?;
             filters.into_iter().map(|f| (f.id,)).collect::<Vec<_>>()
         };
@@ -1610,7 +1573,7 @@ async fn get_filter_v2(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let fwp_fc = state.pool.clone();
             let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };
@@ -1653,11 +1616,11 @@ async fn update_filter_v2(
     if let Some(kw_attrs) = &body.keywords_attributes {
         // Delete all existing keywords before re-adding
         let existing_kws = fieldwork::filters_db::get_keywords(
-            &crate::server::fw_pool(&state.pool), filter_id,
+            &state.pool, filter_id,
         ).await?;
         for kw in &existing_kws {
             fieldwork::filters_db::delete_keyword(
-                &crate::server::fw_pool(&state.pool), kw.id,
+                &state.pool, kw.id,
             ).await?;
         }
         for kw in kw_attrs {
@@ -1680,13 +1643,13 @@ async fn delete_filter_v2(
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
     let del_filter = fieldwork::filters_db::get_filter(
-        &crate::server::fw_pool(&state.pool), filter_id,
+        &state.pool, filter_id,
     ).await?;
     if del_filter.as_ref().map(|f| f.user_id) != Some(auth.account_id) {
         return Err(AppError::not_found("Filter not found"));
     }
     fieldwork::filters_db::delete_filter(
-        &crate::server::fw_pool(&state.pool), filter_id,
+        &state.pool, filter_id,
     ).await?;
     let _rows_affected = if del_filter.is_some() { 1u64 } else { 0u64 };
     Ok(StatusCode::OK)
@@ -1704,7 +1667,7 @@ async fn list_filter_keywords(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let fwp_fc = state.pool.clone();
             let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };
@@ -1740,7 +1703,7 @@ async fn add_filter_keyword(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let fwp_fc = state.pool.clone();
             let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };

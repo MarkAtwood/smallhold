@@ -7,7 +7,7 @@ use crate::error::AppError;
 use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
-use crate::server::{fw_pool, AppState};
+use crate::server::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -25,11 +25,11 @@ use std::sync::Arc;
 // ---------------------------------------------------------------------------
 
 async fn build_relationship(
-    pool: &crate::sqlx::SqlitePool,
+    pool: &fieldwork::db::Pool,
     source_account_id: i64,
     target_persona_id: i64,
 ) -> Result<Value, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+    let fwp = pool;
 
     // REMAINING: relationship queries use follow/block/mute tables with local persona IDs.
     // fieldwork has is_following_remote but not is_following_local. These queries check
@@ -79,11 +79,11 @@ async fn build_relationship(
 /// Build relationship JSON for a remote account target. The target_id is the
 /// remote_accounts.id, but we present the string ID the same way.
 async fn build_relationship_remote(
-    pool: &crate::sqlx::SqlitePool,
+    pool: &fieldwork::db::Pool,
     source_account_id: i64,
     target_remote_id: i64,
 ) -> Result<Value, AppError> {
-    let fwp = crate::server::fw_pool(pool);
+    let fwp = pool;
 
     let following = fieldwork::follows_db::is_following_remote(
         &fwp, source_account_id, target_remote_id,
@@ -135,10 +135,10 @@ enum TargetAccount {
     },
 }
 
-async fn resolve_target(pool: &crate::sqlx::SqlitePool, id_str: &str) -> Result<TargetAccount, AppError> {
+async fn resolve_target(pool: &fieldwork::db::Pool, id_str: &str) -> Result<TargetAccount, AppError> {
     // Parse ID as i64 first
     let id: i64 = id_str.parse().map_err(|_| AppError::not_found("Account not found"))?;
-    let fwp = crate::server::fw_pool(pool);
+    let fwp = pool;
     let local = fieldwork::persona_db::get_persona_by_id(&fwp, id).await?;
     if let Some(persona) = local {
         return Ok(TargetAccount::Local(persona.id));
@@ -182,7 +182,7 @@ async fn follow(
                 return Err(AppError::unprocessable("Cannot follow yourself"));
             }
             fieldwork::follows_db::follow_local(
-                &fw_pool(&state.pool), auth.account_id, crate::db::DEFAULT_USER_ID, target_id, now,
+                &state.pool, auth.account_id, crate::db::DEFAULT_USER_ID, target_id, now,
             ).await?;
 
             build_relationship(&state.pool, auth.account_id, target_id)
@@ -197,7 +197,7 @@ async fn follow(
         } => {
             // Insert follow locally
             fieldwork::follows_db::follow_remote(
-                &fw_pool(&state.pool), auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
+                &state.pool, auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
             ).await?;
 
             // Enqueue outbound Follow activity — derive a stable ID from
@@ -243,7 +243,7 @@ async fn unfollow(
     match target {
         TargetAccount::Local(target_id) => {
             fieldwork::follows_db::unfollow_local(
-                &fw_pool(&state.pool), auth.account_id, target_id,
+                &state.pool, auth.account_id, target_id,
             ).await?;
 
             build_relationship(&state.pool, auth.account_id, target_id)
@@ -257,7 +257,7 @@ async fn unfollow(
             shared_inbox_url,
         } => {
             fieldwork::follows_db::unfollow_remote(
-                &fw_pool(&state.pool), auth.account_id, remote_id,
+                &state.pool, auth.account_id, remote_id,
             ).await?;
 
             // Enqueue Undo{Follow} — derive a stable follow ID from
@@ -429,16 +429,16 @@ async fn block(
             }
 
             fieldwork::interactions_db::block(
-                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, auth.account_id,
+                &state.pool, crate::db::DEFAULT_USER_ID, auth.account_id,
                 Some(target_id), None, now,
             ).await?;
 
             // Remove mutual follows
             fieldwork::follows_db::unfollow_local(
-                &fw_pool(&state.pool), auth.account_id, target_id,
+                &state.pool, auth.account_id, target_id,
             ).await?;
             fieldwork::follows_db::unfollow_local(
-                &fw_pool(&state.pool), target_id, auth.account_id,
+                &state.pool, target_id, auth.account_id,
             ).await?;
 
             build_relationship(&state.pool, auth.account_id, target_id)
@@ -452,16 +452,16 @@ async fn block(
             shared_inbox_url,
         } => {
             fieldwork::interactions_db::block(
-                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, auth.account_id,
+                &state.pool, crate::db::DEFAULT_USER_ID, auth.account_id,
                 None, Some(remote_id), now,
             ).await?;
 
             // Remove follow + follower relationships
             fieldwork::follows_db::unfollow_remote(
-                &fw_pool(&state.pool), auth.account_id, remote_id,
+                &state.pool, auth.account_id, remote_id,
             ).await?;
             fieldwork::followers_db::remove_follower(
-                &fw_pool(&state.pool), auth.account_id, remote_id,
+                &state.pool, auth.account_id, remote_id,
             ).await?;
 
             // Send Block activity to the remote actor's inbox.
@@ -499,7 +499,7 @@ async fn unblock(
     match target {
         TargetAccount::Local(target_id) => {
             fieldwork::interactions_db::unblock(
-                &fw_pool(&state.pool), auth.account_id, Some(target_id), None,
+                &state.pool, auth.account_id, Some(target_id), None,
             ).await?;
 
             build_relationship(&state.pool, auth.account_id, target_id)
@@ -508,7 +508,7 @@ async fn unblock(
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             fieldwork::interactions_db::unblock(
-                &fw_pool(&state.pool), auth.account_id, None, Some(remote_id),
+                &state.pool, auth.account_id, None, Some(remote_id),
             ).await?;
 
             build_relationship_remote(&state.pool, auth.account_id, remote_id)
@@ -539,7 +539,7 @@ async fn mute(
             }
 
             fieldwork::interactions_db::mute(
-                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, auth.account_id,
+                &state.pool, crate::db::DEFAULT_USER_ID, auth.account_id,
                 Some(target_id), None, now,
             ).await?;
 
@@ -549,7 +549,7 @@ async fn mute(
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             fieldwork::interactions_db::mute(
-                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, auth.account_id,
+                &state.pool, crate::db::DEFAULT_USER_ID, auth.account_id,
                 None, Some(remote_id), now,
             ).await?;
 
@@ -575,7 +575,7 @@ async fn unmute(
     match target {
         TargetAccount::Local(target_id) => {
             fieldwork::interactions_db::unmute(
-                &fw_pool(&state.pool), auth.account_id, Some(target_id), None,
+                &state.pool, auth.account_id, Some(target_id), None,
             ).await?;
 
             build_relationship(&state.pool, auth.account_id, target_id)
@@ -584,7 +584,7 @@ async fn unmute(
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             fieldwork::interactions_db::unmute(
-                &fw_pool(&state.pool), auth.account_id, None, Some(remote_id),
+                &state.pool, auth.account_id, None, Some(remote_id),
             ).await?;
 
             build_relationship_remote(&state.pool, auth.account_id, remote_id)
@@ -633,7 +633,7 @@ async fn update_credentials(
     if body.display_name.is_some() || body.note.is_some() {
         let bio_html = body.note.as_ref().map(|n| render_content(n, domain).html);
         fieldwork::persona_db::update_persona_profile(
-            &fw_pool(&state.pool),
+            &state.pool,
             auth.account_id,
             body.display_name.as_deref(),
             body.note.as_deref(),
@@ -805,7 +805,7 @@ async fn authorize_follow(
 
     // Accept: insert into followers
     fieldwork::followers_db::add_follower(
-        &fw_pool(&state.pool), auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
+        &state.pool, auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
     ).await?;
 
     // Remove from follow_requests
@@ -1115,7 +1115,7 @@ async fn followed_tags_list(
         .min(100);
 
     let tags = fieldwork::followed_tags_db::get_followed_tags(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         auth.account_id,
     )
     .await?;
@@ -1140,7 +1140,7 @@ async fn follow_tag(
     let now = now_millis();
 
     fieldwork::followed_tags_db::follow_tag(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         auth.account_id,
         &tag,
         now,
@@ -1160,7 +1160,7 @@ async fn unfollow_tag(
     let tag = id.to_lowercase();
 
     fieldwork::followed_tags_db::unfollow_tag(
-        &crate::server::fw_pool(&state.pool),
+        &state.pool,
         auth.account_id,
         &tag,
     )
@@ -1185,7 +1185,7 @@ async fn get_tag(
         .and_then(|v| v.strip_prefix("Bearer "))
     {
         let token_hash = crate::api::hex_encode(&Sha256::digest(auth_header.as_bytes()));
-        let fwp = crate::server::fw_pool(&state.pool);
+        let fwp = state.pool.clone();
         let token_info = fieldwork::oauth_db::verify_token(&fwp, &token_hash).await?;
 
         if let Some((aid, _username, _scopes)) = token_info {

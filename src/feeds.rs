@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::server::{fw_pool, AppState};
+use crate::server::AppState;
 use axum::extract::{Path, State};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
@@ -15,8 +15,8 @@ struct FeedPost {
 }
 
 /// Look up persona_id by username, returning 404 if not found.
-async fn resolve_account_id(pool: &crate::sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
-    let persona = fieldwork::persona_db::get_persona_by_username(&fw_pool(pool), username)
+async fn resolve_account_id(pool: &fieldwork::db::Pool, username: &str) -> Result<i64, AppError> {
+    let persona = fieldwork::persona_db::get_persona_by_username(pool, username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona.id)
@@ -24,7 +24,7 @@ async fn resolve_account_id(pool: &crate::sqlx::SqlitePool, username: &str) -> R
 
 /// Fetch last 20 public posts for an account.
 async fn fetch_public_posts(
-    pool: &crate::sqlx::SqlitePool,
+    pool: &fieldwork::db::Pool,
     account_id: i64,
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by

@@ -5,7 +5,6 @@ use axum::routing::post;
 use axum::Router;
 use base64::Engine;
 use serde_json::Value;
-use crate::sqlx::SqlitePool;
 use std::sync::Arc;
 
 use crate::delivery;
@@ -13,7 +12,7 @@ use crate::error::AppError;
 use crate::federation::{upsert_remote_account, FederationClient, RemoteActorData};
 use crate::id::generate_id;
 use crate::posting::html_sanitizer;
-use crate::server::{fw_pool, AppState};
+use crate::server::AppState;
 use crate::streaming::{publish, StreamEvent};
 
 // Length caps for inbound string fields.
@@ -98,7 +97,7 @@ async fn user_inbox(
 ) -> Result<impl IntoResponse, AppError> {
     // Verify the target account exists.
     let persona = fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(&state.pool), &username,
+        &state.pool, &username,
     ).await?;
     if persona.is_none() {
         return Err(AppError::not_found("Account not found"));
@@ -139,7 +138,7 @@ async fn process_inbox(
     if let Ok(parsed_url) = url::Url::parse(actor_uri) {
         if let Some(actor_domain) = parsed_url.host_str() {
             let blocked = fieldwork::domain_blocks_db::is_blocked(
-                &fw_pool(&state.pool), actor_domain,
+                &state.pool, actor_domain,
             ).await?;
             if blocked.is_some() {
                 return Err(AppError::forbidden("domain is blocked"));
@@ -220,7 +219,7 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
 
     // Look up local account.
     let persona = match fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(&state.pool), username,
+        &state.pool, username,
     ).await {
         Ok(row) => row,
         Err(_) => return,
@@ -431,10 +430,10 @@ fn verify_rsa_sha256(
 
 /// Look up a remote account by key_id in our database.
 async fn lookup_by_key_id(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     key_id: &str,
 ) -> Result<Option<RemoteAccountRow>, AppError> {
-    let row = fieldwork::actor_cache::get_by_key_id(&fw_pool(pool), key_id).await?;
+    let row = fieldwork::actor_cache::get_by_key_id(pool, key_id).await?;
 
     Ok(row.map(|r| RemoteAccountRow {
         id: r.id,
@@ -448,7 +447,7 @@ async fn lookup_by_key_id(
 /// Get a local account's private key and key_id for signing outbound fetches.
 /// Uses the first local account found.
 async fn get_signing_credentials(state: &AppState) -> Result<(String, String), AppError> {
-    let personas = fieldwork::persona_db::list_personas(&fw_pool(&state.pool)).await?;
+    let personas = fieldwork::persona_db::list_personas(&state.pool).await?;
     let persona = personas.into_iter().next()
         .ok_or_else(|| AppError::internal("no local accounts configured"))?;
 
@@ -638,7 +637,7 @@ fn collect_recipients(activity: &Value) -> Vec<&str> {
 
 /// Resolve a local account URI (https://domain/users/username) to an account ID.
 async fn resolve_local_account(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     domain: &str,
     uri: &str,
 ) -> Result<Option<(i64, String, bool)>, AppError> {
@@ -649,7 +648,7 @@ async fn resolve_local_account(
     };
 
     let persona = fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(pool), username,
+        pool, username,
     ).await?;
 
     Ok(persona.map(|p| (p.id, p.username, p.is_locked)))
@@ -657,7 +656,7 @@ async fn resolve_local_account(
 
 /// Enqueue an activity for delivery to a remote inbox.
 async fn enqueue_activity(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     target_inbox: &str,
     sender_persona_id: i64,
     activity: &Value,
@@ -669,11 +668,11 @@ async fn enqueue_activity(
 
 /// Check if a remote account is blocked or muted by a local account.
 async fn is_blocked_or_muted(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     persona_id: i64,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
-    let fwp = &fw_pool(pool);
+    let fwp = pool;
     let blocked = fieldwork::interactions_db::is_blocked(fwp, persona_id, None, Some(remote_account_id)).await?;
     if blocked {
         return Ok(true);
@@ -727,14 +726,14 @@ async fn handle_follow(
     } else {
         // Auto-accept: insert into followers.
         fieldwork::followers_db::add_follower(
-            &fw_pool(&state.pool), account_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+            &state.pool, account_id, crate::db::DEFAULT_USER_ID, remote.id, now,
         ).await?;
 
         // Create a notification (unless blocked/muted).
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
             let notif_id = generate_id();
             fieldwork::notifications_db::create_notification(
-                &fw_pool(&state.pool),
+                &state.pool,
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
                     user_id: crate::db::DEFAULT_USER_ID,
@@ -828,7 +827,7 @@ async fn handle_undo_follow(
     if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
         fieldwork::followers_db::remove_follower(
-            &fw_pool(&state.pool), account_id, remote.id,
+            &state.pool, account_id, remote.id,
         ).await?;
 
         // Also remove any pending follow request.
@@ -996,7 +995,7 @@ async fn handle_create(
                 if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
                     let notif_id = generate_id();
                     fieldwork::notifications_db::create_notification(
-                        &fw_pool(&state.pool),
+                        &state.pool,
                         &fieldwork::notifications_db::NotificationRow {
                             id: notif_id,
                             user_id: crate::db::DEFAULT_USER_ID,
@@ -1074,7 +1073,7 @@ async fn handle_create(
                 {
                     let notif_id = generate_id();
                     fieldwork::notifications_db::create_notification(
-                        &fw_pool(&state.pool),
+                        &state.pool,
                         &fieldwork::notifications_db::NotificationRow {
                             id: notif_id,
                             user_id: crate::db::DEFAULT_USER_ID,
@@ -1303,7 +1302,7 @@ async fn handle_like(
             // always attempt the push notification. Duplicate notifications are
             // prevented by the unique ID.
             fieldwork::notifications_db::create_notification(
-                &fw_pool(&state.pool),
+                &state.pool,
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
                     user_id: crate::db::DEFAULT_USER_ID,
@@ -1369,7 +1368,7 @@ async fn handle_announce(
             let notif_id = generate_id();
 
             fieldwork::notifications_db::create_notification(
-                &fw_pool(&state.pool),
+                &state.pool,
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
                     user_id: crate::db::DEFAULT_USER_ID,
@@ -1538,7 +1537,7 @@ async fn handle_move(
     for (local_id, local_username, _) in &local_followers {
         // Insert new follow.
         fieldwork::follows_db::follow_remote(
-            &fw_pool(&state.pool), *local_id, crate::db::DEFAULT_USER_ID, new_account.id, now,
+            &state.pool, *local_id, crate::db::DEFAULT_USER_ID, new_account.id, now,
         ).await?;
 
         // Enqueue a Follow activity to the new actor.
@@ -1617,12 +1616,12 @@ async fn handle_accept(
     // This is a confirmation. If it's somehow not there, we can insert it.
     let now = chrono::Utc::now().timestamp();
     fieldwork::follows_db::follow_remote(
-        &fw_pool(&state.pool), local_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+        &state.pool, local_id, crate::db::DEFAULT_USER_ID, remote.id, now,
     ).await?;
 
     // Check if this Accept is from a relay we subscribed to.
-    if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {
-        fieldwork::relay::accept(&fw_pool(&state.pool), relay.id).await?;
+    if let Some(relay) = fieldwork::relay::find_by_actor(&state.pool, &remote.actor_uri).await? {
+        fieldwork::relay::accept(&state.pool, relay.id).await?;
         tracing::info!(
             relay = %remote.actor_uri,
             "relay subscription accepted"
@@ -1669,12 +1668,12 @@ async fn handle_reject(
 
     // Remove the pending follow.
     fieldwork::follows_db::unfollow_remote(
-        &fw_pool(&state.pool), local_id, remote.id,
+        &state.pool, local_id, remote.id,
     ).await?;
 
     // Check if this Reject is from a relay we subscribed to.
-    if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {
-        fieldwork::relay::reject(&fw_pool(&state.pool), relay.id).await?;
+    if let Some(relay) = fieldwork::relay::find_by_actor(&state.pool, &remote.actor_uri).await? {
+        fieldwork::relay::reject(&state.pool, relay.id).await?;
         tracing::info!(
             relay = %remote.actor_uri,
             "relay subscription rejected"

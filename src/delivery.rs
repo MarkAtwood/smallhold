@@ -2,14 +2,12 @@ use std::sync::LazyLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fieldwork::circuit_breaker::CircuitBreaker;
-use crate::sqlx::SqlitePool;
 
 use crate::api::millis_to_iso;
 use crate::config::Config;
 use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
-use crate::server::fw_pool;
 
 
 struct DeliveryRow {
@@ -46,7 +44,7 @@ fn now_secs() -> i64 {
 
 /// Enqueue a single activity delivery.
 pub async fn enqueue_delivery(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     target_inbox: &str,
     sender_persona_id: i64,
     activity_json: &serde_json::Value,
@@ -54,7 +52,7 @@ pub async fn enqueue_delivery(
     let json = serde_json::to_string(activity_json)?;
     let now = now_secs();
     fieldwork::delivery_db::enqueue(
-        &fw_pool(pool),
+        pool,
         target_inbox,
         sender_persona_id,
         &json,
@@ -66,11 +64,11 @@ pub async fn enqueue_delivery(
 
 /// Fan-out an activity to every subscribed relay's inbox.
 pub async fn enqueue_to_relays(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let relays = fieldwork::relay::get_accepted(&fw_pool(pool)).await?;
+    let relays = fieldwork::relay::get_accepted(pool).await?;
 
     for relay in relays {
         enqueue_delivery(pool, &relay.inbox_url, sender_persona_id, activity).await?;
@@ -81,11 +79,11 @@ pub async fn enqueue_to_relays(
 
 /// Fan-out an activity to every follower's inbox (deduped by shared inbox).
 pub async fn enqueue_to_followers(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let inboxes = fieldwork::followers_db::follower_inboxes(&fw_pool(pool), sender_persona_id).await?;
+    let inboxes = fieldwork::followers_db::follower_inboxes(pool, sender_persona_id).await?;
 
     for inbox in inboxes {
         enqueue_delivery(pool, &inbox, sender_persona_id, activity).await?;
@@ -95,7 +93,7 @@ pub async fn enqueue_to_followers(
 }
 
 /// Long-running background task: poll `delivery_queue` and deliver activities.
-pub async fn run_delivery_worker(pool: SqlitePool, config: Config) {
+pub async fn run_delivery_worker(pool: fieldwork::db::Pool, config: Config) {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(config.federation.delivery_timeout_secs))
         .user_agent(&config.federation.user_agent)
@@ -116,7 +114,7 @@ pub async fn run_delivery_worker(pool: SqlitePool, config: Config) {
 // -- Internals --
 
 async fn process_batch(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     client: &reqwest::Client,
     config: &Config,
 ) -> anyhow::Result<()> {
@@ -185,7 +183,7 @@ async fn process_batch(
 
 async fn deliver_one(
     client: &reqwest::Client,
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     row: &DeliveryRow,
     domain: &str,
 ) -> anyhow::Result<()> {
@@ -262,34 +260,34 @@ async fn deliver_one(
     Ok(())
 }
 
-async fn mark_delivered(pool: &SqlitePool, id: i64) -> anyhow::Result<()> {
-    fieldwork::delivery_db::mark_delivered(&fw_pool(pool), id, now_secs()).await?;
+async fn mark_delivered(pool: &fieldwork::db::Pool, id: i64) -> anyhow::Result<()> {
+    fieldwork::delivery_db::mark_delivered(pool, id, now_secs()).await?;
     Ok(())
 }
 
-async fn mark_dead(pool: &SqlitePool, id: i64, reason: &str) -> anyhow::Result<()> {
-    fieldwork::delivery_db::mark_dead(&fw_pool(pool), id, reason, now_secs()).await?;
+async fn mark_dead(pool: &fieldwork::db::Pool, id: i64, reason: &str) -> anyhow::Result<()> {
+    fieldwork::delivery_db::mark_dead(pool, id, reason, now_secs()).await?;
     Ok(())
 }
 
 async fn schedule_retry(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     id: i64,
     _attempts: i32,
     error: &str,
 ) -> anyhow::Result<()> {
-    fieldwork::delivery_db::schedule_retry(&fw_pool(pool), id, error, now_secs()).await?;
+    fieldwork::delivery_db::schedule_retry(pool, id, error, now_secs()).await?;
     Ok(())
 }
 
 // -- Scheduled posts --
 
 /// Check for and create any scheduled posts that are now due.
-async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::Result<()> {
+async fn process_scheduled_posts(pool: &fieldwork::db::Pool, config: &Config) -> anyhow::Result<()> {
     let now_ms = chrono::Utc::now().timestamp_millis();
     let domain = &config.server.domain;
 
-    let fwp = fw_pool(pool);
+    let fwp = pool.clone();
     let due_posts = fieldwork::scheduled_db::fetch_due(&fwp, now_ms).await?;
 
     for sched in due_posts {
@@ -309,7 +307,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
 /// create_status handler — inserts the post row, renders content, inserts
 /// tags/mentions, and enqueues delivery to followers.
 async fn create_scheduled_post(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     domain: &str,
     account_id: i64,
     params_json: &str,
@@ -332,7 +330,7 @@ async fn create_scheduled_post(
         .unwrap_or("");
     let language = params.get("language").and_then(|v| v.as_str());
 
-    let persona = fieldwork::persona_db::get_persona_by_id(&fw_pool(pool), account_id)
+    let persona = fieldwork::persona_db::get_persona_by_id(pool, account_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("persona not found: {account_id}"))?;
     let username = &persona.username;
@@ -344,7 +342,7 @@ async fn create_scheduled_post(
     let context_url = format!("{ap_id}/context");
 
     fieldwork::posts_db::create_post(
-        &fw_pool(pool),
+        pool,
         &fieldwork::posts_db::PostRow {
             id: post_id,
             user_id: crate::db::DEFAULT_USER_ID,
@@ -393,10 +391,10 @@ async fn create_scheduled_post(
     }
 
     // Insert tags
-    fieldwork::post_tags_db::add_tags(&fw_pool(pool), post_id, &rendered.tags).await?;
+    fieldwork::post_tags_db::add_tags(pool, post_id, &rendered.tags).await?;
 
     // Insert mentions
-    let fwp = fw_pool(pool);
+    let fwp = pool.clone();
     for m in &rendered.mentions {
         match &m.domain {
             None => {
@@ -421,7 +419,7 @@ async fn create_scheduled_post(
     crate::db_extras::touch_persona_last_status(pool, account_id, now_ms).await?;
 
     // Query media attachments for the AP Note
-    let ap_media = fieldwork::media_db::attachments_for_post(&fw_pool(pool), post_id)
+    let ap_media = fieldwork::media_db::attachments_for_post(pool, post_id)
         .await
         .unwrap_or_default();
 

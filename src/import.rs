@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use crate::sqlx::SqlitePool;
 use std::path::Path;
 
 use crate::config::Config;
@@ -15,7 +14,7 @@ pub struct ImportStats {
 }
 
 pub async fn import_mastodon_archive(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     config: &Config,
     username: &str,
     archive_path: &Path,
@@ -151,7 +150,7 @@ fn find_extract_root(base: &Path) -> std::path::PathBuf {
     base.to_path_buf()
 }
 
-async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) -> Result<bool> {
+async fn apply_actor_profile(pool: &fieldwork::db::Pool, account_id: i64, path: &Path) -> Result<bool> {
     let data = std::fs::read_to_string(path).context("Failed to read actor.json")?;
     let actor: serde_json::Value = serde_json::from_str(&data).context("Invalid actor.json")?;
 
@@ -192,7 +191,7 @@ async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) ->
 
 #[allow(clippy::too_many_arguments)]
 async fn import_outbox(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     config: &Config,
     account_id: i64,
     username: &str,
@@ -245,7 +244,7 @@ async fn import_outbox(
     let mut last_ms: i64 = 0;
     let mut last_seq: u32 = 0;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::db::begin_tx(pool).await?;
 
     for item in &notes {
         let object = item.get("object").unwrap(); // safe: filtered above

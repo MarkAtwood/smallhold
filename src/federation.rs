@@ -2,12 +2,10 @@ use anyhow::{anyhow, bail, Context};
 use base64::Engine;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
-use crate::sqlx::SqlitePool;
 use std::time::Duration;
 
 use crate::config::Config;
 use crate::id::generate_id;
-use crate::server::fw_pool;
 
 /// Parsed remote actor data, ready for database upsert.
 #[derive(Debug)]
@@ -418,7 +416,7 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
 
 /// Insert or update a remote account. Returns the local snowflake ID.
 pub async fn upsert_remote_account(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     data: &RemoteActorData,
 ) -> anyhow::Result<i64> {
     let now = chrono::Utc::now().timestamp();
@@ -445,7 +443,7 @@ pub async fn upsert_remote_account(
         fetch_fail_count: 0,
     };
 
-    let id = fieldwork::actor_cache::upsert_remote_account(&fw_pool(pool), &row)
+    let id = fieldwork::actor_cache::upsert_remote_account(pool, &row)
         .await
         .context("upsert remote_accounts")?;
 
@@ -462,7 +460,7 @@ pub async fn upsert_remote_account(
 /// The digest is the XOR of SHA-256 hashes of all follower actor URIs on
 /// `target_domain`. Returns `None` if there are no followers on that domain.
 pub async fn compute_follower_sync_digest(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     account_id: i64,
     target_domain: &str,
 ) -> Option<String> {
@@ -765,7 +763,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
     #[tokio::test]
     async fn upsert_remote_account_insert_and_update() {
-        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let pool = crate::db::test_pool().await;
 
         let data = RemoteActorData {
             actor_uri: "https://remote.example/users/alice".into(),
@@ -845,7 +843,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
     #[tokio::test]
     async fn compute_follower_sync_digest_no_followers() {
-        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let pool = crate::db::test_pool().await;
 
         // Create a local account
         let acct_id = crate::id::generate_id();
@@ -859,7 +857,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
     #[tokio::test]
     async fn compute_follower_sync_digest_single_follower() {
-        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let pool = crate::db::test_pool().await;
 
         // Create a local account
         let acct_id = crate::id::generate_id();
@@ -906,7 +904,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
     #[tokio::test]
     async fn compute_follower_sync_digest_xor_is_commutative() {
-        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let pool = crate::db::test_pool().await;
 
         let acct_id = crate::id::generate_id();
         crate::db_extras::test_insert_user(&pool).await.unwrap();
@@ -956,7 +954,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
     #[tokio::test]
     async fn compute_follower_sync_digest_filters_by_domain() {
-        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let pool = crate::db::test_pool().await;
 
         let acct_id = crate::id::generate_id();
         crate::db_extras::test_insert_user(&pool).await.unwrap();

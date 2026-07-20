@@ -10,8 +10,6 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use crate::server::fw_pool;
-use crate::sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, LazyLock};
@@ -45,7 +43,7 @@ pub fn publish(event: StreamEvent) {
 // ---------------------------------------------------------------------------
 
 async fn authenticate(
-    pool: &SqlitePool,
+    pool: &fieldwork::db::Pool,
     headers: &HeaderMap,
     params: &HashMap<String, String>,
 ) -> Result<AuthenticatedAccount, AppError> {
@@ -60,7 +58,7 @@ async fn authenticate(
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
 
     let (account_id, username, scopes) =
-        fieldwork::oauth_db::verify_token(&fw_pool(pool), &token_hash)
+        fieldwork::oauth_db::verify_token(pool, &token_hash)
             .await
             .map_err(AppError::from)?
             .ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
@@ -170,7 +168,7 @@ struct WsCommand {
 async fn handle_ws(
     socket: WebSocket,
     account: AuthenticatedAccount,
-    _pool: SqlitePool,
+    _pool: fieldwork::db::Pool,
     initial_params: HashMap<String, String>,
 ) {
     let (mut ws_tx, mut ws_rx) = futures::StreamExt::split(socket);

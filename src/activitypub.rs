@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::server::{fw_pool, AppState};
+use crate::server::AppState;
 use axum::extract::{Path, State};
 use axum::http::header::{ACCEPT, CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, StatusCode};
@@ -66,45 +66,26 @@ fn ap_response(body: Value) -> Response {
 }
 
 /// Row from the personas + users tables needed for actor documents and profile pages.
-struct AccountRow {
-    username: String,
-    display_name: String,
-    bio_html: String,
-    public_key_pem: String,
-    is_locked: bool,
-    discoverable: bool,
-    bot: bool,
-    fields_json: String,
-    created_at: i64,
-    did_key: Option<String>,
-    recovery_pubkey: Option<String>,
-}
-
-impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for AccountRow {
-    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
-        use crate::sqlx::Row;
-        Ok(Self {
-            username: row.try_get("username")?,
-            display_name: row.try_get("display_name")?,
-            bio_html: row.try_get("bio_html")?,
-            public_key_pem: row.try_get("public_key_pem")?,
-            is_locked: row.try_get("is_locked")?,
-            discoverable: row.try_get("discoverable")?,
-            bot: row.try_get("bot")?,
-            fields_json: row.try_get("fields_json")?,
-            created_at: row.try_get("created_at")?,
-            did_key: row.try_get("did_key")?,
-            recovery_pubkey: row.try_get("recovery_pubkey")?,
-        })
-    }
+pub(crate) struct ApAccountRow {
+    pub username: String,
+    pub display_name: String,
+    pub bio_html: String,
+    pub public_key_pem: String,
+    pub is_locked: bool,
+    pub discoverable: bool,
+    pub bot: bool,
+    pub fields_json: String,
+    pub created_at: i64,
+    pub did_key: Option<String>,
+    pub recovery_pubkey: Option<String>,
 }
 
 /// Looks up a local persona by username (with DID data from users table).
-async fn fetch_account(pool: &crate::sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
+async fn fetch_account(pool: &fieldwork::db::Pool, username: &str) -> Result<ApAccountRow, AppError> {
     let raw_row = crate::db_extras::fetch_ap_account(pool, username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
-    let row: AccountRow = crate::sqlx::FromRow::from_row(&raw_row)
+    let row: ApAccountRow = crate::sqlx::FromRow::from_row(&raw_row)
         .map_err(|e| AppError::internal(format!("row conversion: {e}")))?;
 
     Ok(row)
@@ -309,7 +290,7 @@ async fn profile_page(
 
     // Counts
     let persona = fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(&state.pool), &username,
+        &state.pool, &username,
     ).await?;
     let aid = persona.as_ref().map(|p| p.id).unwrap_or(0);
 
@@ -318,7 +299,7 @@ async fn profile_page(
         .unwrap_or(0);
 
     let follower_count = fieldwork::followers_db::follower_count(
-        &fw_pool(&state.pool), aid,
+        &state.pool, aid,
     ).await.unwrap_or(0);
 
     // Profile fields
@@ -549,12 +530,12 @@ async fn followers_collection(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let persona = fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(&state.pool), &username,
+        &state.pool, &username,
     ).await?
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let count = fieldwork::followers_db::follower_count(
-        &fw_pool(&state.pool), persona.id,
+        &state.pool, persona.id,
     ).await?;
 
     let domain = &state.config.server.domain;
@@ -572,12 +553,12 @@ async fn following_collection(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let persona = fieldwork::persona_db::get_persona_by_username(
-        &fw_pool(&state.pool), &username,
+        &state.pool, &username,
     ).await?
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let count = fieldwork::follows_db::following_count(
-        &fw_pool(&state.pool), persona.id,
+        &state.pool, persona.id,
     ).await?;
 
     let domain = &state.config.server.domain;

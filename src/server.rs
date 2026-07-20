@@ -1,18 +1,12 @@
 use crate::config::Config;
 use axum::{routing::get, Json, Router};
-use crate::sqlx::SqlitePool;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
 pub struct AppState {
     pub config: Config,
-    pub pool: SqlitePool,
+    pub pool: fieldwork::db::Pool,
     pub search: Option<std::sync::Arc<crate::search::SearchIndex>>,
-}
-
-/// Wrap a raw `SqlitePool` as a `fieldwork::db::Pool` for shared DB modules.
-pub fn fw_pool(pool: &SqlitePool) -> fieldwork::db::Pool {
-    fieldwork::db::Pool::Sqlite(pool.clone())
 }
 
 pub fn create_router(state: Arc<AppState>) -> Router {
