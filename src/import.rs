@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::path::Path;
 
 use crate::config::Config;

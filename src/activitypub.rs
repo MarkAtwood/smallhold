@@ -66,7 +66,6 @@ fn ap_response(body: Value) -> Response {
 }
 
 /// Row from the personas + users tables needed for actor documents and profile pages.
-#[derive(sqlx::FromRow)]
 struct AccountRow {
     username: String,
     display_name: String,
@@ -81,12 +80,31 @@ struct AccountRow {
     recovery_pubkey: Option<String>,
 }
 
+impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for AccountRow {
+    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
+        use crate::sqlx::Row;
+        Ok(Self {
+            username: row.try_get("username")?,
+            display_name: row.try_get("display_name")?,
+            bio_html: row.try_get("bio_html")?,
+            public_key_pem: row.try_get("public_key_pem")?,
+            is_locked: row.try_get("is_locked")?,
+            discoverable: row.try_get("discoverable")?,
+            bot: row.try_get("bot")?,
+            fields_json: row.try_get("fields_json")?,
+            created_at: row.try_get("created_at")?,
+            did_key: row.try_get("did_key")?,
+            recovery_pubkey: row.try_get("recovery_pubkey")?,
+        })
+    }
+}
+
 /// Looks up a local persona by username (with DID data from users table).
-async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
+async fn fetch_account(pool: &crate::sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
     let raw_row = crate::db_extras::fetch_ap_account(pool, username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
-    let row: AccountRow = sqlx::FromRow::from_row(&raw_row)
+    let row: AccountRow = crate::sqlx::FromRow::from_row(&raw_row)
         .map_err(|e| AppError::internal(format!("row conversion: {e}")))?;
 
     Ok(row)
@@ -462,11 +480,9 @@ async fn post_page(
 }
 
 /// Row from the posts table needed for outbox items.
-#[derive(sqlx::FromRow)]
 struct PostRow {
     id: i64,
     content_html: String,
-    #[sqlx(default)]
     context_url: Option<String>,
     created_at: i64,
 }
@@ -675,7 +691,6 @@ async fn ap_context_collection(
 
     // Collect all posts sharing the same context_url, ordered chronologically.
     // Join to accounts so each post uses its actual author, not the URL path username.
-    #[derive(sqlx::FromRow)]
     struct ContextPostRow {
         id: i64,
         content_html: String,

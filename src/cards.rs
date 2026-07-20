@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use serde_json::{json, Value};
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::{SystemTime, UNIX_EPOCH};

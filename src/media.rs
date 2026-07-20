@@ -50,7 +50,7 @@ fn ext_for_mime(mime: &str) -> Option<&'static str> {
     }
 }
 
-#[derive(sqlx::FromRow)]
+
 #[allow(dead_code)] // All fields are needed by FromRow; not all are used in rendering
 struct MediaRow {
     id: i64,

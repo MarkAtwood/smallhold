@@ -764,7 +764,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn get_or_create_cli_app(pool: &sqlx::SqlitePool) -> Result<i64> {
+async fn get_or_create_cli_app(pool: &crate::sqlx::SqlitePool) -> Result<i64> {
     let existing: Option<(i64,)> = crate::db_extras::get_cli_app_id(pool)
         .await?
         .map(|id| (id,));

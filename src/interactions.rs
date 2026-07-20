@@ -25,7 +25,7 @@ use std::sync::Arc;
 // ---------------------------------------------------------------------------
 
 async fn build_relationship(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     source_account_id: i64,
     target_persona_id: i64,
 ) -> Result<Value, AppError> {
@@ -79,7 +79,7 @@ async fn build_relationship(
 /// Build relationship JSON for a remote account target. The target_id is the
 /// remote_accounts.id, but we present the string ID the same way.
 async fn build_relationship_remote(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     source_account_id: i64,
     target_remote_id: i64,
 ) -> Result<Value, AppError> {
@@ -135,7 +135,7 @@ enum TargetAccount {
     },
 }
 
-async fn resolve_target(pool: &sqlx::SqlitePool, id_str: &str) -> Result<TargetAccount, AppError> {
+async fn resolve_target(pool: &crate::sqlx::SqlitePool, id_str: &str) -> Result<TargetAccount, AppError> {
     // Parse ID as i64 first
     let id: i64 = id_str.parse().map_err(|_| AppError::not_found("Account not found"))?;
     let fwp = crate::server::fw_pool(pool);

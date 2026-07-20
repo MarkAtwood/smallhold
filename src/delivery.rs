@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fieldwork::circuit_breaker::CircuitBreaker;
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 
 use crate::api::millis_to_iso;
 use crate::config::Config;
@@ -11,7 +11,7 @@ use crate::id::generate_id;
 use crate::posting::render_content;
 use crate::server::fw_pool;
 
-#[derive(sqlx::FromRow)]
+
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
@@ -127,7 +127,7 @@ async fn process_batch(
     // fields). Kept as inline SQL for the JOIN projection.
     let raw_rows = crate::db_extras::fetch_pending_deliveries(pool, now, config.federation.delivery_concurrency as i64).await?;
     let rows: Vec<DeliveryRow> = raw_rows.into_iter().map(|row| {
-        use sqlx::Row;
+        use crate::sqlx::Row;
         DeliveryRow {
             id: row.get(0),
             target_inbox: row.get(1),

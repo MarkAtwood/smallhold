@@ -1,3 +1,6 @@
+// Re-export sqlx from fieldwork so modules can use it without a direct dependency.
+pub use fieldwork::db::sqlx;
+
 pub mod activitypub;
 pub mod api;
 pub mod cards;

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use fieldwork::db::sqlx;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
 use std::str::FromStr;

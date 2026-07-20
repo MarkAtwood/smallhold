@@ -17,7 +17,7 @@ use p256::{EncodedPoint, PublicKey};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::Sha256;
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -34,7 +34,7 @@ pub struct AlertsConfig {
     pub poll: bool,
 }
 
-#[derive(sqlx::FromRow)]
+
 #[allow(dead_code)]
 struct SubscriptionRow {
     id: i64,

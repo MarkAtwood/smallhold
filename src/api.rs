@@ -102,7 +102,6 @@ fn millis_to_date(ms: i64) -> String {
 // Account serialization helper
 // ---------------------------------------------------------------------------
 
-#[derive(sqlx::FromRow)]
 pub struct AccountRow {
     pub id: i64,
     pub username: String,
@@ -117,7 +116,25 @@ pub struct AccountRow {
     pub last_status_at: Option<i64>,
 }
 
-#[derive(sqlx::FromRow)]
+impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for AccountRow {
+    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
+        use crate::sqlx::Row;
+        Ok(Self {
+            id: row.try_get("id")?,
+            username: row.try_get("username")?,
+            display_name: row.try_get("display_name")?,
+            bio: row.try_get("bio")?,
+            bio_html: row.try_get("bio_html")?,
+            is_locked: row.try_get("is_locked")?,
+            discoverable: row.try_get("discoverable")?,
+            bot: row.try_get("bot")?,
+            fields_json: row.try_get("fields_json")?,
+            created_at: row.try_get("created_at")?,
+            last_status_at: row.try_get("last_status_at")?,
+        })
+    }
+}
+
 pub struct StatusRow {
     pub id: i64,
     pub persona_id: i64,
@@ -129,6 +146,24 @@ pub struct StatusRow {
     pub language: Option<String>,
     pub created_at: i64,
     pub edited_at: Option<i64>,
+}
+
+impl<'r> crate::sqlx::FromRow<'r, crate::sqlx::sqlite::SqliteRow> for StatusRow {
+    fn from_row(row: &'r crate::sqlx::sqlite::SqliteRow) -> crate::sqlx::Result<Self> {
+        use crate::sqlx::Row;
+        Ok(Self {
+            id: row.try_get("id")?,
+            persona_id: row.try_get("persona_id")?,
+            ap_id: row.try_get("ap_id")?,
+            content_html: row.try_get("content_html")?,
+            spoiler_text: row.try_get("spoiler_text")?,
+            visibility: row.try_get("visibility")?,
+            sensitive: row.try_get("sensitive")?,
+            language: row.try_get("language")?,
+            created_at: row.try_get("created_at")?,
+            edited_at: row.try_get("edited_at")?,
+        })
+    }
 }
 
 pub fn account_to_json(row: &AccountRow, domain: &str) -> Value {
@@ -169,7 +204,7 @@ pub fn account_to_json_with_counts(
     })
 }
 
-pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
+pub async fn fetch_account_counts(pool: &crate::sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
     let fwp = crate::server::fw_pool(pool);
     let followers = fieldwork::followers_db::follower_count(&fwp, account_id)
         .await
@@ -186,7 +221,7 @@ pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (
     (followers, following, statuses)
 }
 
-pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
+pub async fn fetch_account_row(pool: &crate::sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
     let fwp = crate::server::fw_pool(pool);
     let persona = fieldwork::persona_db::get_persona_by_id(&fwp, id).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
@@ -210,7 +245,7 @@ fn persona_to_account_row(p: &fieldwork::persona_db::PersonaRow) -> AccountRow {
 }
 
 async fn fetch_account_row_by_username(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     username: &str,
 ) -> Result<AccountRow, AppError> {
     let fwp = crate::server::fw_pool(pool);
@@ -219,7 +254,7 @@ async fn fetch_account_row_by_username(
     Ok(persona_to_account_row(&persona))
 }
 
-async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<Value, AppError> {
+async fn load_contact_account(pool: &crate::sqlx::SqlitePool, domain: &str) -> Result<Value, AppError> {
     let fwp = crate::server::fw_pool(pool);
     let personas = fieldwork::persona_db::list_personas(&fwp).await?;
     let row = personas.first().map(persona_to_account_row);
@@ -1494,7 +1529,7 @@ fn default_true() -> bool {
 }
 
 /// Build a v2 Filter JSON object with nested keywords.
-async fn filter_to_json(pool: &sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
+async fn filter_to_json(pool: &crate::sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
     let row: (i64, String, String, String, Option<i64>, i64) = crate::db_extras::get_filter_row(pool, filter_id).await?;
     let keywords: Vec<(i64, String, bool)> = crate::db_extras::get_filter_keywords(pool, filter_id).await?;
 

@@ -14,7 +14,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
@@ -570,12 +570,12 @@ pub const POST_COLUMNS: &str =
     "id, persona_id, ap_id, in_reply_to_id, in_reply_to_uri, boost_of_id, context_url, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
 
-pub fn sqlx_row_to_post_pub(row: sqlx::sqlite::SqliteRow) -> PostRow {
+pub fn sqlx_row_to_post_pub(row: crate::sqlx::sqlite::SqliteRow) -> PostRow {
     sqlx_row_to_post(row)
 }
 
-fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow) -> PostRow {
-    use sqlx::Row;
+fn sqlx_row_to_post(row: crate::sqlx::sqlite::SqliteRow) -> PostRow {
+    use crate::sqlx::Row;
     PostRow {
         id: row.get(0),
         persona_id: row.get(1),
@@ -2669,8 +2669,8 @@ struct NotificationRow {
 }
 
 impl NotificationRow {
-    fn from_sqlx_row(row: sqlx::sqlite::SqliteRow) -> Self {
-        use sqlx::Row;
+    fn from_sqlx_row(row: crate::sqlx::sqlite::SqliteRow) -> Self {
+        use crate::sqlx::Row;
         NotificationRow {
             id: row.get(0),
             persona_id: row.get(1),

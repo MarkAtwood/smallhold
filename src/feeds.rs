@@ -15,7 +15,7 @@ struct FeedPost {
 }
 
 /// Look up persona_id by username, returning 404 if not found.
-async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
+async fn resolve_account_id(pool: &crate::sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
     let persona = fieldwork::persona_db::get_persona_by_username(&fw_pool(pool), username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
@@ -24,7 +24,7 @@ async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i
 
 /// Fetch last 20 public posts for an account.
 async fn fetch_public_posts(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     account_id: i64,
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by

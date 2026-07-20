@@ -3,6 +3,7 @@
 //! Covers: admin table operations, aggregate statistics, dynamic pagination,
 //! complex JOINs for timelines, and test fixtures.
 
+use crate::sqlx;
 use sqlx::SqlitePool;
 
 // ---------------------------------------------------------------------------

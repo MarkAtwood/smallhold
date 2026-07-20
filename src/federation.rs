@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context};
 use base64::Engine;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::time::Duration;
 
 use crate::config::Config;

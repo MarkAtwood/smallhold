@@ -1,6 +1,6 @@
 use crate::config::Config;
 use axum::{routing::get, Json, Router};
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 

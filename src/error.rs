@@ -74,8 +74,8 @@ impl std::fmt::Display for AppError {
 
 impl std::error::Error for AppError {}
 
-impl From<sqlx::Error> for AppError {
-    fn from(err: sqlx::Error) -> Self {
+impl From<crate::sqlx::Error> for AppError {
+    fn from(err: crate::sqlx::Error) -> Self {
         tracing::error!("Database error: {err}");
         Self::internal("Internal server error")
     }

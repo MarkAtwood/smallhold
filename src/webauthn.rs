@@ -59,12 +59,12 @@ fn random_hex(len: usize) -> String {
     hex_encode(&bytes)
 }
 
-async fn has_passkeys(pool: &sqlx::SqlitePool) -> Result<bool, AppError> {
+async fn has_passkeys(pool: &crate::sqlx::SqlitePool) -> Result<bool, AppError> {
     let creds = fieldwork::webauthn_db::get_credentials(&fw_pool(pool), crate::db::DEFAULT_USER_ID).await?;
     Ok(!creds.is_empty())
 }
 
-async fn load_passkeys(pool: &sqlx::SqlitePool) -> Result<Vec<Passkey>, AppError> {
+async fn load_passkeys(pool: &crate::sqlx::SqlitePool) -> Result<Vec<Passkey>, AppError> {
     let rows = fieldwork::webauthn_db::get_credentials(&fw_pool(pool), crate::db::DEFAULT_USER_ID).await?;
 
     let mut creds = Vec::with_capacity(rows.len());
@@ -77,7 +77,7 @@ async fn load_passkeys(pool: &sqlx::SqlitePool) -> Result<Vec<Passkey>, AppError
 }
 
 async fn store_challenge(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     challenge_id: &str,
     state: &impl serde::Serialize,
 ) -> Result<(), AppError> {
@@ -96,7 +96,7 @@ async fn store_challenge(
 }
 
 async fn consume_challenge<T: serde::de::DeserializeOwned>(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     challenge_id: &str,
 ) -> Result<T, AppError> {
     let now = now_millis();
@@ -420,7 +420,7 @@ async fn auth_complete(
 }
 
 async fn update_credential_bycred_id(
-    pool: &sqlx::SqlitePool,
+    pool: &crate::sqlx::SqlitePool,
     cred_id: &[u8],
     new_json: &str,
 ) -> Result<(), AppError> {
@@ -471,7 +471,7 @@ pub fn verify_passkey_token(token: &str) -> bool {
 }
 
 /// Check whether any passkeys are registered.
-pub async fn passkeys_registered(pool: &sqlx::SqlitePool) -> bool {
+pub async fn passkeys_registered(pool: &crate::sqlx::SqlitePool) -> bool {
     has_passkeys(pool).await.unwrap_or(false)
 }
 

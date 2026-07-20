@@ -3471,7 +3471,6 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sha2",
- "sqlx",
  "ssrf-guard",
  "subtle",
  "tantivy",

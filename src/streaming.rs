@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use crate::server::fw_pool;
-use sqlx::SqlitePool;
+use crate::sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, LazyLock};
