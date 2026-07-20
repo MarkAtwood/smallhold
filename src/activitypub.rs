@@ -1,11 +1,13 @@
 use crate::error::AppError;
 use crate::server::AppState;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::header::{ACCEPT, CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use fieldwork::collections::{build_collection, build_collection_page, paginate_offset};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::{Arc, LazyLock, OnceLock};
 
@@ -460,6 +462,11 @@ async fn post_page(
     Ok(Html(html))
 }
 
+#[derive(Deserialize)]
+struct PaginationQuery {
+    page: Option<u32>,
+}
+
 /// Row from the posts table needed for outbox items.
 struct PostRow {
     id: i64,
@@ -469,20 +476,38 @@ struct PostRow {
 }
 
 /// GET /users/{username}/outbox — OrderedCollection of public Create{Note} activities.
+///
+/// Without `?page`: returns the top-level collection with `totalItems` and `first` link.
+/// With `?page=N`: returns an OrderedCollectionPage with up to 20 items.
 async fn outbox(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
+    Query(query): Query<PaginationQuery>,
 ) -> Result<Response, AppError> {
     let account_id = crate::db_extras::get_persona_id(&state.pool, &username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let domain = &state.config.server.domain;
-    let actor_uri = format!("https://{domain}/users/{username}");
-
+    let outbox_uri = format!("https://{domain}/users/{username}/outbox");
     let total = crate::db_extras::count_public_posts(&state.pool, account_id).await?;
 
-    let outbox_tuples = crate::db_extras::get_outbox_posts(&state.pool, account_id).await?;
+    if query.page.is_none() {
+        let col = build_collection(&outbox_uri, total as u64);
+        let doc = serde_json::to_value(&col).expect("OrderedCollection serialization is infallible");
+        return Ok(ap_response(doc));
+    }
+
+    let page = query.page.unwrap_or(1);
+    if page == 0 {
+        return Err(AppError::bad_request("page must be >= 1"));
+    }
+
+    let per_page: u32 = 20;
+    let offset = paginate_offset(page, per_page).min(i64::MAX as u64) as i64;
+    let actor_uri = format!("https://{domain}/users/{username}");
+
+    let outbox_tuples = crate::db_extras::get_outbox_posts(&state.pool, account_id, i64::from(per_page), offset).await?;
     let posts: Vec<PostRow> = outbox_tuples.into_iter().map(|(id, content_html, context_url, created_at)| PostRow {
         id, content_html, context_url, created_at,
     }).collect();
@@ -515,13 +540,9 @@ async fn outbox(
         })
         .collect();
 
-    Ok(ap_response(json!({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": format!("https://{domain}/users/{username}/outbox"),
-        "type": "OrderedCollection",
-        "totalItems": total,
-        "orderedItems": items
-    })))
+    let page_doc = build_collection_page(&outbox_uri, page, items, total as u64, per_page);
+    let doc = serde_json::to_value(&page_doc).expect("OrderedCollectionPage serialization is infallible");
+    Ok(ap_response(doc))
 }
 
 /// GET /users/{username}/followers — OrderedCollection with follower count.
@@ -539,12 +560,9 @@ async fn followers_collection(
     ).await?;
 
     let domain = &state.config.server.domain;
-    Ok(ap_response(json!({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": format!("https://{domain}/users/{username}/followers"),
-        "type": "OrderedCollection",
-        "totalItems": count
-    })))
+    let col = build_collection(&format!("https://{domain}/users/{username}/followers"), count as u64);
+    let doc = serde_json::to_value(&col).expect("OrderedCollection serialization is infallible");
+    Ok(ap_response(doc))
 }
 
 /// GET /users/{username}/following — OrderedCollection with following count.
@@ -562,12 +580,9 @@ async fn following_collection(
     ).await?;
 
     let domain = &state.config.server.domain;
-    Ok(ap_response(json!({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": format!("https://{domain}/users/{username}/following"),
-        "type": "OrderedCollection",
-        "totalItems": count
-    })))
+    let col = build_collection(&format!("https://{domain}/users/{username}/following"), count as u64);
+    let doc = serde_json::to_value(&col).expect("OrderedCollection serialization is infallible");
+    Ok(ap_response(doc))
 }
 
 /// GET /users/{username}/collections/featured — pinned posts as an OrderedCollection.
@@ -611,13 +626,11 @@ async fn featured(
         })
         .collect();
 
-    Ok(ap_response(json!({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": format!("https://{domain}/users/{username}/collections/featured"),
-        "type": "OrderedCollection",
-        "totalItems": items.len(),
-        "orderedItems": items
-    })))
+    let featured_uri = format!("https://{domain}/users/{username}/collections/featured");
+    let col = build_collection(&featured_uri, items.len() as u64);
+    let mut doc = serde_json::to_value(&col).expect("OrderedCollection serialization is infallible");
+    doc["orderedItems"] = json!(items);
+    Ok(ap_response(doc))
 }
 
 /// GET /users/{username}/collections/tags — empty OrderedCollection stub.
@@ -628,13 +641,9 @@ async fn featured_tags(
     let _ = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
 
-    Ok(ap_response(json!({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": format!("https://{domain}/users/{username}/collections/tags"),
-        "type": "OrderedCollection",
-        "totalItems": 0,
-        "orderedItems": []
-    })))
+    let col = build_collection(&format!("https://{domain}/users/{username}/collections/tags"), 0);
+    let doc = serde_json::to_value(&col).expect("OrderedCollection serialization is infallible");
+    Ok(ap_response(doc))
 }
 
 /// GET /users/{username}/statuses/{id} — Serve a single post as an ActivityPub Note.

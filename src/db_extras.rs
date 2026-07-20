@@ -1575,15 +1575,17 @@ pub async fn get_post_for_page(pool: &fieldwork_db::db::Pool, post_id: i64, user
 }
 
 /// Get outbox posts (public only, with context_url).
-pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
+pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64, limit: i64, offset: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, content_html, context_url, created_at \
          FROM posts \
          WHERE persona_id = ? AND visibility = 'public' \
          ORDER BY created_at DESC \
-         LIMIT 20",
+         LIMIT ? OFFSET ?",
     )
     .bind(persona_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(sq(pool))
     .await
 }
