@@ -44,13 +44,14 @@ pub struct CardData {
 // URL extraction
 // ---------------------------------------------------------------------------
 
-static URL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"https://[^\s<>\]\)]+").unwrap());
+static URL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"https://[^\s<>\]\)]+").unwrap());
 
 /// Extract the first https:// URL from raw post text.
 pub fn extract_first_url(text: &str) -> Option<String> {
     URL_RE.find(text).map(|m| {
-        let url = m.as_str().trim_end_matches(['.', ',', ';', ')', ']', '!', '?']);
+        let url = m
+            .as_str()
+            .trim_end_matches(['.', ',', ';', ')', ']', '!', '?']);
         url.to_string()
     })
 }
@@ -82,7 +83,8 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         bail!("HTTP {}", resp.status());
     }
 
-    let content_type = resp.headers()
+    let content_type = resp
+        .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
@@ -98,10 +100,7 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
 
     // ponytail: if Content-Length is absent/lying, the 10s timeout provides a
     // soft cap (~10MB at 1MB/s). The post-download check catches the rest.
-    let body = resp
-        .bytes()
-        .await
-        .context("failed to read response body")?;
+    let body = resp.bytes().await.context("failed to read response body")?;
     if body.len() > 1_048_576 {
         bail!("response body exceeds 1MB");
     }
@@ -121,7 +120,10 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         .or_else(|| tags.get("twitter:description"))
         .cloned()
         .unwrap_or_default();
-    let description: String = decode_html_entities(&description).chars().take(512).collect();
+    let description: String = decode_html_entities(&description)
+        .chars()
+        .take(512)
+        .collect();
 
     let image_url = tags
         .get("og:image")
@@ -148,13 +150,11 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         "link".to_string()
     };
 
-    let provider_name = decode_html_entities(
-        &tags.get("og:site_name").cloned().unwrap_or_default(),
-    );
+    let provider_name =
+        decode_html_entities(&tags.get("og:site_name").cloned().unwrap_or_default());
 
-    let author_name = decode_html_entities(
-        &tags.get("article:author").cloned().unwrap_or_default(),
-    );
+    let author_name =
+        decode_html_entities(&tags.get("article:author").cloned().unwrap_or_default());
     let width = tags
         .get("og:video:width")
         .or_else(|| tags.get("og:image:width"))
@@ -248,9 +248,7 @@ fn parse_html_title(html: &str) -> Option<String> {
     static TITLE_RE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?i)<title[^>]*>([^<]+)</title>").unwrap());
 
-    TITLE_RE
-        .captures(html)
-        .map(|c| c[1].trim().to_string())
+    TITLE_RE.captures(html).map(|c| c[1].trim().to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -291,35 +289,31 @@ pub async fn fetch_and_cache_card(
     let now = crate::api::now_millis();
 
     // Check if already cached and fresh (< 24h)
-    let cached: Option<(i64, i64)> = sqlx::query_as(
-        "SELECT id, fetched_at FROM link_cards WHERE url = ? AND failed = 0",
-    )
-    .bind(url)
-    .fetch_optional(pool)
-    .await?;
+    let cached: Option<(i64, i64)> =
+        sqlx::query_as("SELECT id, fetched_at FROM link_cards WHERE url = ? AND failed = 0")
+            .bind(url)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some((_, fetched_at)) = cached {
         let age_ms = now - fetched_at;
         if age_ms < 24 * 60 * 60 * 1000 {
             // Fresh cache — just link to post
-            sqlx::query(
-                "INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)",
-            )
-            .bind(post_id)
-            .bind(url)
-            .execute(pool)
-            .await?;
+            sqlx::query("INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)")
+                .bind(post_id)
+                .bind(url)
+                .execute(pool)
+                .await?;
             return Ok(());
         }
     }
 
     // Check if URL failed recently (< 1h)
-    let failed: Option<(i64,)> = sqlx::query_as(
-        "SELECT fetched_at FROM link_cards WHERE url = ? AND failed = 1",
-    )
-    .bind(url)
-    .fetch_optional(pool)
-    .await?;
+    let failed: Option<(i64,)> =
+        sqlx::query_as("SELECT fetched_at FROM link_cards WHERE url = ? AND failed = 1")
+            .bind(url)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some((fetched_at,)) = failed {
         let age_ms = now - fetched_at;
@@ -353,13 +347,11 @@ pub async fn fetch_and_cache_card(
             .execute(pool)
             .await?;
 
-            sqlx::query(
-                "INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)",
-            )
-            .bind(post_id)
-            .bind(url)
-            .execute(pool)
-            .await?;
+            sqlx::query("INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)")
+                .bind(post_id)
+                .bind(url)
+                .execute(pool)
+                .await?;
         }
         Err(_) => {
             // Mark as failed
@@ -449,10 +441,7 @@ pub async fn load_card_for_post(pool: &SqlitePool, post_id: i64) -> Option<Value
 }
 
 /// Batch load cards for multiple posts. Returns a map of post_id -> card JSON.
-pub async fn load_cards_for_posts(
-    pool: &SqlitePool,
-    post_ids: &[i64],
-) -> HashMap<i64, Value> {
+pub async fn load_cards_for_posts(pool: &SqlitePool, post_ids: &[i64]) -> HashMap<i64, Value> {
     if post_ids.is_empty() {
         return HashMap::new();
     }
@@ -468,21 +457,24 @@ pub async fn load_cards_for_posts(
          WHERE pc.post_id IN ({placeholders}) AND lc.failed = 0"
     );
 
-    let mut q = sqlx::query_as::<_, (
-        i64,
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i32,
-        i32,
-    )>(&query);
+    let mut q = sqlx::query_as::<
+        _,
+        (
+            i64,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            String,
+            String,
+            String,
+            String,
+            String,
+            i32,
+            i32,
+        ),
+    >(&query);
 
     for id in post_ids {
         q = q.bind(id);

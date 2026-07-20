@@ -656,8 +656,7 @@ async fn block(
             });
             let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
             let _ =
-                enqueue_delivery(&state.pool, target_inbox, auth.account_id, &block_activity)
-                    .await;
+                enqueue_delivery(&state.pool, target_inbox, auth.account_id, &block_activity).await;
 
             build_relationship_remote(&state.pool, auth.account_id, remote_id)
                 .await
