@@ -1,7 +1,7 @@
 use crate::api::AuthenticatedAccount;
 use crate::error::AppError;
 use crate::id::generate_id;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
 use axum::extract::State;
@@ -57,12 +57,8 @@ struct SubscriptionRow {
 
 /// Get or create the server's VAPID keypair. Returns (private_key_pem, public_key_base64url).
 pub async fn get_or_create_vapid_key(pool: &SqlitePool) -> anyhow::Result<(String, String)> {
-    let existing: Option<(String, String)> =
-        sqlx::query_as("SELECT private_key_pem, public_key_base64 FROM vapid_keys WHERE id = 1")
-            .fetch_optional(pool)
-            .await?;
-
-    if let Some((pem, pub_b64)) = existing {
+    let fwp = fw_pool(pool);
+    if let Some((pem, pub_b64)) = fieldwork::push_db::get_vapid_keys(&fwp).await? {
         return Ok((pem, pub_b64));
     }
 
@@ -78,11 +74,7 @@ pub async fn get_or_create_vapid_key(pool: &SqlitePool) -> anyhow::Result<(Strin
     let pub_bytes = EncodedPoint::from(verifying_key);
     let pub_b64 = URL_SAFE_NO_PAD.encode(pub_bytes.as_bytes());
 
-    sqlx::query("INSERT OR IGNORE INTO vapid_keys (id, private_key_pem, public_key_base64) VALUES (1, ?, ?)")
-        .bind(pem.as_str())
-        .bind(&pub_b64)
-        .execute(pool)
-        .await?;
+    fieldwork::push_db::set_vapid_keys(&fwp, pem.as_str(), &pub_b64).await?;
 
     Ok((pem.to_string(), pub_b64))
 }
@@ -114,30 +106,23 @@ pub async fn create_subscription(
         .unwrap()
         .as_millis() as i64;
 
-    // Upsert: replace any existing subscription for this account
-    sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
-        .bind(account_id)
-        .execute(pool)
-        .await?;
-
-    sqlx::query(
-        "INSERT INTO push_subscriptions (id, user_id, endpoint, key_p256dh, key_auth, \
-         alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, policy, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    fieldwork::push_db::create_subscription(
+        &fw_pool(pool),
+        &fieldwork::push_db::PushSubscriptionRow {
+            id,
+            user_id: account_id.to_string(),
+            endpoint: endpoint.to_string(),
+            key_p256dh: p256dh.to_string(),
+            key_auth: auth.to_string(),
+            alerts_mention: alerts.mention,
+            alerts_favourite: alerts.favourite,
+            alerts_reblog: alerts.reblog,
+            alerts_follow: alerts.follow,
+            alerts_poll: alerts.poll,
+            policy: policy.to_string(),
+            created_at: now,
+        },
     )
-    .bind(id)
-    .bind(account_id)
-    .bind(endpoint)
-    .bind(p256dh)
-    .bind(auth)
-    .bind(alerts.mention)
-    .bind(alerts.favourite)
-    .bind(alerts.reblog)
-    .bind(alerts.follow)
-    .bind(alerts.poll)
-    .bind(policy)
-    .bind(now)
-    .execute(pool)
     .await?;
 
     let vapid_pub = get_vapid_public_key(pool).await;
@@ -150,16 +135,9 @@ pub async fn get_subscription(
     pool: &SqlitePool,
     account_id: &str,
 ) -> Result<Option<Value>, AppError> {
-    let row: Option<SubscriptionRow> = sqlx::query_as(
-        "SELECT id, user_id, endpoint, key_p256dh, key_auth, \
-         alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, \
-         policy, created_at FROM push_subscriptions WHERE user_id = ?",
-    )
-    .bind(account_id)
-    .fetch_optional(pool)
-    .await?;
+    let fw_row = fieldwork::push_db::get_subscription(&fw_pool(pool), account_id).await?;
 
-    match row {
+    match fw_row {
         Some(r) => {
             let vapid_pub = get_vapid_public_key(pool).await;
             let alerts = AlertsConfig {
@@ -187,20 +165,21 @@ pub async fn update_subscription(
     alerts: &AlertsConfig,
     policy: &str,
 ) -> Result<Value, AppError> {
-    sqlx::query(
-        "UPDATE push_subscriptions SET alerts_mention = ?, alerts_favourite = ?, \
-         alerts_reblog = ?, alerts_follow = ?, alerts_poll = ?, policy = ? \
-         WHERE user_id = ?",
-    )
-    .bind(alerts.mention)
-    .bind(alerts.favourite)
-    .bind(alerts.reblog)
-    .bind(alerts.follow)
-    .bind(alerts.poll)
-    .bind(policy)
-    .bind(account_id)
-    .execute(pool)
-    .await?;
+    // Get subscription ID for the update call
+    let sub = fieldwork::push_db::get_subscription(&fw_pool(pool), account_id).await?;
+    if let Some(s) = sub {
+        fieldwork::push_db::update_subscription(
+            &fw_pool(pool),
+            s.id,
+            alerts.mention,
+            alerts.favourite,
+            alerts.reblog,
+            alerts.follow,
+            alerts.poll,
+            policy,
+        )
+        .await?;
+    }
 
     get_subscription(pool, account_id)
         .await?
@@ -208,10 +187,7 @@ pub async fn update_subscription(
 }
 
 pub async fn delete_subscription(pool: &SqlitePool, account_id: &str) -> Result<(), AppError> {
-    sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
-        .bind(account_id)
-        .execute(pool)
-        .await?;
+    fieldwork::push_db::delete_subscription(&fw_pool(pool), account_id).await?;
     Ok(())
 }
 
@@ -265,16 +241,9 @@ async fn send_push_inner(
     body: &str,
     domain: &str,
 ) -> anyhow::Result<()> {
-    let row: Option<SubscriptionRow> = sqlx::query_as(
-        "SELECT id, user_id, endpoint, key_p256dh, key_auth, \
-         alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, \
-         policy, created_at FROM push_subscriptions WHERE user_id = ?",
-    )
-    .bind(account_id)
-    .fetch_optional(pool)
-    .await?;
+    let fw_sub = fieldwork::push_db::get_subscription(&fw_pool(pool), account_id).await?;
 
-    let sub = match row {
+    let sub = match fw_sub {
         Some(s) => s,
         None => return Ok(()), // No subscription, nothing to do
     };
@@ -344,10 +313,7 @@ async fn send_push_inner(
     // 404 or 410 means the subscription is stale — delete it
     if status == 404 || status == 410 {
         tracing::info!(account_id, "push endpoint gone, removing subscription");
-        sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
-            .bind(account_id)
-            .execute(pool)
-            .await?;
+        fieldwork::push_db::delete_subscription(&fw_pool(pool), account_id).await?;
     } else if status >= 400 {
         let body_bytes = response.bytes().await.unwrap_or_default();
         let body_text = String::from_utf8_lossy(&body_bytes[..body_bytes.len().min(1024)]);

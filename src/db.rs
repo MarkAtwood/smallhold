@@ -10,19 +10,17 @@ pub const DEFAULT_USER_ID: &str = "legacy-owner";
 /// Ensure the default single-user row exists. Called on startup and before
 /// persona creation on fresh installs.
 pub async fn ensure_default_user(pool: &SqlitePool) -> Result<()> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
-    sqlx::query(
-        "INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) \
-         VALUES (?, 'admin@localhost', 'Owner', 'admin', ?)",
-    )
-    .bind(DEFAULT_USER_ID)
-    .bind(now)
-    .execute(pool)
-    .await
-    .context("Failed to ensure default user")?;
+    let fwp = fieldwork::db::Pool::Sqlite(pool.clone());
+    let existing = fieldwork::tenant_db::get_user_by_id(&fwp, DEFAULT_USER_ID).await?;
+    if existing.is_none() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        fieldwork::tenant_db::create_user(&fwp, DEFAULT_USER_ID, "admin@localhost", None, "admin", now)
+            .await
+            .context("Failed to ensure default user")?;
+    }
     Ok(())
 }
 

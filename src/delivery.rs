@@ -122,6 +122,9 @@ async fn process_batch(
 ) -> anyhow::Result<()> {
     let now = now_secs();
 
+    // ponytail: this JOIN between delivery_queue and personas is not covered
+    // by fieldwork::delivery_db::fetch_pending (which doesn't include persona
+    // fields). Kept as inline SQL for the JOIN projection.
     let rows: Vec<DeliveryRow> = sqlx::query_as(
         "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
                 a.private_key_pem, a.username \
@@ -286,25 +289,17 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
     let now_ms = chrono::Utc::now().timestamp_millis();
     let domain = &config.server.domain;
 
-    let due_posts: Vec<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, persona_id, params_json FROM scheduled_statuses \
-         WHERE scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
-    )
-    .bind(now_ms)
-    .fetch_all(pool)
-    .await?;
+    let fwp = fw_pool(pool);
+    let due_posts = fieldwork::scheduled_db::fetch_due(&fwp, now_ms).await?;
 
-    for (sched_id, account_id, params_json) in due_posts {
-        if let Err(e) = create_scheduled_post(pool, domain, &account_id, &params_json, now_ms).await
+    for sched in due_posts {
+        if let Err(e) = create_scheduled_post(pool, domain, &sched.persona_id, &sched.params_json, now_ms).await
         {
-            tracing::error!("Failed to create scheduled post {sched_id}: {e}");
+            tracing::error!("Failed to create scheduled post {}: {e}", sched.id);
             // Delete the row anyway to avoid infinite retry of a broken scheduled post
         }
 
-        sqlx::query("DELETE FROM scheduled_statuses WHERE id = ?")
-            .bind(sched_id)
-            .execute(pool)
-            .await?;
+        fieldwork::scheduled_db::delete_scheduled(&fwp, sched.id).await?;
     }
 
     Ok(())
@@ -337,11 +332,10 @@ async fn create_scheduled_post(
         .unwrap_or("");
     let language = params.get("language").and_then(|v| v.as_str());
 
-    let account: (String,) = sqlx::query_as("SELECT username FROM personas WHERE id = ?")
-        .bind(account_id)
-        .fetch_one(pool)
-        .await?;
-    let username = &account.0;
+    let persona = fieldwork::persona_db::get_persona_by_id(&fw_pool(pool), account_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("persona not found: {account_id}"))?;
+    let username = &persona.username;
 
     let rendered = render_content(text, domain);
     let post_id = generate_id();
@@ -349,24 +343,30 @@ async fn create_scheduled_post(
     // FEP-f228: scheduled posts are always originals (no in_reply_to), so they get their own context.
     let context_url = format!("{ap_id}/context");
 
-    sqlx::query(
-        "INSERT INTO posts (id, user_id, persona_id, ap_id, context_url, content, content_html, \
-         spoiler_text, visibility, sensitive, language, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    fieldwork::posts_db::create_post(
+        &fw_pool(pool),
+        &fieldwork::posts_db::PostRow {
+            id: post_id,
+            user_id: crate::db::DEFAULT_USER_ID.to_string(),
+            persona_id: account_id.to_string(),
+            ap_id: ap_id.clone(),
+            in_reply_to_id: None,
+            in_reply_to_uri: None,
+            boost_of_id: None,
+            boost_of_uri: None,
+            content: text.to_string(),
+            content_html: rendered.html.clone(),
+            spoiler_text: spoiler_text.to_string(),
+            visibility: visibility.to_string(),
+            sensitive,
+            language: language.map(|l| l.to_string()),
+            context_url: Some(context_url.clone()),
+            created_at: now_ms,
+            edited_at: None,
+            deleted_at: None,
+            deleted_reason: None,
+        },
     )
-    .bind(post_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(account_id)
-    .bind(&ap_id)
-    .bind(&context_url)
-    .bind(text)
-    .bind(&rendered.html)
-    .bind(spoiler_text)
-    .bind(visibility)
-    .bind(sensitive)
-    .bind(language)
-    .bind(now_ms)
-    .execute(pool)
     .await?;
 
     // Attach media
@@ -383,6 +383,9 @@ async fn create_scheduled_post(
                 .collect()
         })
         .unwrap_or_default();
+    // ponytail: fieldwork::media_db has no attach_to_post function.
+    // This conditional UPDATE (matching persona_id + post_id IS NULL) is
+    // too specific for a generic module.
     for mid in &media_ids {
         sqlx::query(
             "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
@@ -395,57 +398,29 @@ async fn create_scheduled_post(
     }
 
     // Insert tags
-    for tag in &rendered.tags {
-        sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
-            .bind(post_id)
-            .bind(tag)
-            .execute(pool)
-            .await?;
-    }
+    fieldwork::post_tags_db::add_tags(&fw_pool(pool), post_id, &rendered.tags).await?;
 
     // Insert mentions
+    let fwp = fw_pool(pool);
     for m in &rendered.mentions {
         match &m.domain {
             None => {
-                let local: Option<(i64,)> =
-                    sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-                        .bind(&m.username)
-                        .fetch_optional(pool)
-                        .await?;
-                if let Some((aid,)) = local {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_persona_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(aid)
-                    .execute(pool)
-                    .await?;
+                let local = fieldwork::persona_db::get_persona_by_username(&fwp, &m.username).await?;
+                if let Some(p) = local {
+                    fieldwork::mentions_db::add_mention(&fwp, post_id, None, Some(&p.id)).await?;
                 }
             }
             Some(mention_domain) => {
-                let remote: Option<(i64,)> = sqlx::query_as(
-                    "SELECT id FROM remote_accounts WHERE username = ? AND domain = ?",
-                )
-                .bind(&m.username)
-                .bind(mention_domain)
-                .fetch_optional(pool)
-                .await?;
-                if let Some((rid,)) = remote {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(rid)
-                    .execute(pool)
-                    .await?;
+                let remote = fieldwork::actor_cache::get_by_webfinger(&fwp, &m.username, mention_domain).await?;
+                if let Some(r) = remote {
+                    fieldwork::mentions_db::add_mention(&fwp, post_id, Some(r.id), None).await?;
                 }
             }
         }
     }
 
-    // Update last_status_at
+    // ponytail: fieldwork::persona_db has no update_last_status_at function.
+    // This is a single-column timestamp bump, not worth a new fieldwork function.
     sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now_ms)
         .bind(account_id)
@@ -453,27 +428,15 @@ async fn create_scheduled_post(
         .await?;
 
     // Query media attachments for the AP Note
-    #[allow(clippy::type_complexity)]
-    let ap_media: Vec<(
-        String,
-        String,
-        Option<i32>,
-        Option<i32>,
-        Option<String>,
-        String,
-    )> = sqlx::query_as(
-        "SELECT file_path, mime_type, width, height, blurhash, description \
-             FROM media WHERE post_id = ? ORDER BY id",
-    )
-    .bind(post_id)
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
+    let ap_media = fieldwork::media_db::attachments_for_post(&fw_pool(pool), post_id)
+        .await
+        .unwrap_or_default();
 
     let ap_attachments: Vec<serde_json::Value> = ap_media
         .iter()
         .map(
-            |(file_path, mime_type, width, height, blurhash, description)| {
+            |m| { let (file_path, mime_type, width, height, blurhash, description) =
+                (&m.file_path, &m.mime_type, m.width, m.height, &m.blurhash, &m.description);
                 let mut doc = serde_json::json!({
                     "type": "Document",
                     "mediaType": mime_type,

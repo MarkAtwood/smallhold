@@ -466,6 +466,9 @@ pub async fn compute_follower_sync_digest(
     account_id: &str,
     target_domain: &str,
 ) -> Option<String> {
+    // ponytail: this JOIN between followers and remote_accounts filtered by
+    // domain is not covered by any fieldwork module. It's a FEP-8fcf-specific
+    // query for follower sync digest computation.
     let uris: Vec<(String,)> = sqlx::query_as(
         "SELECT ra.actor_uri FROM followers f \
          JOIN remote_accounts ra ON f.remote_account_id = ra.id \

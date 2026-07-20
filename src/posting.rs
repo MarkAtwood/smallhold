@@ -951,15 +951,14 @@ async fn create_status(
     // Check idempotency key
     if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
-        let existing: Option<(i64,)> = sqlx::query_as(
-            "SELECT post_id FROM idempotency_keys WHERE key_hash = ? AND user_id = ?",
+        let existing = fieldwork::idempotency_db::check_key(
+            &crate::server::fw_pool(&state.pool),
+            &key_hash,
+            &auth.account_id,
         )
-        .bind(&key_hash)
-        .bind(&auth.account_id)
-        .fetch_optional(&state.pool)
         .await?;
 
-        if let Some((post_id,)) = existing {
+        if let Some(post_id) = existing {
             let post = sqlx::query_as::<_, PostRow>(&format!(
                 "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
             ))
@@ -1210,30 +1209,16 @@ async fn create_status(
     }
 
     // Insert tags
-    for tag in &rendered.tags {
-        sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
-            .bind(post_id)
-            .bind(tag)
-            .execute(&state.pool)
-            .await?;
-    }
+    let fwp = crate::server::fw_pool(&state.pool);
+    fieldwork::post_tags_db::add_tags(&fwp, post_id, &rendered.tags).await?;
 
     // Store idempotency key
     if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
-        sqlx::query(
-            "INSERT OR IGNORE INTO idempotency_keys (key_hash, user_id, post_id, created_at) \
-             VALUES (?, ?, ?, ?)",
-        )
-        .bind(&key_hash)
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        fieldwork::idempotency_db::store_key(&fwp, &key_hash, &auth.account_id, post_id, now).await?;
     }
 
-    // Update last_status_at
+    // ponytail: fieldwork::persona_db has no update_last_status_at function.
     sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now)
         .bind(&auth.account_id)
@@ -1675,63 +1660,29 @@ async fn edit_status(
     .await?;
 
     // Delete old mentions and tags, re-insert new ones
-    sqlx::query("DELETE FROM mentions WHERE post_id = ?")
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
-    sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
+    let fwp_del = crate::server::fw_pool(&state.pool);
+    fieldwork::mentions_db::remove_mentions(&fwp_del, post_id).await?;
+    fieldwork::post_tags_db::remove_tags(&fwp_del, post_id).await?;
 
+    let fwp_edit = crate::server::fw_pool(&state.pool);
     for m in &rendered.mentions {
         match &m.domain {
             None => {
-                let local: Option<(String,)> =
-                    sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-                        .bind(&m.username)
-                        .fetch_optional(&state.pool)
-                        .await?;
-                if let Some((aid,)) = local {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_persona_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(&aid)
-                    .execute(&state.pool)
-                    .await?;
+                let local = fieldwork::persona_db::get_persona_by_username(&fwp_edit, &m.username).await?;
+                if let Some(p) = local {
+                    fieldwork::mentions_db::add_mention(&fwp_edit, post_id, None, Some(&p.id)).await?;
                 }
             }
             Some(mention_domain) => {
-                let remote: Option<(i64,)> = sqlx::query_as(
-                    "SELECT id FROM remote_accounts WHERE username = ? AND domain = ?",
-                )
-                .bind(&m.username)
-                .bind(mention_domain)
-                .fetch_optional(&state.pool)
-                .await?;
-                if let Some((rid,)) = remote {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(rid)
-                    .execute(&state.pool)
-                    .await?;
+                let remote = fieldwork::actor_cache::get_by_webfinger(&fwp_edit, &m.username, mention_domain).await?;
+                if let Some(r) = remote {
+                    fieldwork::mentions_db::add_mention(&fwp_edit, post_id, Some(r.id), None).await?;
                 }
             }
         }
     }
 
-    for tag in &rendered.tags {
-        sqlx::query("INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)")
-            .bind(post_id)
-            .bind(tag)
-            .execute(&state.pool)
-            .await?;
-    }
+    fieldwork::post_tags_db::add_tags(&fwp_edit, post_id, &rendered.tags).await?;
 
     // Enqueue outbound Update{Note} for federation
     {
@@ -3521,12 +3472,11 @@ async fn mark_conversation_read(
     }
 
     // Mark as read
-    sqlx::query(
-        "INSERT OR IGNORE INTO conversation_read_markers (user_id, post_id) VALUES (?, ?)",
+    fieldwork::conversations_db::mark_read(
+        &crate::server::fw_pool(&state.pool),
+        &auth.account_id,
+        post_id,
     )
-    .bind(&auth.account_id)
-    .bind(post_id)
-    .execute(&state.pool)
     .await?;
 
     // Return the updated conversation object
@@ -3551,11 +3501,12 @@ async fn delete_conversation(
         .map_err(|_| AppError::not_found("Conversation not found"))?;
 
     // Mark as hidden for this user (don't delete the actual post)
-    sqlx::query("INSERT OR IGNORE INTO conversation_hidden (user_id, post_id) VALUES (?, ?)")
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::conversations_db::hide(
+        &crate::server::fw_pool(&state.pool),
+        &auth.account_id,
+        post_id,
+    )
+    .await?;
 
     Ok(Json(json!({})))
 }

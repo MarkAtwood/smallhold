@@ -68,12 +68,13 @@ async fn webfinger(
         return Err(AppError::not_found("unknown domain"));
     }
 
-    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas WHERE username = ?")
-        .bind(username)
-        .fetch_one(&state.pool)
-        .await?;
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &crate::server::fw_pool(&state.pool),
+        username,
+    )
+    .await?;
 
-    if exists.0 == 0 {
+    if persona.is_none() {
         return Err(AppError::not_found("unknown user"));
     }
 
@@ -134,13 +135,16 @@ async fn nodeinfo_links(State(state): State<Arc<AppState>>) -> Response {
 }
 
 async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppError> {
-    let (local_posts,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
-        .fetch_one(&state.pool)
-        .await?;
-
-    let (user_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas")
-        .fetch_one(&state.pool)
-        .await?;
+    // ponytail: nodeinfo needs global counts across all personas. No single
+    // fieldwork function covers this; posts_count requires a persona_id and
+    // list_personas returns all personas but doesn't count them.
+    let fwp = crate::server::fw_pool(&state.pool);
+    let personas = fieldwork::persona_db::list_personas(&fwp).await?;
+    let user_count = personas.len() as i64;
+    let mut local_posts = 0i64;
+    for p in &personas {
+        local_posts += fieldwork::posts_db::posts_count(&fwp, &p.id).await?;
+    }
 
     let body = serde_json::json!({
         "version": "2.0",

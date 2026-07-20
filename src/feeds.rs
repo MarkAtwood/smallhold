@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use axum::extract::{Path, State};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
@@ -8,21 +8,18 @@ use axum::routing::get;
 use axum::Router;
 use std::sync::Arc;
 
-#[derive(sqlx::FromRow)]
 struct FeedPost {
     id: i64,
     content_html: String,
     created_at: i64,
 }
 
-/// Look up.persona_id by username, returning 404 if not found.
+/// Look up persona_id by username, returning 404 if not found.
 async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<String, AppError> {
-    let row: Option<(String,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-        .bind(username)
-        .fetch_optional(pool)
-        .await?;
-    row.map(|r| r.0)
-        .ok_or_else(|| AppError::not_found("Account not found"))
+    let persona = fieldwork::persona_db::get_persona_by_username(&fw_pool(pool), username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+    Ok(persona.id)
 }
 
 /// Fetch last 20 public posts for an account.
@@ -30,7 +27,9 @@ async fn fetch_public_posts(
     pool: &sqlx::SqlitePool,
     account_id: &str,
 ) -> Result<Vec<FeedPost>, AppError> {
-    let posts: Vec<FeedPost> = sqlx::query_as(
+    // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by
+    // visibility or exclude boosts. Custom query needed for feed generation.
+    let rows: Vec<(i64, String, i64)> = sqlx::query_as(
         "SELECT id, content_html, created_at \
          FROM posts \
          WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
@@ -40,7 +39,7 @@ async fn fetch_public_posts(
     .bind(account_id)
     .fetch_all(pool)
     .await?;
-    Ok(posts)
+    Ok(rows.into_iter().map(|(id, content_html, created_at)| FeedPost { id, content_html, created_at }).collect())
 }
 
 fn millis_to_rfc2822(ms: i64) -> String {

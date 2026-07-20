@@ -97,6 +97,9 @@ impl SearchIndex {
 
     /// Reindex all posts from the database
     pub async fn reindex_all(&self, pool: &sqlx::SqlitePool) -> Result<usize> {
+        // fieldwork::posts_db doesn't expose a "list all posts" function with
+        // just (id, content, persona_id) columns and no persona filter.
+        // ponytail: complex projection query not covered by fieldwork module
         let posts: Vec<(i64, String, String)> =
             sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
                 .fetch_all(pool)

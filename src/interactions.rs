@@ -1314,17 +1314,16 @@ async fn followed_tags_list(
         .unwrap_or(20)
         .min(100);
 
-    let tags: Vec<(String,)> = sqlx::query_as(
-        "SELECT tag FROM followed_tags WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+    let tags = fieldwork::followed_tags_db::get_followed_tags(
+        &crate::server::fw_pool(&state.pool),
+        &auth.account_id,
     )
-    .bind(&auth.account_id)
-    .bind(limit)
-    .fetch_all(&state.pool)
     .await?;
 
     let result: Vec<Value> = tags
         .iter()
-        .map(|(tag,)| tag_json(tag, domain, true))
+        .take(limit as usize)
+        .map(|(tag, _created_at)| tag_json(tag, domain, true))
         .collect();
 
     Ok(Json(json!(result)))
@@ -1340,13 +1339,12 @@ async fn follow_tag(
     let tag = id.to_lowercase();
     let now = now_millis();
 
-    sqlx::query(
-        "INSERT OR IGNORE INTO followed_tags (user_id, tag, created_at) VALUES (?, ?, ?)",
+    fieldwork::followed_tags_db::follow_tag(
+        &crate::server::fw_pool(&state.pool),
+        &auth.account_id,
+        &tag,
+        now,
     )
-    .bind(&auth.account_id)
-    .bind(&tag)
-    .bind(now)
-    .execute(&state.pool)
     .await?;
 
     Ok(Json(tag_json(&tag, domain, true)))
@@ -1361,11 +1359,12 @@ async fn unfollow_tag(
     let domain = &state.config.server.domain;
     let tag = id.to_lowercase();
 
-    sqlx::query("DELETE FROM followed_tags WHERE user_id = ? AND tag = ?")
-        .bind(&auth.account_id)
-        .bind(&tag)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::followed_tags_db::unfollow_tag(
+        &crate::server::fw_pool(&state.pool),
+        &auth.account_id,
+        &tag,
+    )
+    .await?;
 
     Ok(Json(tag_json(&tag, domain, false)))
 }
@@ -1386,22 +1385,11 @@ async fn get_tag(
         .and_then(|v| v.strip_prefix("Bearer "))
     {
         let token_hash = crate::api::hex_encode(&Sha256::digest(auth_header.as_bytes()));
-        let account_id: Option<(String,)> = sqlx::query_as(
-            "SELECT persona_id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
-        )
-        .bind(&token_hash)
-        .fetch_optional(&state.pool)
-        .await?;
+        let fwp = crate::server::fw_pool(&state.pool);
+        let token_info = fieldwork::oauth_db::verify_token(&fwp, &token_hash).await?;
 
-        if let Some((aid,)) = account_id {
-            let (count,): (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM followed_tags WHERE user_id = ? AND tag = ?",
-            )
-            .bind(aid)
-            .bind(&tag)
-            .fetch_one(&state.pool)
-            .await?;
-            count > 0
+        if let Some((aid, _username, _scopes)) = token_info {
+            fieldwork::followed_tags_db::is_following_tag(&fwp, &aid, &tag).await?
         } else {
             false
         }

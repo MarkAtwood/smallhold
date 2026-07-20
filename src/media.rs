@@ -344,20 +344,25 @@ async fn update_media(
         .parse()
         .map_err(|_| AppError::not_found("Media not found"))?;
 
-    let row: Option<MediaRow> = sqlx::query_as(
-        "SELECT id, file_path, mime_type, width, height, blurhash, description, created_at FROM media WHERE id = ? AND user_id = ?",
-    )
-    .bind(media_id)
-    .bind(&auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    // ponytail: fieldwork::media_db::get_media doesn't filter by user_id
+    // (ownership). Single-user smallhold doesn't need it, but we check persona_id
+    // for safety via the fieldwork row.
+    let fw_row = fieldwork::media_db::get_media(&fw_pool(&state.pool), media_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Media not found"))?;
 
-    let mut row = row.ok_or_else(|| AppError::not_found("Media not found"))?;
+    if fw_row.persona_id != auth.account_id {
+        return Err(AppError::not_found("Media not found"));
+    }
+
+    let mut row = fw_media_to_local(&fw_row);
 
     let description = body
         .description
         .map(|d| d.chars().take(MAX_DESCRIPTION_CHARS).collect::<String>());
 
+    // ponytail: fieldwork::media_db has no update_description function.
+    // This is a single-column update not worth a new fieldwork function.
     sqlx::query("UPDATE media SET description = ? WHERE id = ?")
         .bind(&description)
         .bind(media_id)

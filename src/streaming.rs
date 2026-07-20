@@ -10,6 +10,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use crate::server::fw_pool;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -58,18 +59,11 @@ async fn authenticate(
 
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
 
-    let row: Option<(String, String, String)> = sqlx::query_as(
-        "SELECT t.persona_id, a.username, t.scopes \
-         FROM oauth_tokens t JOIN personas a ON t.persona_id = a.id \
-         WHERE t.token_hash = ? AND t.revoked_at IS NULL",
-    )
-    .bind(&token_hash)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::from)?;
-
     let (account_id, username, scopes) =
-        row.ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
+        fieldwork::oauth_db::verify_token(&fw_pool(pool), &token_hash)
+            .await
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
 
     Ok(AuthenticatedAccount {
         account_id,

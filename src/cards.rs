@@ -397,79 +397,33 @@ pub async fn load_cards_for_posts(pool: &SqlitePool, post_ids: &[i64]) -> HashMa
         return HashMap::new();
     }
 
-    // ponytail: build IN clause with positional params. SQLite max is 999 but
-    // timeline pages are <=40 posts, so this is safe.
-    let placeholders: String = post_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let query = format!(
-        "SELECT pc.post_id, lc.url, lc.card_type, lc.title, lc.description, lc.image_url, \
-         lc.author_name, lc.author_url, lc.provider_name, lc.provider_url, \
-         lc.html, lc.width, lc.height \
-         FROM post_cards pc JOIN link_cards lc ON pc.card_url = lc.url \
-         WHERE pc.post_id IN ({placeholders}) AND lc.failed = 0"
-    );
-
-    let mut q = sqlx::query_as::<
-        _,
-        (
-            i64,
-            String,
-            String,
-            String,
-            String,
-            Option<String>,
-            String,
-            String,
-            String,
-            String,
-            String,
-            i32,
-            i32,
-        ),
-    >(&query);
-
-    for id in post_ids {
-        q = q.bind(id);
-    }
-
-    let rows = match q.fetch_all(pool).await {
-        Ok(r) => r,
-        Err(_) => return HashMap::new(),
-    };
-
+    // ponytail: iterates per-post via fieldwork::cards_db::cards_for_post.
+    // Timeline pages are <=40 posts so N+1 is acceptable. Upgrade to batch
+    // query if this becomes a bottleneck.
+    let fwp = fw_pool(pool);
     let mut map = HashMap::new();
-    for (
-        post_id,
-        url,
-        card_type,
-        title,
-        description,
-        image_url,
-        author_name,
-        author_url,
-        provider_name,
-        provider_url,
-        html,
-        width,
-        height,
-    ) in rows
-    {
-        map.insert(
-            post_id,
-            card_to_json(&CardData {
-                url,
-                card_type,
-                title,
-                description,
-                image_url,
-                author_name,
-                author_url,
-                provider_name,
-                provider_url,
-                html,
-                width,
-                height,
-            }),
-        );
+    for &post_id in post_ids {
+        if let Ok(cards) = fieldwork::cards_db::cards_for_post(&fwp, post_id).await {
+            if let Some(c) = cards.into_iter().next() {
+                map.insert(
+                    post_id,
+                    card_to_json(&CardData {
+                        url: c.url,
+                        card_type: c.card_type,
+                        title: c.title,
+                        description: c.description,
+                        image_url: c.image_url,
+                        author_name: c.author_name,
+                        author_url: c.author_url,
+                        provider_name: c.provider_name,
+                        provider_url: c.provider_url,
+                        html: c.html,
+                        width: c.width,
+                        height: c.height,
+                    }),
+                );
+            }
+        }
     }
     map
 }
