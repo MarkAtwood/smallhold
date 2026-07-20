@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use axum::extract::{Path, State};
 use axum::http::header::{ACCEPT, CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, StatusCode};
@@ -299,11 +299,10 @@ async fn profile_page(
     let custom_css = load_extra_css(&state.config);
 
     // Counts
-    let account_id: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-        .bind(&username)
-        .fetch_optional(&state.pool)
-        .await?;
-    let aid = account_id.map(|r| r.0).unwrap_or(0);
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(&state.pool), &username,
+    ).await?;
+    let aid = persona.as_ref().map(|p| p.id.as_str()).unwrap_or("");
 
     let (post_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
         .bind(aid)
@@ -311,12 +310,9 @@ async fn profile_page(
         .await
         .unwrap_or((0,));
 
-    let (follower_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
-            .bind(aid)
-            .fetch_one(&state.pool)
-            .await
-            .unwrap_or((0,));
+    let follower_count = fieldwork::followers_db::follower_count(
+        &fw_pool(&state.pool), aid,
+    ).await.unwrap_or(0);
 
     // Profile fields
     let fields: Vec<serde_json::Value> =
@@ -568,19 +564,14 @@ async fn followers_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-            .bind(&username)
-            .fetch_optional(&state.pool)
-            .await?;
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(&state.pool), &username,
+    ).await?
+    .ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
-
-    let (count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
-            .bind(account_id)
-            .fetch_one(&state.pool)
-            .await?;
+    let count = fieldwork::followers_db::follower_count(
+        &fw_pool(&state.pool), &persona.id,
+    ).await?;
 
     let domain = &state.config.server.domain;
     Ok(ap_response(json!({
@@ -596,18 +587,14 @@ async fn following_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
-            .bind(&username)
-            .fetch_optional(&state.pool)
-            .await?;
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(&state.pool), &username,
+    ).await?
+    .ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
-
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ?")
-        .bind(account_id)
-        .fetch_one(&state.pool)
-        .await?;
+    let count = fieldwork::follows_db::following_count(
+        &fw_pool(&state.pool), &persona.id,
+    ).await?;
 
     let domain = &state.config.server.domain;
     Ok(ap_response(json!({

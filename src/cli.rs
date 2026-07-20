@@ -562,22 +562,19 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             display_name,
             bio,
         } => {
-            if let Some(dn) = &display_name {
-                sqlx::query("UPDATE personas SET display_name = ? WHERE username = ?")
-                    .bind(dn)
-                    .bind(&username)
-                    .execute(&pool)
-                    .await?;
-            }
-            if let Some(b) = &bio {
-                let html = render_bio(b);
-                sqlx::query("UPDATE personas SET bio = ?, bio_html = ? WHERE username = ?")
-                    .bind(b)
-                    .bind(&html)
-                    .bind(&username)
-                    .execute(&pool)
-                    .await?;
-            }
+            let persona = fieldwork::persona_db::get_persona_by_username(
+                &fw_pool(&pool), &username,
+            ).await?
+            .ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
+
+            let bio_html = bio.as_ref().map(|b| render_bio(b));
+            fieldwork::persona_db::update_persona_profile(
+                &fw_pool(&pool),
+                &persona.id,
+                display_name.as_deref(),
+                bio.as_deref(),
+                bio_html.as_deref(),
+            ).await?;
             eprintln!("Updated @{username}");
         }
         PersonaCommands::Delete { username } => {
@@ -691,18 +688,10 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
-            sqlx::query(
-                "INSERT INTO oauth_tokens (id, token_hash, app_id, user_id, persona_id, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            )
-            .bind(id)
-            .bind(&token_hash)
-            .bind(app_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(account_id)
-            .bind(&scopes)
-            .bind(now)
-            .execute(&pool)
-            .await?;
+            fieldwork::oauth_db::create_token(
+                &fw_pool(&pool),
+                id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, &account_id, &scopes, now,
+            ).await?;
 
             eprintln!("Token minted for @{username} (scopes: {scopes}):");
             eprintln!("{token}");

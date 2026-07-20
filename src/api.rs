@@ -170,18 +170,14 @@ pub fn account_to_json_with_counts(
 }
 
 pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: &str) -> (i64, i64, i64) {
-    let (followers,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
-            .bind(account_id)
-            .fetch_one(pool)
-            .await
-            .unwrap_or((0,));
-
-    let (following,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ?")
-        .bind(account_id)
-        .fetch_one(pool)
+    let fwp = crate::server::fw_pool(pool);
+    let followers = fieldwork::followers_db::follower_count(&fwp, account_id)
         .await
-        .unwrap_or((0,));
+        .unwrap_or(0);
+
+    let following = fieldwork::follows_db::following_count(&fwp, account_id)
+        .await
+        .unwrap_or(0);
 
     let (statuses,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
         .bind(account_id)
@@ -277,11 +273,9 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
         // ponytail: SQL equality on SHA-256 hash is acceptable — attacker would
         // need to brute-force the hash, not the token. Constant-time comparison
         // of the hash would require fetching all rows, which is worse.
-        let row: Option<(String, String, String)> = sqlx::query_as(
-            "SELECT t.persona_id, a.username, t.scopes FROM oauth_tokens t JOIN personas a ON t.persona_id = a.id WHERE t.token_hash = ? AND t.revoked_at IS NULL",
+        let row = fieldwork::oauth_db::verify_token(
+            &crate::server::fw_pool(&state.pool), &token_hash,
         )
-        .bind(&token_hash)
-        .fetch_optional(&state.pool)
         .await
         .map_err(AppError::from)?;
 
@@ -345,19 +339,19 @@ async fn create_app(
     let scopes = body.scopes.as_deref().unwrap_or("read");
     let now = now_millis();
 
-    sqlx::query(
-        "INSERT INTO oauth_apps (id, client_id, client_secret, name, website, redirect_uri, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(id)
-    .bind(&client_id)
-    .bind(&client_secret)
-    .bind(&body.client_name)
-    .bind(&body.website)
-    .bind(&body.redirect_uris)
-    .bind(scopes)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::oauth_db::create_app(
+        &crate::server::fw_pool(&state.pool),
+        &fieldwork::oauth_db::OAuthAppRow {
+            id,
+            client_id: client_id.clone(),
+            client_secret: client_secret.clone(),
+            name: body.client_name.clone(),
+            website: body.website.clone(),
+            redirect_uri: body.redirect_uris.clone(),
+            scopes: scopes.to_string(),
+            created_at: now,
+        },
+    ).await?;
 
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
 
@@ -786,18 +780,10 @@ async fn token(
     let token_hash = hex_encode(&Sha256::digest(access_token.as_bytes()));
     let id = generate_id();
 
-    sqlx::query(
-        "INSERT INTO oauth_tokens (id, token_hash, app_id, user_id, persona_id, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(id)
-    .bind(&token_hash)
-    .bind(app_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(&account_id)
-    .bind(&scopes)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::oauth_db::create_token(
+        &crate::server::fw_pool(&state.pool),
+        id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, &account_id, &scopes, now,
+    ).await?;
 
     Ok(Json(json!({
         "access_token": access_token,
@@ -826,15 +812,22 @@ async fn revoke(
     axum::Form(form): axum::Form<RevokeRequest>,
 ) -> Result<StatusCode, AppError> {
     let token_hash = hex_encode(&Sha256::digest(form.token.as_bytes()));
-    let now = now_millis();
 
-    sqlx::query(
-        "UPDATE oauth_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+    // Look up token ID by hash to use revoke_token API.
+    // ponytail: extra query to map hash→id; fieldwork API is keyed on id.
+    let token_row: Option<(i64,)> = sqlx::query_as(
+        "SELECT id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
     )
-    .bind(now)
     .bind(&token_hash)
-    .execute(&state.pool)
+    .fetch_optional(&state.pool)
     .await?;
+
+    if let Some((token_id,)) = token_row {
+        let now = now_millis();
+        fieldwork::oauth_db::revoke_token(
+            &crate::server::fw_pool(&state.pool), token_id, now,
+        ).await?;
+    }
 
     // Always return 200 per RFC 7009, even if token not found
     Ok(StatusCode::OK)

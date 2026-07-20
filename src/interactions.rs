@@ -7,7 +7,7 @@ use crate::error::AppError;
 use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -247,16 +247,9 @@ async fn follow(
             if target_id == auth.account_id {
                 return Err(AppError::unprocessable("Cannot follow yourself"));
             }
-            sqlx::query(
-                "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_persona_id, created_at) \
-                 VALUES (?, ?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&target_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::follows_db::follow_local(
+                &fw_pool(&state.pool), &auth.account_id, crate::db::DEFAULT_USER_ID, &target_id, now,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
@@ -269,16 +262,9 @@ async fn follow(
             shared_inbox_url,
         } => {
             // Insert follow locally
-            sqlx::query(
-                "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at) \
-                 VALUES (?, ?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(remote_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::follows_db::follow_remote(
+                &fw_pool(&state.pool), &auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
+            ).await?;
 
             // Enqueue outbound Follow activity — derive a stable ID from
             // actor+object so Undo{Follow} can reference the same URI.
@@ -322,11 +308,9 @@ async fn unfollow(
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(&auth.account_id)
-                .bind(&target_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::follows_db::unfollow_local(
+                &fw_pool(&state.pool), &auth.account_id, &target_id,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
@@ -338,11 +322,9 @@ async fn unfollow(
             inbox_url,
             shared_inbox_url,
         } => {
-            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-                .bind(&auth.account_id)
-                .bind(remote_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::follows_db::unfollow_remote(
+                &fw_pool(&state.pool), &auth.account_id, remote_id,
+            ).await?;
 
             // Enqueue Undo{Follow} — derive a stable follow ID from
             // actor+object so the Undo references the same URI.
@@ -550,27 +532,18 @@ async fn block(
                 return Err(AppError::unprocessable("Cannot block yourself"));
             }
 
-            sqlx::query(
-                "INSERT OR IGNORE INTO blocks (persona_id, target_persona_id, created_at) \
-                 VALUES (?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(&target_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::interactions_db::block(
+                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, &auth.account_id,
+                Some(target_id.as_str()), None, now,
+            ).await?;
 
             // Remove mutual follows
-            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(&auth.account_id)
-                .bind(&target_id)
-                .execute(&state.pool)
-                .await?;
-            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(&target_id)
-                .bind(&auth.account_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::follows_db::unfollow_local(
+                &fw_pool(&state.pool), &auth.account_id, &target_id,
+            ).await?;
+            fieldwork::follows_db::unfollow_local(
+                &fw_pool(&state.pool), &target_id, &auth.account_id,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
@@ -582,29 +555,18 @@ async fn block(
             inbox_url,
             shared_inbox_url,
         } => {
-            sqlx::query(
-                "INSERT OR IGNORE INTO blocks (persona_id, target_remote_id, created_at) \
-                 VALUES (?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(remote_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::interactions_db::block(
+                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, &auth.account_id,
+                None, Some(remote_id), now,
+            ).await?;
 
             // Remove follow + follower relationships
-            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-                .bind(&auth.account_id)
-                .bind(remote_id)
-                .execute(&state.pool)
-                .await?;
-            sqlx::query(
-                "DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?",
-            )
-            .bind(&auth.account_id)
-            .bind(remote_id)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::follows_db::unfollow_remote(
+                &fw_pool(&state.pool), &auth.account_id, remote_id,
+            ).await?;
+            fieldwork::followers_db::remove_follower(
+                &fw_pool(&state.pool), &auth.account_id, remote_id,
+            ).await?;
 
             // Send Block activity to the remote actor's inbox.
             let block_id = generate_id();
@@ -640,22 +602,18 @@ async fn unblock(
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_persona_id = ?")
-                .bind(&auth.account_id)
-                .bind(&target_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::interactions_db::unblock(
+                &fw_pool(&state.pool), &auth.account_id, Some(target_id.as_str()), None,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
-            sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_remote_id = ?")
-                .bind(&auth.account_id)
-                .bind(remote_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::interactions_db::unblock(
+                &fw_pool(&state.pool), &auth.account_id, None, Some(remote_id),
+            ).await?;
 
             build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
@@ -684,30 +642,20 @@ async fn mute(
                 return Err(AppError::unprocessable("Cannot mute yourself"));
             }
 
-            sqlx::query(
-                "INSERT OR IGNORE INTO mutes (persona_id, target_persona_id, created_at) \
-                 VALUES (?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(&target_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::interactions_db::mute(
+                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, &auth.account_id,
+                Some(target_id.as_str()), None, now,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
-            sqlx::query(
-                "INSERT OR IGNORE INTO mutes (persona_id, target_remote_id, created_at) \
-                 VALUES (?, ?, ?)",
-            )
-            .bind(&auth.account_id)
-            .bind(remote_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::interactions_db::mute(
+                &fw_pool(&state.pool), crate::db::DEFAULT_USER_ID, &auth.account_id,
+                None, Some(remote_id), now,
+            ).await?;
 
             build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
@@ -730,22 +678,18 @@ async fn unmute(
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_persona_id = ?")
-                .bind(&auth.account_id)
-                .bind(&target_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::interactions_db::unmute(
+                &fw_pool(&state.pool), &auth.account_id, Some(target_id.as_str()), None,
+            ).await?;
 
             build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
-            sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_remote_id = ?")
-                .bind(&auth.account_id)
-                .bind(remote_id)
-                .execute(&state.pool)
-                .await?;
+            fieldwork::interactions_db::unmute(
+                &fw_pool(&state.pool), &auth.account_id, None, Some(remote_id),
+            ).await?;
 
             build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
@@ -790,23 +734,15 @@ async fn update_credentials(
 
     let mut changed = false;
 
-    if let Some(ref display_name) = body.display_name {
-        sqlx::query("UPDATE personas SET display_name = ? WHERE id = ?")
-            .bind(display_name)
-            .bind(&auth.account_id)
-            .execute(&state.pool)
-            .await?;
-        changed = true;
-    }
-
-    if let Some(ref note) = body.note {
-        let rendered = render_content(note, domain);
-        sqlx::query("UPDATE personas SET bio = ?, bio_html = ? WHERE id = ?")
-            .bind(note)
-            .bind(&rendered.html)
-            .bind(&auth.account_id)
-            .execute(&state.pool)
-            .await?;
+    if body.display_name.is_some() || body.note.is_some() {
+        let bio_html = body.note.as_ref().map(|n| render_content(n, domain).html);
+        fieldwork::persona_db::update_persona_profile(
+            &fw_pool(&state.pool),
+            &auth.account_id,
+            body.display_name.as_deref(),
+            body.note.as_deref(),
+            bio_html.as_deref(),
+        ).await?;
         changed = true;
     }
 
@@ -1007,16 +943,9 @@ async fn authorize_follow(
     let now = now_millis();
 
     // Accept: insert into followers
-    sqlx::query(
-        "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at) \
-         VALUES (?, ?, ?, ?)",
-    )
-    .bind(&auth.account_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(remote_id)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::followers_db::add_follower(
+        &fw_pool(&state.pool), &auth.account_id, crate::db::DEFAULT_USER_ID, remote_id, now,
+    ).await?;
 
     // Remove from follow_requests
     sqlx::query("DELETE FROM follow_requests WHERE id = ?")

@@ -771,12 +771,9 @@ pub async fn load_status(
 
     // Check viewer interactions
     let (favourited, reblogged, bookmarked) = if let Some(viewer) = viewer_account_id {
-        let fav: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM favourites WHERE persona_id = ? AND post_id = ?")
-                .bind(viewer)
-                .bind(post.id)
-                .fetch_one(pool)
-                .await?;
+        let fav = fieldwork::interactions_db::is_favourited(
+            &crate::server::fw_pool(pool), viewer, post.id,
+        ).await?;
 
         let boost: (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND boost_of_id = ?")
@@ -792,7 +789,7 @@ pub async fn load_status(
                 .fetch_one(pool)
                 .await?;
 
-        (fav.0 > 0, boost.0 > 0, bmark.0 > 0)
+        (fav, boost.0 > 0, bmark.0 > 0)
     } else {
         (false, false, false)
     };
@@ -1155,19 +1152,21 @@ async fn create_status(
                     // Skip self-mentions — don't notify the author about their own post
                     if aid != auth.account_id {
                         let notif_id = generate_id();
-                        sqlx::query(
-                            "INSERT OR IGNORE INTO notifications \
-                             (id, user_id, persona_id, kind, from_persona_id, post_id, created_at) \
-                             VALUES (?, ?, ?, 'mention', ?, ?, ?)",
-                        )
-                        .bind(notif_id)
-                        .bind(crate::db::DEFAULT_USER_ID)
-                        .bind(&aid)
-                        .bind(&auth.account_id)
-                        .bind(post_id)
-                        .bind(now)
-                        .execute(&state.pool)
-                        .await?;
+                        fieldwork::notifications_db::create_notification(
+                            &crate::server::fw_pool(&state.pool),
+                            &fieldwork::notifications_db::NotificationRow {
+                                id: notif_id,
+                                user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                                persona_id: aid.clone(),
+                                kind: "mention".to_string(),
+                                from_persona_id: Some(auth.account_id.clone()),
+                                from_remote_account_id: None,
+                                post_id: Some(post_id),
+                                remote_post_id: None,
+                                created_at: now,
+                                read_at: None,
+                            },
+                        ).await?;
 
                         // Fire-and-forget push notification
                         let pool = state.pool.clone();
@@ -2092,31 +2091,28 @@ async fn favourite(
             .await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    sqlx::query(
-        "INSERT OR IGNORE INTO favourites (user_id, persona_id, post_id, created_at) VALUES (?, ?, ?, ?)",
-    )
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(&auth.account_id)
-    .bind(post_id)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::interactions_db::favourite(
+        &crate::server::fw_pool(&state.pool),
+        crate::db::DEFAULT_USER_ID, &auth.account_id, Some(post_id), None, now,
+    ).await?;
 
     if post.persona_id != auth.account_id {
         let notif_id = generate_id();
-        sqlx::query(
-            "INSERT OR IGNORE INTO notifications \
-             (id, user_id, persona_id, kind, from_persona_id, post_id, created_at) \
-             VALUES (?, ?, ?, 'favourite', ?, ?, ?)",
-        )
-        .bind(notif_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(&post.persona_id)
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        fieldwork::notifications_db::create_notification(
+            &crate::server::fw_pool(&state.pool),
+            &fieldwork::notifications_db::NotificationRow {
+                id: notif_id,
+                user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                persona_id: post.persona_id.clone(),
+                kind: "favourite".to_string(),
+                from_persona_id: Some(auth.account_id.clone()),
+                from_remote_account_id: None,
+                post_id: Some(post_id),
+                remote_post_id: None,
+                created_at: now,
+                read_at: None,
+            },
+        ).await?;
 
         // Fire-and-forget push notification
         let pool = state.pool.clone();
@@ -2209,11 +2205,9 @@ async fn unfavourite(
             .await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    sqlx::query("DELETE FROM favourites WHERE persona_id = ? AND post_id = ?")
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::interactions_db::unfavourite(
+        &crate::server::fw_pool(&state.pool), &auth.account_id, Some(post_id), None,
+    ).await?;
 
     // Enqueue outbound Undo{Like} activity
     {
@@ -2319,19 +2313,21 @@ async fn reblog(
 
         if original.persona_id != auth.account_id {
             let notif_id = generate_id();
-            sqlx::query(
-                "INSERT OR IGNORE INTO notifications \
-                 (id, user_id, persona_id, kind, from_persona_id, post_id, created_at) \
-                 VALUES (?, ?, ?, 'reblog', ?, ?, ?)",
-            )
-            .bind(notif_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&original.persona_id)
-            .bind(&auth.account_id)
-            .bind(post_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::notifications_db::create_notification(
+                &crate::server::fw_pool(&state.pool),
+                &fieldwork::notifications_db::NotificationRow {
+                    id: notif_id,
+                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                    persona_id: original.persona_id.clone(),
+                    kind: "reblog".to_string(),
+                    from_persona_id: Some(auth.account_id.clone()),
+                    from_remote_account_id: None,
+                    post_id: Some(post_id),
+                    remote_post_id: None,
+                    created_at: now,
+                    read_at: None,
+                },
+            ).await?;
 
             // Fire-and-forget push notification
             let pool = state.pool.clone();
@@ -2564,15 +2560,10 @@ async fn bookmark(
             .await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    sqlx::query(
-        "INSERT OR IGNORE INTO bookmarks (user_id, persona_id, post_id, created_at) VALUES (?, ?, ?, ?)",
-    )
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(&auth.account_id)
-    .bind(post_id)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::interactions_db::bookmark(
+        &crate::server::fw_pool(&state.pool),
+        crate::db::DEFAULT_USER_ID, &auth.account_id, Some(post_id), None, now,
+    ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
     Ok(Json(status))
@@ -2595,11 +2586,9 @@ async fn unbookmark(
             .await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    sqlx::query("DELETE FROM bookmarks WHERE persona_id = ? AND post_id = ?")
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::interactions_db::unbookmark(
+        &crate::server::fw_pool(&state.pool), &auth.account_id, Some(post_id), None,
+    ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
     Ok(Json(status))
@@ -3073,10 +3062,9 @@ async fn clear_notifications(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    sqlx::query("DELETE FROM notifications WHERE persona_id = ?")
-        .bind(&auth.account_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::notifications_db::clear_notifications(
+        &crate::server::fw_pool(&state.pool), &auth.account_id,
+    ).await?;
 
     Ok(Json(json!({})))
 }
@@ -3126,14 +3114,9 @@ async fn pin_status(
         return Err(AppError::forbidden("You do not own this status"));
     }
 
-    sqlx::query(
-        "INSERT OR IGNORE INTO pinned_posts (persona_id, post_id, pinned_at) VALUES (?, ?, ?)",
-    )
-    .bind(&auth.account_id)
-    .bind(post_id)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::interactions_db::pin_post(
+        &crate::server::fw_pool(&state.pool), &auth.account_id, post_id, now,
+    ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
     Ok(Json(status))
@@ -3160,11 +3143,9 @@ async fn unpin_status(
         return Err(AppError::forbidden("You do not own this status"));
     }
 
-    sqlx::query("DELETE FROM pinned_posts WHERE persona_id = ? AND post_id = ?")
-        .bind(&auth.account_id)
-        .bind(post_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::interactions_db::unpin_post(
+        &crate::server::fw_pool(&state.pool), &auth.account_id, post_id,
+    ).await?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
     Ok(Json(status))

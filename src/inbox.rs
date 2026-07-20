@@ -97,11 +97,10 @@ async fn user_inbox(
     request: axum::extract::Request,
 ) -> Result<impl IntoResponse, AppError> {
     // Verify the target account exists.
-    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas WHERE username = ?")
-        .bind(&username)
-        .fetch_one(&state.pool)
-        .await?;
-    if exists.0 == 0 {
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(&state.pool), &username,
+    ).await?;
+    if persona.is_none() {
         return Err(AppError::not_found("Account not found"));
     }
 
@@ -222,17 +221,14 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
     };
 
     // Look up local account.
-    let account_row: Option<(String,)> =
-        match sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-            .bind(username)
-            .fetch_optional(&state.pool)
-            .await
-        {
-            Ok(row) => row,
-            Err(_) => return,
-        };
-    let account_id = match account_row {
-        Some((id,)) => id,
+    let persona = match fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(&state.pool), username,
+    ).await {
+        Ok(row) => row,
+        Err(_) => return,
+    };
+    let account_id = match persona {
+        Some(p) => p.id,
         None => return,
     };
 
@@ -454,17 +450,13 @@ async fn lookup_by_key_id(
 /// Get a local account's private key and key_id for signing outbound fetches.
 /// Uses the first local account found.
 async fn get_signing_credentials(state: &AppState) -> Result<(String, String), AppError> {
-    let row: Option<(String, String)> =
-        sqlx::query_as("SELECT username, private_key_pem FROM personas LIMIT 1")
-            .fetch_optional(&state.pool)
-            .await?;
-
-    let (username, private_key_pem) =
-        row.ok_or_else(|| AppError::internal("no local accounts configured"))?;
+    let personas = fieldwork::persona_db::list_personas(&fw_pool(&state.pool)).await?;
+    let persona = personas.into_iter().next()
+        .ok_or_else(|| AppError::internal("no local accounts configured"))?;
 
     let domain = &state.config.server.domain;
-    let key_id = format!("https://{domain}/users/{username}#main-key");
-    Ok((private_key_pem, key_id))
+    let key_id = format!("https://{domain}/users/{}#main-key", persona.username);
+    Ok((persona.private_key_pem, key_id))
 }
 
 /// Fetch a remote actor, upsert into our database, and return the account row.
@@ -658,13 +650,11 @@ async fn resolve_local_account(
         None => return Ok(None),
     };
 
-    let row: Option<(String, String, bool)> =
-        sqlx::query_as("SELECT id, username, is_locked FROM personas WHERE username = ? LIMIT 1")
-            .bind(username)
-            .fetch_optional(pool)
-            .await?;
+    let persona = fieldwork::persona_db::get_persona_by_username(
+        &fw_pool(pool), username,
+    ).await?;
 
-    Ok(row)
+    Ok(persona.map(|p| (p.id, p.username, p.is_locked)))
 }
 
 /// Enqueue an activity for delivery to a remote inbox.
@@ -685,17 +675,13 @@ async fn is_blocked_or_muted(
     persona_id: &str,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
-    let row: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM blocks WHERE persona_id = ? AND target_remote_id = ?
-         UNION SELECT 1 FROM mutes WHERE persona_id = ? AND target_remote_id = ?",
-    )
-    .bind(&persona_id)
-    .bind(remote_account_id)
-    .bind(&persona_id)
-    .bind(remote_account_id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.is_some())
+    let fwp = &fw_pool(pool);
+    let blocked = fieldwork::interactions_db::is_blocked(fwp, persona_id, None, Some(remote_account_id)).await?;
+    if blocked {
+        return Ok(true);
+    }
+    let muted = fieldwork::interactions_db::is_muted(fwp, persona_id, None, Some(remote_account_id)).await?;
+    Ok(muted)
 }
 
 // ---------------------------------------------------------------------------
@@ -752,31 +738,28 @@ async fn handle_follow(
         );
     } else {
         // Auto-accept: insert into followers.
-        sqlx::query(
-            "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at)
-             VALUES (?, ?, ?, ?)",
-        )
-        .bind(&account_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(remote.id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        fieldwork::followers_db::add_follower(
+            &fw_pool(&state.pool), &account_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+        ).await?;
 
         // Create a notification (unless blocked/muted).
         if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
             let notif_id = generate_id();
-            sqlx::query(
-                "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, created_at)
-                 VALUES (?, ?, ?, 'follow', ?, ?)",
-            )
-            .bind(notif_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&account_id)
-            .bind(remote.id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::notifications_db::create_notification(
+                &fw_pool(&state.pool),
+                &fieldwork::notifications_db::NotificationRow {
+                    id: notif_id,
+                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                    persona_id: account_id.clone(),
+                    kind: "follow".to_string(),
+                    from_persona_id: None,
+                    from_remote_account_id: Some(remote.id),
+                    post_id: None,
+                    remote_post_id: None,
+                    created_at: now,
+                    read_at: None,
+                },
+            ).await?;
 
             // Fire-and-forget push notification
             let pool = state.pool.clone();
@@ -856,11 +839,9 @@ async fn handle_undo_follow(
     let domain = &state.config.server.domain;
     if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
-        sqlx::query("DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?")
-            .bind(&account_id)
-            .bind(remote.id)
-            .execute(&state.pool)
-            .await?;
+        fieldwork::followers_db::remove_follower(
+            &fw_pool(&state.pool), &account_id, remote.id,
+        ).await?;
 
         // Also remove any pending follow request.
         sqlx::query(
@@ -1086,17 +1067,21 @@ async fn handle_create(
                 // Create a mention notification (unless blocked/muted).
                 if !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await? {
                     let notif_id = generate_id();
-                    sqlx::query(
-                        "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, remote_post_id, created_at)
-                         VALUES (?, ?, ?, 'mention', ?, ?, ?)",
-                    )
-                    .bind(notif_id)
-                    .bind(&persona_id)
-                    .bind(remote.id)
-                    .bind(post_id)
-                    .bind(now)
-                    .execute(&state.pool)
-                    .await?;
+                    fieldwork::notifications_db::create_notification(
+                        &fw_pool(&state.pool),
+                        &fieldwork::notifications_db::NotificationRow {
+                            id: notif_id,
+                            user_id: persona_id.clone(),
+                            persona_id: persona_id.clone(),
+                            kind: "mention".to_string(),
+                            from_persona_id: None,
+                            from_remote_account_id: Some(remote.id),
+                            post_id: None,
+                            remote_post_id: Some(post_id),
+                            created_at: now,
+                            read_at: None,
+                        },
+                    ).await?;
 
                     publish(StreamEvent {
                         event_type: "notification".into(),
@@ -1175,17 +1160,21 @@ async fn handle_create(
                     && !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await?
                 {
                     let notif_id = generate_id();
-                    sqlx::query(
-                        "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, remote_post_id, created_at)
-                         VALUES (?, ?, ?, 'mention', ?, ?, ?)",
-                    )
-                    .bind(notif_id)
-                    .bind(&persona_id)
-                    .bind(remote.id)
-                    .bind(post_id)
-                    .bind(now)
-                    .execute(&state.pool)
-                    .await?;
+                    fieldwork::notifications_db::create_notification(
+                        &fw_pool(&state.pool),
+                        &fieldwork::notifications_db::NotificationRow {
+                            id: notif_id,
+                            user_id: persona_id.clone(),
+                            persona_id: persona_id.clone(),
+                            kind: "mention".to_string(),
+                            from_persona_id: None,
+                            from_remote_account_id: Some(remote.id),
+                            post_id: None,
+                            remote_post_id: Some(post_id),
+                            created_at: now,
+                            read_at: None,
+                        },
+                    ).await?;
 
                     publish(StreamEvent {
                         event_type: "notification".into(),
@@ -1472,20 +1461,26 @@ async fn handle_like(
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
-            let result = sqlx::query(
-                "INSERT OR IGNORE INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, post_id, created_at)
-                 VALUES (?, ?, ?, 'favourite', ?, ?, ?)",
-            )
-            .bind(notif_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&account_id)
-            .bind(remote.id)
-            .bind(post_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            // ponytail: create_notification doesn't return rows_affected, so we
+            // always attempt the push notification. Duplicate notifications are
+            // prevented by the unique ID.
+            fieldwork::notifications_db::create_notification(
+                &fw_pool(&state.pool),
+                &fieldwork::notifications_db::NotificationRow {
+                    id: notif_id,
+                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                    persona_id: account_id.clone(),
+                    kind: "favourite".to_string(),
+                    from_persona_id: None,
+                    from_remote_account_id: Some(remote.id),
+                    post_id: Some(post_id),
+                    remote_post_id: None,
+                    created_at: now,
+                    read_at: None,
+                },
+            ).await?;
 
-            if result.rows_affected() > 0 {
+            {
                 // Fire-and-forget push notification
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
@@ -1539,20 +1534,23 @@ async fn handle_announce(
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
-            let result = sqlx::query(
-                "INSERT OR IGNORE INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, post_id, created_at)
-                 VALUES (?, ?, ?, 'reblog', ?, ?, ?)",
-            )
-            .bind(notif_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&account_id)
-            .bind(remote.id)
-            .bind(post_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::notifications_db::create_notification(
+                &fw_pool(&state.pool),
+                &fieldwork::notifications_db::NotificationRow {
+                    id: notif_id,
+                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                    persona_id: account_id.clone(),
+                    kind: "reblog".to_string(),
+                    from_persona_id: None,
+                    from_remote_account_id: Some(remote.id),
+                    post_id: Some(post_id),
+                    remote_post_id: None,
+                    created_at: now,
+                    read_at: None,
+                },
+            ).await?;
 
-            if result.rows_affected() > 0 {
+            {
                 // Fire-and-forget push notification
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
@@ -1726,16 +1724,9 @@ async fn handle_move(
 
     for (local_id, local_username, _) in &local_followers {
         // Insert new follow.
-        sqlx::query(
-            "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at)
-             VALUES (?, ?, ?, ?)",
-        )
-        .bind(local_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(new_account.id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        fieldwork::follows_db::follow_remote(
+            &fw_pool(&state.pool), local_id, crate::db::DEFAULT_USER_ID, new_account.id, now,
+        ).await?;
 
         // Enqueue a Follow activity to the new actor.
         let follow_id = generate_id();
@@ -1815,16 +1806,9 @@ async fn handle_accept(
     // The follow already exists in the follows table (inserted when we sent the Follow).
     // This is a confirmation. If it's somehow not there, we can insert it.
     let now = chrono::Utc::now().timestamp();
-    sqlx::query(
-        "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at)
-             VALUES (?, ?, ?, ?)",
-    )
-    .bind(&local_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(remote.id)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::follows_db::follow_remote(
+        &fw_pool(&state.pool), &local_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+    ).await?;
 
     // Check if this Accept is from a relay we subscribed to.
     if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {
@@ -1874,11 +1858,9 @@ async fn handle_reject(
     };
 
     // Remove the pending follow.
-    sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-        .bind(&local_id)
-        .bind(remote.id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::follows_db::unfollow_remote(
+        &fw_pool(&state.pool), &local_id, remote.id,
+    ).await?;
 
     // Check if this Reject is from a relay we subscribed to.
     if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {

@@ -85,17 +85,9 @@ pub async fn enqueue_to_followers(
     sender_persona_id: &str,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let inboxes: Vec<(String,)> = sqlx::query_as(
-        "SELECT DISTINCT COALESCE(ra.shared_inbox_url, ra.inbox_url) as inbox \
-         FROM followers f \
-         JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.persona_id = ?",
-    )
-    .bind(sender_persona_id)
-    .fetch_all(pool)
-    .await?;
+    let inboxes = fieldwork::followers_db::follower_inboxes(&fw_pool(pool), sender_persona_id).await?;
 
-    for (inbox,) in inboxes {
+    for inbox in inboxes {
         enqueue_delivery(pool, &inbox, sender_persona_id, activity).await?;
     }
 

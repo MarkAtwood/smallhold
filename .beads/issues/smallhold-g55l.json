@@ -1,0 +1,17 @@
+{
+  "id": "smallhold-g55l",
+  "title": "refactor: replace inline SQL with fieldwork DB module calls",
+  "description": "Replace remaining inline SQL in smallhold with calls to the 6 new fieldwork DB modules: followers_db, follows_db, notifications_db, interactions_db, persona_db, oauth_db.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T16:58:23.565808897Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T17:08:07.874416265Z",
+  "closed_at": "2026-07-20T17:08:07.874416265Z",
+  "close_reason": "Closed",
+  "labels": [
+    "epic"
+  ]
+}
