@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::id::generate_id;
+use crate::server::fw_pool;
 
 /// Parsed remote actor data, ready for database upsert.
 #[derive(Debug)]
@@ -423,58 +424,32 @@ pub async fn upsert_remote_account(
     let now = chrono::Utc::now().timestamp();
     let new_id = generate_id();
 
-    let result = sqlx::query_scalar::<_, i64>(
-        "INSERT INTO remote_accounts (
-            id, actor_uri, username, domain, display_name, bio_html,
-            avatar_url, header_url, public_key_pem, public_key_id,
-            inbox_url, shared_inbox_url, followers_url,
-            is_locked, bot, last_fetched_at
-        ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6,
-            ?7, ?8, ?9, ?10,
-            ?11, ?12, ?13,
-            ?14, ?15, ?16
-        )
-        ON CONFLICT(actor_uri) DO UPDATE SET
-            username         = excluded.username,
-            domain           = excluded.domain,
-            display_name     = excluded.display_name,
-            bio_html         = excluded.bio_html,
-            avatar_url       = excluded.avatar_url,
-            header_url       = excluded.header_url,
-            public_key_pem   = excluded.public_key_pem,
-            public_key_id    = excluded.public_key_id,
-            inbox_url        = excluded.inbox_url,
-            shared_inbox_url = excluded.shared_inbox_url,
-            followers_url    = excluded.followers_url,
-            is_locked        = excluded.is_locked,
-            bot              = excluded.bot,
-            last_fetched_at  = excluded.last_fetched_at,
-            fetched_failed_at = NULL,
-            fetch_fail_count  = 0
-        RETURNING id",
-    )
-    .bind(new_id)
-    .bind(&data.actor_uri)
-    .bind(&data.username)
-    .bind(&data.domain)
-    .bind(&data.display_name)
-    .bind(&data.bio_html)
-    .bind(&data.avatar_url)
-    .bind(&data.header_url)
-    .bind(&data.public_key_pem)
-    .bind(&data.public_key_id)
-    .bind(&data.inbox_url)
-    .bind(&data.shared_inbox_url)
-    .bind(&data.followers_url)
-    .bind(data.is_locked)
-    .bind(data.bot)
-    .bind(now)
-    .fetch_one(pool)
-    .await
-    .context("upsert remote_accounts")?;
+    let row = fieldwork::actor_cache::RemoteAccountRow {
+        id: new_id,
+        actor_uri: data.actor_uri.clone(),
+        username: data.username.clone(),
+        domain: data.domain.clone(),
+        display_name: data.display_name.clone(),
+        bio_html: data.bio_html.clone(),
+        avatar_url: data.avatar_url.clone(),
+        header_url: data.header_url.clone(),
+        public_key_pem: data.public_key_pem.clone(),
+        public_key_id: data.public_key_id.clone(),
+        inbox_url: data.inbox_url.clone(),
+        shared_inbox_url: data.shared_inbox_url.clone(),
+        followers_url: data.followers_url.clone(),
+        is_locked: data.is_locked,
+        bot: data.bot,
+        last_fetched_at: now,
+        fetched_failed_at: None,
+        fetch_fail_count: 0,
+    };
 
-    Ok(result)
+    let id = fieldwork::actor_cache::upsert_remote_account(&fw_pool(pool), &row)
+        .await
+        .context("upsert remote_accounts")?;
+
+    Ok(id)
 }
 
 // ---------------------------------------------------------------------------

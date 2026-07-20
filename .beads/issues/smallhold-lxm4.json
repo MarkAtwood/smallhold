@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-lxm4",
+  "title": "Replace inline SQL with fieldwork shared DB modules",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T15:10:36.571690174Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T15:16:15.357906983Z",
+  "closed_at": "2026-07-20T15:16:15.357906983Z",
+  "close_reason": "Closed",
+  "labels": [
+    "epic"
+  ]
+}

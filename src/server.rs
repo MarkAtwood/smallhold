@@ -10,6 +10,11 @@ pub struct AppState {
     pub search: Option<std::sync::Arc<crate::search::SearchIndex>>,
 }
 
+/// Wrap a raw `SqlitePool` as a `fieldwork::db::Pool` for shared DB modules.
+pub fn fw_pool(pool: &SqlitePool) -> fieldwork::db::Pool {
+    fieldwork::db::Pool::Sqlite(pool.clone())
+}
+
 pub fn create_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)

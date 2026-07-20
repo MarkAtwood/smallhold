@@ -4,6 +4,9 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::LazyLock;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::server::fw_pool;
 
 // ---------------------------------------------------------------------------
 // Shared HTTP client for card fetching
@@ -286,84 +289,70 @@ pub async fn fetch_and_cache_card(
     url: &str,
     own_domain: &str,
 ) -> Result<()> {
-    let now = crate::api::now_millis();
+    let fwp = fw_pool(pool);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     // Check if already cached and fresh (< 24h)
-    let cached: Option<(i64, i64)> =
-        sqlx::query_as("SELECT id, fetched_at FROM link_cards WHERE url = ? AND failed = 0")
-            .bind(url)
-            .fetch_optional(pool)
-            .await?;
-
-    if let Some((_, fetched_at)) = cached {
-        let age_ms = now - fetched_at;
-        if age_ms < 24 * 60 * 60 * 1000 {
-            // Fresh cache — just link to post
-            sqlx::query("INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)")
-                .bind(post_id)
-                .bind(url)
-                .execute(pool)
-                .await?;
+    if let Some(cached) = fieldwork::cards_db::get_card_by_url(&fwp, url).await? {
+        if !cached.failed && (now - cached.fetched_at) < 24 * 60 * 60 {
+            fieldwork::cards_db::link_card_to_post(&fwp, post_id, url).await?;
             return Ok(());
         }
     }
 
     // Check if URL failed recently (< 1h)
-    let failed: Option<(i64,)> =
-        sqlx::query_as("SELECT fetched_at FROM link_cards WHERE url = ? AND failed = 1")
-            .bind(url)
-            .fetch_optional(pool)
-            .await?;
-
-    if let Some((fetched_at,)) = failed {
-        let age_ms = now - fetched_at;
-        if age_ms < 60 * 60 * 1000 {
-            bail!("URL failed recently, not retrying");
-        }
+    if fieldwork::cards_db::is_recent_failure(&fwp, url, 3600).await? {
+        bail!("URL failed recently, not retrying");
     }
 
     // Fetch the card
     match fetch_card(url, own_domain).await {
         Ok(card) => {
-            sqlx::query(
-                "INSERT OR REPLACE INTO link_cards \
-                 (url, card_type, title, description, image_url, author_name, author_url, \
-                  provider_name, provider_url, html, width, height, fetched_at, failed) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+            fieldwork::cards_db::upsert_card(
+                &fwp,
+                &fieldwork::cards_db::CardRow {
+                    id: 0,
+                    url: card.url.clone(),
+                    card_type: card.card_type,
+                    title: card.title,
+                    description: card.description,
+                    image_url: card.image_url,
+                    author_name: card.author_name,
+                    author_url: card.author_url,
+                    provider_name: card.provider_name,
+                    provider_url: card.provider_url,
+                    html: card.html,
+                    width: card.width,
+                    height: card.height,
+                    fetched_at: now,
+                    failed: false,
+                },
             )
-            .bind(&card.url)
-            .bind(&card.card_type)
-            .bind(&card.title)
-            .bind(&card.description)
-            .bind(&card.image_url)
-            .bind(&card.author_name)
-            .bind(&card.author_url)
-            .bind(&card.provider_name)
-            .bind(&card.provider_url)
-            .bind(&card.html)
-            .bind(card.width)
-            .bind(card.height)
-            .bind(now)
-            .execute(pool)
             .await?;
 
-            sqlx::query("INSERT OR IGNORE INTO post_cards (post_id, card_url) VALUES (?, ?)")
-                .bind(post_id)
-                .bind(url)
-                .execute(pool)
-                .await?;
+            fieldwork::cards_db::link_card_to_post(&fwp, post_id, &card.url).await?;
         }
         Err(_) => {
-            // Mark as failed
-            sqlx::query(
-                "INSERT OR REPLACE INTO link_cards \
-                 (url, card_type, title, description, image_url, author_name, author_url, \
-                  provider_name, provider_url, html, width, height, fetched_at, failed) \
-                 VALUES (?, 'link', '', '', NULL, '', '', '', '', '', 0, 0, ?, 1)",
+            fieldwork::cards_db::upsert_card(
+                &fwp,
+                &fieldwork::cards_db::CardRow {
+                    id: 0,
+                    url: url.to_string(),
+                    card_type: "link".to_string(),
+                    title: String::new(),
+                    description: String::new(),
+                    image_url: None,
+                    author_name: String::new(),
+                    author_url: String::new(),
+                    provider_name: String::new(),
+                    provider_url: String::new(),
+                    html: String::new(),
+                    width: 0,
+                    height: 0,
+                    fetched_at: now,
+                    failed: true,
+                },
             )
-            .bind(url)
-            .bind(now)
-            .execute(pool)
             .await?;
         }
     }
@@ -379,65 +368,27 @@ pub async fn fetch_and_cache_card(
 // ponytail: batch card loading available via load_cards_for_posts().
 // Currently cards loaded per-status in load_status(). Acceptable for
 // timeline sizes (max 40 posts). Wire batch loading if this becomes a bottleneck.
-#[allow(clippy::type_complexity)]
 pub async fn load_card_for_post(pool: &SqlitePool, post_id: i64) -> Option<Value> {
-    let row: Option<(
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i32,
-        i32,
-    )> = sqlx::query_as(
-        "SELECT lc.url, lc.card_type, lc.title, lc.description, lc.image_url, \
-         lc.author_name, lc.author_url, lc.provider_name, lc.provider_url, \
-         lc.html, lc.width, lc.height \
-         FROM post_cards pc JOIN link_cards lc ON pc.card_url = lc.url \
-         WHERE pc.post_id = ? AND lc.failed = 0",
-    )
-    .bind(post_id)
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten();
+    let cards = fieldwork::cards_db::cards_for_post(&fw_pool(pool), post_id)
+        .await
+        .ok()?;
 
-    row.map(
-        |(
-            url,
-            card_type,
-            title,
-            description,
-            image_url,
-            author_name,
-            author_url,
-            provider_name,
-            provider_url,
-            html,
-            width,
-            height,
-        )| {
-            card_to_json(&CardData {
-                url,
-                card_type,
-                title,
-                description,
-                image_url,
-                author_name,
-                author_url,
-                provider_name,
-                provider_url,
-                html,
-                width,
-                height,
-            })
-        },
-    )
+    cards.into_iter().next().map(|c| {
+        card_to_json(&CardData {
+            url: c.url,
+            card_type: c.card_type,
+            title: c.title,
+            description: c.description,
+            image_url: c.image_url,
+            author_name: c.author_name,
+            author_url: c.author_url,
+            provider_name: c.provider_name,
+            provider_url: c.provider_url,
+            html: c.html,
+            width: c.width,
+            height: c.height,
+        })
+    })
 }
 
 /// Batch load cards for multiple posts. Returns a map of post_id -> card JSON.

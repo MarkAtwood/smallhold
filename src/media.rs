@@ -1,7 +1,7 @@
 use crate::api::{now_millis, AuthenticatedAccount};
 use crate::error::AppError;
 use crate::id::generate_id;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
@@ -61,6 +61,20 @@ struct MediaRow {
     blurhash: Option<String>,
     description: Option<String>,
     created_at: i64,
+}
+
+/// Convert a fieldwork MediaRow to a local MediaRow for JSON serialization.
+fn fw_media_to_local(fw: &fieldwork::media_db::MediaRow) -> MediaRow {
+    MediaRow {
+        id: fw.id,
+        file_path: fw.file_path.clone(),
+        mime_type: fw.mime_type.clone(),
+        width: fw.width.map(|w| w as i64),
+        height: fw.height.map(|h| h as i64),
+        blurhash: fw.blurhash.clone(),
+        description: if fw.description.is_empty() { None } else { Some(fw.description.clone()) },
+        created_at: fw.created_at,
+    }
 }
 
 fn media_attachment_json(row: &MediaRow, domain: &str) -> Value {
@@ -260,21 +274,24 @@ async fn process_upload(
     let now = now_millis();
     let file_size = clean_data.len() as i64;
 
-    sqlx::query(
-        "INSERT INTO media (id, user_id, persona_id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    fieldwork::media_db::insert_media(
+        &fw_pool(&state.pool),
+        &fieldwork::media_db::MediaRow {
+            id,
+            user_id: crate::db::DEFAULT_USER_ID.to_string(),
+            persona_id: auth.account_id.to_string(),
+            post_id: None,
+            file_path: rel_path.clone(),
+            mime_type: mime.clone(),
+            file_size,
+            width: Some(width as i32),
+            height: Some(height as i32),
+            blurhash: Some(blurhash.clone()),
+            integrity: None,
+            description: description.clone().unwrap_or_default(),
+            created_at: now,
+        },
     )
-    .bind(id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(auth.account_id)
-    .bind(&rel_path)
-    .bind(&mime)
-    .bind(file_size)
-    .bind(width as i64)
-    .bind(height as i64)
-    .bind(&blurhash)
-    .bind(&description)
-    .bind(now)
-    .execute(&state.pool)
     .await?;
 
     Ok(MediaRow {
@@ -367,14 +384,11 @@ async fn get_media(
         .parse()
         .map_err(|_| AppError::not_found("Media not found"))?;
 
-    let row: Option<MediaRow> = sqlx::query_as(
-        "SELECT id, file_path, mime_type, width, height, blurhash, description, created_at FROM media WHERE id = ?",
-    )
-    .bind(media_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let fw_row = fieldwork::media_db::get_media(&fw_pool(&state.pool), media_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Media not found"))?;
 
-    let row = row.ok_or_else(|| AppError::not_found("Media not found"))?;
+    let row = fw_media_to_local(&fw_row);
     let domain = &state.config.server.domain;
     Ok(Json(media_attachment_json(&row, domain)))
 }

@@ -1,5 +1,5 @@
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fieldwork::circuit_breaker::CircuitBreaker;
 use sqlx::SqlitePool;
@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
+use crate::server::fw_pool;
 
 #[derive(sqlx::FromRow)]
 struct DeliveryRow {
@@ -37,6 +38,10 @@ impl std::fmt::Debug for DeliveryRow {
 
 static CIRCUIT_BREAKER: LazyLock<CircuitBreaker> = LazyLock::new(CircuitBreaker::new);
 
+fn now_secs() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
+}
+
 // -- Public API --
 
 /// Enqueue a single activity delivery.
@@ -46,24 +51,16 @@ pub async fn enqueue_delivery(
     sender_persona_id: i64,
     activity_json: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let id = generate_id();
-    let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::to_string(activity_json)?;
-
-    sqlx::query(
-        "INSERT INTO delivery_queue \
-         (id, target_inbox, sender_persona_id, activity_json, attempts, next_attempt_at, created_at) \
-         VALUES (?, ?, ?, ?, 0, ?, ?)",
+    let now = now_secs();
+    fieldwork::delivery_db::enqueue(
+        &fw_pool(pool),
+        target_inbox,
+        &sender_persona_id.to_string(),
+        &json,
+        now,
     )
-    .bind(id)
-    .bind(target_inbox)
-    .bind(sender_persona_id)
-    .bind(&json)
-    .bind(now)
-    .bind(now)
-    .execute(pool)
     .await?;
-
     Ok(())
 }
 
@@ -73,13 +70,10 @@ pub async fn enqueue_to_relays(
     sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let inboxes: Vec<(String,)> =
-        sqlx::query_as("SELECT inbox_url FROM relays WHERE state = 'accepted'")
-            .fetch_all(pool)
-            .await?;
+    let relays = fieldwork::relay::get_accepted(&fw_pool(pool)).await?;
 
-    for (inbox,) in inboxes {
-        enqueue_delivery(pool, &inbox, sender_persona_id, activity).await?;
+    for relay in relays {
+        enqueue_delivery(pool, &relay.inbox_url, sender_persona_id, activity).await?;
     }
 
     Ok(())
@@ -134,7 +128,7 @@ async fn process_batch(
     client: &reqwest::Client,
     config: &Config,
 ) -> anyhow::Result<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = now_secs();
 
     let rows: Vec<DeliveryRow> = sqlx::query_as(
         "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
@@ -236,7 +230,7 @@ async fn deliver_one(
         .send()
         .await;
 
-    let now_ms = chrono::Utc::now().timestamp_millis();
+    let now_ms = chrono::Utc::now().timestamp_millis(); // millis for circuit breaker
 
     match result {
         Ok(resp) => {
@@ -274,52 +268,22 @@ async fn deliver_one(
 }
 
 async fn mark_delivered(pool: &SqlitePool, id: i64) -> anyhow::Result<()> {
-    let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query("UPDATE delivery_queue SET delivered_at = ? WHERE id = ?")
-        .bind(now)
-        .bind(id)
-        .execute(pool)
-        .await?;
+    fieldwork::delivery_db::mark_delivered(&fw_pool(pool), id, now_secs()).await?;
     Ok(())
 }
 
 async fn mark_dead(pool: &SqlitePool, id: i64, reason: &str) -> anyhow::Result<()> {
-    let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query("UPDATE delivery_queue SET dead_at = ?, last_error = ? WHERE id = ?")
-        .bind(now)
-        .bind(reason)
-        .bind(id)
-        .execute(pool)
-        .await?;
+    fieldwork::delivery_db::mark_dead(&fw_pool(pool), id, reason, now_secs()).await?;
     Ok(())
 }
 
 async fn schedule_retry(
     pool: &SqlitePool,
     id: i64,
-    attempts: i32,
+    _attempts: i32,
     error: &str,
 ) -> anyhow::Result<()> {
-    let next_attempt = attempts + 1;
-    if fieldwork::retry::exhausted(next_attempt) {
-        return mark_dead(pool, id, error).await;
-    }
-
-    let now = chrono::Utc::now().timestamp_millis();
-    let next_at = now + fieldwork::retry::delay_ms(attempts);
-
-    sqlx::query(
-        "UPDATE delivery_queue \
-         SET attempts = ?, next_attempt_at = ?, last_error = ? \
-         WHERE id = ?",
-    )
-    .bind(next_attempt)
-    .bind(next_at)
-    .bind(error)
-    .bind(id)
-    .execute(pool)
-    .await?;
-
+    fieldwork::delivery_db::schedule_retry(&fw_pool(pool), id, error, now_secs()).await?;
     Ok(())
 }
 

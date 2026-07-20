@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::federation::{upsert_remote_account, FederationClient, RemoteActorData};
 use crate::id::generate_id;
 use crate::posting::html_sanitizer;
-use crate::server::AppState;
+use crate::server::{fw_pool, AppState};
 use crate::streaming::{publish, StreamEvent};
 
 // Length caps for inbound string fields.
@@ -440,23 +440,15 @@ async fn lookup_by_key_id(
     pool: &SqlitePool,
     key_id: &str,
 ) -> Result<Option<RemoteAccountRow>, AppError> {
-    let row: Option<(i64, String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT id, actor_uri, public_key_pem, inbox_url, shared_inbox_url
-         FROM remote_accounts WHERE public_key_id = ? LIMIT 1",
-    )
-    .bind(key_id)
-    .fetch_optional(pool)
-    .await?;
+    let row = fieldwork::actor_cache::get_by_key_id(&fw_pool(pool), key_id).await?;
 
-    Ok(row.map(
-        |(id, actor_uri, public_key_pem, inbox_url, shared_inbox_url)| RemoteAccountRow {
-            id,
-            actor_uri,
-            public_key_pem,
-            inbox_url,
-            shared_inbox_url,
-        },
-    ))
+    Ok(row.map(|r| RemoteAccountRow {
+        id: r.id,
+        actor_uri: r.actor_uri,
+        public_key_pem: r.public_key_pem,
+        inbox_url: r.inbox_url,
+        shared_inbox_url: r.shared_inbox_url,
+    }))
 }
 
 /// Get a local account's private key and key_id for signing outbound fetches.
@@ -1830,12 +1822,8 @@ async fn handle_accept(
     .await?;
 
     // Check if this Accept is from a relay we subscribed to.
-    let relay_updated = sqlx::query("UPDATE relays SET state = 'accepted' WHERE actor_uri = ?")
-        .bind(&remote.actor_uri)
-        .execute(&state.pool)
-        .await?;
-
-    if relay_updated.rows_affected() > 0 {
+    if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {
+        fieldwork::relay::accept(&fw_pool(&state.pool), relay.id).await?;
         tracing::info!(
             relay = %remote.actor_uri,
             "relay subscription accepted"
@@ -1888,12 +1876,8 @@ async fn handle_reject(
         .await?;
 
     // Check if this Reject is from a relay we subscribed to.
-    let relay_updated = sqlx::query("UPDATE relays SET state = 'rejected' WHERE actor_uri = ?")
-        .bind(&remote.actor_uri)
-        .execute(&state.pool)
-        .await?;
-
-    if relay_updated.rows_affected() > 0 {
+    if let Some(relay) = fieldwork::relay::find_by_actor(&fw_pool(&state.pool), &remote.actor_uri).await? {
+        fieldwork::relay::reject(&fw_pool(&state.pool), relay.id).await?;
         tracing::info!(
             relay = %remote.actor_uri,
             "relay subscription rejected"

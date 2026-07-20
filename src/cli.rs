@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::db;
 use crate::id::generate_id;
+use crate::server::fw_pool;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -949,7 +950,7 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_millis() as i64;
+                .as_secs() as i64;
 
             let result = sqlx::query(
                 "UPDATE delivery_queue SET dead_at = NULL, attempts = 0, next_attempt_at = ? WHERE dead_at IS NOT NULL",
@@ -1183,15 +1184,12 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             eprintln!("Subscribed to relay (pending acceptance): {url}");
         }
         RelayCommands::Remove { url } => {
-            let relay: Option<(i64, String, String, String)> = sqlx::query_as(
-                "SELECT id, inbox_url, actor_uri, follow_id FROM relays WHERE actor_uri = ?",
-            )
-            .bind(&url)
-            .fetch_optional(&pool)
-            .await?;
+            let relay = fieldwork::relay::find_by_actor(&fw_pool(&pool), &url)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;
 
-            let (_, inbox_url, _, stored_follow_id) =
-                relay.ok_or_else(|| anyhow::anyhow!("Relay not found: {url}"))?;
+            let inbox_url = relay.inbox_url.clone();
+            let stored_follow_id = relay.follow_id.clone();
 
             // Get the first local account to send the Undo.
             let first_account: Option<(i64, String)> =
@@ -1222,10 +1220,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 .await
                 .context("Failed to enqueue Undo activity")?;
 
-            sqlx::query("DELETE FROM relays WHERE actor_uri = ?")
-                .bind(&url)
-                .execute(&pool)
-                .await?;
+            fieldwork::relay::unsubscribe(&fw_pool(&pool), relay.id).await?;
 
             eprintln!("Unsubscribed from relay: {url}");
         }
