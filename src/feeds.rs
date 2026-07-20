@@ -15,8 +15,8 @@ struct FeedPost {
 }
 
 /// Look up persona_id by username, returning 404 if not found.
-async fn resolve_account_id(pool: &fieldwork::db::Pool, username: &str) -> Result<i64, AppError> {
-    let persona = fieldwork::persona_db::get_persona_by_username(pool, username)
+async fn resolve_account_id(pool: &fieldwork_db::db::Pool, username: &str) -> Result<i64, AppError> {
+    let persona = fieldwork_db::persona_db::get_persona_by_username(pool, username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona.id)
@@ -24,10 +24,10 @@ async fn resolve_account_id(pool: &fieldwork::db::Pool, username: &str) -> Resul
 
 /// Fetch last 20 public posts for an account.
 async fn fetch_public_posts(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
 ) -> Result<Vec<FeedPost>, AppError> {
-    // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by
+    // ponytail: fieldwork_db::posts_db::posts_by_persona doesn't filter by
     // visibility or exclude boosts. Custom query needed for feed generation.
     let rows: Vec<(i64, String, i64)> =
         crate::db_extras::get_public_feed_posts(pool, account_id).await?;

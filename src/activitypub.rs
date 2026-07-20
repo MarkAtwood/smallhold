@@ -81,7 +81,7 @@ pub(crate) struct ApAccountRow {
 }
 
 /// Looks up a local persona by username (with DID data from users table).
-async fn fetch_account(pool: &fieldwork::db::Pool, username: &str) -> Result<ApAccountRow, AppError> {
+async fn fetch_account(pool: &fieldwork_db::db::Pool, username: &str) -> Result<ApAccountRow, AppError> {
     let raw_row = crate::db_extras::fetch_ap_account(pool, username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
@@ -289,7 +289,7 @@ async fn profile_page(
     let custom_css = load_extra_css(&state.config);
 
     // Counts
-    let persona = fieldwork::persona_db::get_persona_by_username(
+    let persona = fieldwork_db::persona_db::get_persona_by_username(
         &state.pool, &username,
     ).await?;
     let aid = persona.as_ref().map(|p| p.id).unwrap_or(0);
@@ -298,7 +298,7 @@ async fn profile_page(
         .await
         .unwrap_or(0);
 
-    let follower_count = fieldwork::followers_db::follower_count(
+    let follower_count = fieldwork_db::followers_db::follower_count(
         &state.pool, aid,
     ).await.unwrap_or(0);
 
@@ -529,12 +529,12 @@ async fn followers_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let persona = fieldwork::persona_db::get_persona_by_username(
+    let persona = fieldwork_db::persona_db::get_persona_by_username(
         &state.pool, &username,
     ).await?
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let count = fieldwork::followers_db::follower_count(
+    let count = fieldwork_db::followers_db::follower_count(
         &state.pool, persona.id,
     ).await?;
 
@@ -552,12 +552,12 @@ async fn following_collection(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let persona = fieldwork::persona_db::get_persona_by_username(
+    let persona = fieldwork_db::persona_db::get_persona_by_username(
         &state.pool, &username,
     ).await?
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let count = fieldwork::follows_db::following_count(
+    let count = fieldwork_db::follows_db::following_count(
         &state.pool, persona.id,
     ).await?;
 

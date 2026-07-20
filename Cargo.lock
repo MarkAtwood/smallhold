@@ -1217,13 +1217,22 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "sqlx",
  "ssrf-guard",
  "subtle",
  "thiserror 2.0.18",
  "tracing",
  "url",
  "whatlang",
+]
+
+[[package]]
+name = "fieldwork-db"
+version = "0.1.0"
+dependencies = [
+ "fieldwork",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -3456,6 +3465,7 @@ dependencies = [
  "fedi-did",
  "fedi-integrity",
  "fieldwork",
+ "fieldwork-db",
  "flate2",
  "futures",
  "hkdf",

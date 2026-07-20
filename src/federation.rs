@@ -416,13 +416,13 @@ fn parse_actor_document(doc: &Value, actor_uri: &str) -> anyhow::Result<RemoteAc
 
 /// Insert or update a remote account. Returns the local snowflake ID.
 pub async fn upsert_remote_account(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     data: &RemoteActorData,
 ) -> anyhow::Result<i64> {
     let now = chrono::Utc::now().timestamp();
     let new_id = generate_id();
 
-    let row = fieldwork::actor_cache::RemoteAccountRow {
+    let row = fieldwork_db::actor_cache::RemoteAccountRow {
         id: new_id,
         actor_uri: data.actor_uri.clone(),
         username: data.username.clone(),
@@ -443,7 +443,7 @@ pub async fn upsert_remote_account(
         fetch_fail_count: 0,
     };
 
-    let id = fieldwork::actor_cache::upsert_remote_account(pool, &row)
+    let id = fieldwork_db::actor_cache::upsert_remote_account(pool, &row)
         .await
         .context("upsert remote_accounts")?;
 
@@ -460,7 +460,7 @@ pub async fn upsert_remote_account(
 /// The digest is the XOR of SHA-256 hashes of all follower actor URIs on
 /// `target_domain`. Returns `None` if there are no followers on that domain.
 pub async fn compute_follower_sync_digest(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     target_domain: &str,
 ) -> Option<String> {

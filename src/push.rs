@@ -55,9 +55,9 @@ struct SubscriptionRow {
 // ---------------------------------------------------------------------------
 
 /// Get or create the server's VAPID keypair. Returns (private_key_pem, public_key_base64url).
-pub async fn get_or_create_vapid_key(pool: &fieldwork::db::Pool) -> anyhow::Result<(String, String)> {
+pub async fn get_or_create_vapid_key(pool: &fieldwork_db::db::Pool) -> anyhow::Result<(String, String)> {
     let fwp = pool.clone();
-    if let Some((pem, pub_b64)) = fieldwork::push_db::get_vapid_keys(&fwp).await? {
+    if let Some((pem, pub_b64)) = fieldwork_db::push_db::get_vapid_keys(&fwp).await? {
         return Ok((pem, pub_b64));
     }
 
@@ -73,13 +73,13 @@ pub async fn get_or_create_vapid_key(pool: &fieldwork::db::Pool) -> anyhow::Resu
     let pub_bytes = EncodedPoint::from(verifying_key);
     let pub_b64 = URL_SAFE_NO_PAD.encode(pub_bytes.as_bytes());
 
-    fieldwork::push_db::set_vapid_keys(&fwp, pem.as_str(), &pub_b64).await?;
+    fieldwork_db::push_db::set_vapid_keys(&fwp, pem.as_str(), &pub_b64).await?;
 
     Ok((pem.to_string(), pub_b64))
 }
 
 /// Get just the public key (base64url). Used for instance API responses.
-pub async fn get_vapid_public_key(pool: &fieldwork::db::Pool) -> String {
+pub async fn get_vapid_public_key(pool: &fieldwork_db::db::Pool) -> String {
     match get_or_create_vapid_key(pool).await {
         Ok((_, pub_key)) => pub_key,
         Err(_) => String::new(),
@@ -91,7 +91,7 @@ pub async fn get_vapid_public_key(pool: &fieldwork::db::Pool) -> String {
 // ---------------------------------------------------------------------------
 
 pub async fn create_subscription(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     endpoint: &str,
     p256dh: &str,
@@ -105,9 +105,9 @@ pub async fn create_subscription(
         .unwrap()
         .as_millis() as i64;
 
-    fieldwork::push_db::create_subscription(
+    fieldwork_db::push_db::create_subscription(
         pool,
-        &fieldwork::push_db::PushSubscriptionRow {
+        &fieldwork_db::push_db::PushSubscriptionRow {
             id,
             user_id: account_id,
             endpoint: endpoint.to_string(),
@@ -131,10 +131,10 @@ pub async fn create_subscription(
 }
 
 pub async fn get_subscription(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
 ) -> Result<Option<Value>, AppError> {
-    let fw_row = fieldwork::push_db::get_subscription(pool, account_id).await?;
+    let fw_row = fieldwork_db::push_db::get_subscription(pool, account_id).await?;
 
     match fw_row {
         Some(r) => {
@@ -159,15 +159,15 @@ pub async fn get_subscription(
 }
 
 pub async fn update_subscription(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     alerts: &AlertsConfig,
     policy: &str,
 ) -> Result<Value, AppError> {
     // Get subscription ID for the update call
-    let sub = fieldwork::push_db::get_subscription(pool, account_id).await?;
+    let sub = fieldwork_db::push_db::get_subscription(pool, account_id).await?;
     if let Some(s) = sub {
-        fieldwork::push_db::update_subscription(
+        fieldwork_db::push_db::update_subscription(
             pool,
             s.id,
             alerts.mention,
@@ -185,8 +185,8 @@ pub async fn update_subscription(
         .ok_or_else(|| AppError::not_found("No push subscription"))
 }
 
-pub async fn delete_subscription(pool: &fieldwork::db::Pool, account_id: i64) -> Result<(), AppError> {
-    fieldwork::push_db::delete_subscription(pool, account_id).await?;
+pub async fn delete_subscription(pool: &fieldwork_db::db::Pool, account_id: i64) -> Result<(), AppError> {
+    fieldwork_db::push_db::delete_subscription(pool, account_id).await?;
     Ok(())
 }
 
@@ -218,7 +218,7 @@ fn subscription_to_json(
 
 /// Send a push notification to a local account. Fire-and-forget; errors are logged, not propagated.
 pub async fn send_push_notification(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     notification_type: &str,
     title: &str,
@@ -233,14 +233,14 @@ pub async fn send_push_notification(
 }
 
 async fn send_push_inner(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     notification_type: &str,
     title: &str,
     body: &str,
     domain: &str,
 ) -> anyhow::Result<()> {
-    let fw_sub = fieldwork::push_db::get_subscription(pool, account_id).await?;
+    let fw_sub = fieldwork_db::push_db::get_subscription(pool, account_id).await?;
 
     let sub = match fw_sub {
         Some(s) => s,
@@ -312,7 +312,7 @@ async fn send_push_inner(
     // 404 or 410 means the subscription is stale — delete it
     if status == 404 || status == 410 {
         tracing::info!(account_id, "push endpoint gone, removing subscription");
-        fieldwork::push_db::delete_subscription(pool, account_id).await?;
+        fieldwork_db::push_db::delete_subscription(pool, account_id).await?;
     } else if status >= 400 {
         let body_bytes = response.bytes().await.unwrap_or_default();
         let body_text = String::from_utf8_lossy(&body_bytes[..body_bytes.len().min(1024)]);

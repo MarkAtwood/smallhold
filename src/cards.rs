@@ -282,7 +282,7 @@ pub fn card_to_json(card: &CardData) -> Value {
 
 /// Fetch card for a URL (or use cache) and link it to a post.
 pub async fn fetch_and_cache_card(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     post_id: i64,
     url: &str,
     own_domain: &str,
@@ -291,24 +291,24 @@ pub async fn fetch_and_cache_card(
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     // Check if already cached and fresh (< 24h)
-    if let Some(cached) = fieldwork::cards_db::get_card_by_url(&fwp, url).await? {
+    if let Some(cached) = fieldwork_db::cards_db::get_card_by_url(&fwp, url).await? {
         if !cached.failed && (now - cached.fetched_at) < 24 * 60 * 60 {
-            fieldwork::cards_db::link_card_to_post(&fwp, post_id, url).await?;
+            fieldwork_db::cards_db::link_card_to_post(&fwp, post_id, url).await?;
             return Ok(());
         }
     }
 
     // Check if URL failed recently (< 1h)
-    if fieldwork::cards_db::is_recent_failure(&fwp, url, 3600).await? {
+    if fieldwork_db::cards_db::is_recent_failure(&fwp, url, 3600).await? {
         bail!("URL failed recently, not retrying");
     }
 
     // Fetch the card
     match fetch_card(url, own_domain).await {
         Ok(card) => {
-            fieldwork::cards_db::upsert_card(
+            fieldwork_db::cards_db::upsert_card(
                 &fwp,
-                &fieldwork::cards_db::CardRow {
+                &fieldwork_db::cards_db::CardRow {
                     id: 0,
                     url: card.url.clone(),
                     card_type: card.card_type,
@@ -328,12 +328,12 @@ pub async fn fetch_and_cache_card(
             )
             .await?;
 
-            fieldwork::cards_db::link_card_to_post(&fwp, post_id, &card.url).await?;
+            fieldwork_db::cards_db::link_card_to_post(&fwp, post_id, &card.url).await?;
         }
         Err(_) => {
-            fieldwork::cards_db::upsert_card(
+            fieldwork_db::cards_db::upsert_card(
                 &fwp,
-                &fieldwork::cards_db::CardRow {
+                &fieldwork_db::cards_db::CardRow {
                     id: 0,
                     url: url.to_string(),
                     card_type: "link".to_string(),
@@ -366,8 +366,8 @@ pub async fn fetch_and_cache_card(
 // ponytail: batch card loading available via load_cards_for_posts().
 // Currently cards loaded per-status in load_status(). Acceptable for
 // timeline sizes (max 40 posts). Wire batch loading if this becomes a bottleneck.
-pub async fn load_card_for_post(pool: &fieldwork::db::Pool, post_id: i64) -> Option<Value> {
-    let cards = fieldwork::cards_db::cards_for_post(pool, post_id)
+pub async fn load_card_for_post(pool: &fieldwork_db::db::Pool, post_id: i64) -> Option<Value> {
+    let cards = fieldwork_db::cards_db::cards_for_post(pool, post_id)
         .await
         .ok()?;
 
@@ -390,18 +390,18 @@ pub async fn load_card_for_post(pool: &fieldwork::db::Pool, post_id: i64) -> Opt
 }
 
 /// Batch load cards for multiple posts. Returns a map of post_id -> card JSON.
-pub async fn load_cards_for_posts(pool: &fieldwork::db::Pool, post_ids: &[i64]) -> HashMap<i64, Value> {
+pub async fn load_cards_for_posts(pool: &fieldwork_db::db::Pool, post_ids: &[i64]) -> HashMap<i64, Value> {
     if post_ids.is_empty() {
         return HashMap::new();
     }
 
-    // ponytail: iterates per-post via fieldwork::cards_db::cards_for_post.
+    // ponytail: iterates per-post via fieldwork_db::cards_db::cards_for_post.
     // Timeline pages are <=40 posts so N+1 is acceptable. Upgrade to batch
     // query if this becomes a bottleneck.
     let fwp = pool.clone();
     let mut map = HashMap::new();
     for &post_id in post_ids {
-        if let Ok(cards) = fieldwork::cards_db::cards_for_post(&fwp, post_id).await {
+        if let Ok(cards) = fieldwork_db::cards_db::cards_for_post(&fwp, post_id).await {
             if let Some(c) = cards.into_iter().next() {
                 map.insert(
                     post_id,

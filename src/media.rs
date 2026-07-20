@@ -64,7 +64,7 @@ struct MediaRow {
 }
 
 /// Convert a fieldwork MediaRow to a local MediaRow for JSON serialization.
-fn fw_media_to_local(fw: &fieldwork::media_db::MediaRow) -> MediaRow {
+fn fw_media_to_local(fw: &fieldwork_db::media_db::MediaRow) -> MediaRow {
     MediaRow {
         id: fw.id,
         file_path: fw.file_path.clone(),
@@ -274,9 +274,9 @@ async fn process_upload(
     let now = now_millis();
     let file_size = clean_data.len() as i64;
 
-    fieldwork::media_db::insert_media(
+    fieldwork_db::media_db::insert_media(
         &state.pool,
-        &fieldwork::media_db::MediaRow {
+        &fieldwork_db::media_db::MediaRow {
             id,
             user_id: crate::db::DEFAULT_USER_ID,
             persona_id: auth.account_id,
@@ -344,10 +344,10 @@ async fn update_media(
         .parse()
         .map_err(|_| AppError::not_found("Media not found"))?;
 
-    // ponytail: fieldwork::media_db::get_media doesn't filter by user_id
+    // ponytail: fieldwork_db::media_db::get_media doesn't filter by user_id
     // (ownership). Single-user smallhold doesn't need it, but we check persona_id
     // for safety via the fieldwork row.
-    let fw_row = fieldwork::media_db::get_media(&state.pool, media_id)
+    let fw_row = fieldwork_db::media_db::get_media(&state.pool, media_id)
         .await?
         .ok_or_else(|| AppError::not_found("Media not found"))?;
 
@@ -384,7 +384,7 @@ async fn get_media(
         .parse()
         .map_err(|_| AppError::not_found("Media not found"))?;
 
-    let fw_row = fieldwork::media_db::get_media(&state.pool, media_id)
+    let fw_row = fieldwork_db::media_db::get_media(&state.pool, media_id)
         .await?
         .ok_or_else(|| AppError::not_found("Media not found"))?;
 

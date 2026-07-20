@@ -7,9 +7,9 @@ use crate::sqlx;
 use sqlx::SqlitePool;
 
 /// Extract the inner SQLite pool from the fieldwork pool enum.
-fn sq(pool: &fieldwork::db::Pool) -> &SqlitePool {
+fn sq(pool: &fieldwork_db::db::Pool) -> &SqlitePool {
     match pool {
-        fieldwork::db::Pool::Sqlite(p) => p,
+        fieldwork_db::db::Pool::Sqlite(p) => p,
     }
 }
 
@@ -18,7 +18,7 @@ fn sq(pool: &fieldwork::db::Pool) -> &SqlitePool {
 // ---------------------------------------------------------------------------
 
 /// Fetch the admin password hash. Returns None if no admin password is set.
-pub async fn get_admin_password_hash(pool: &fieldwork::db::Pool) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_admin_password_hash(pool: &fieldwork_db::db::Pool) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> =
         sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
             .fetch_optional(sq(pool))
@@ -27,7 +27,7 @@ pub async fn get_admin_password_hash(pool: &fieldwork::db::Pool) -> Result<Optio
 }
 
 /// Upsert the admin password hash.
-pub async fn set_admin_password(pool: &fieldwork::db::Pool, hash: &str, now: i64) -> Result<(), sqlx::Error> {
+pub async fn set_admin_password(pool: &fieldwork_db::db::Pool, hash: &str, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO admin (id, password_hash, created_at) VALUES (1, ?, ?) \
          ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash",
@@ -44,7 +44,7 @@ pub async fn set_admin_password(pool: &fieldwork::db::Pool, hash: &str, now: i64
 // ---------------------------------------------------------------------------
 
 /// Count all posts (for instance metadata).
-pub async fn total_post_count(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::Error> {
+pub async fn total_post_count(pool: &fieldwork_db::db::Pool) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
         .fetch_one(sq(pool))
         .await?;
@@ -52,7 +52,7 @@ pub async fn total_post_count(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::E
 }
 
 /// Count distinct remote domains (for instance metadata).
-pub async fn remote_domain_count(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::Error> {
+pub async fn remote_domain_count(pool: &fieldwork_db::db::Pool) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) =
         sqlx::query_as("SELECT COUNT(DISTINCT domain) FROM remote_accounts")
             .fetch_one(sq(pool))
@@ -65,7 +65,7 @@ pub async fn remote_domain_count(pool: &fieldwork::db::Pool) -> Result<i64, sqlx
 // ---------------------------------------------------------------------------
 
 /// Find a token ID by its hash (for revocation by token value).
-pub async fn find_token_id_by_hash(pool: &fieldwork::db::Pool, token_hash: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn find_token_id_by_hash(pool: &fieldwork_db::db::Pool, token_hash: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as(
         "SELECT id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
     )
@@ -77,7 +77,7 @@ pub async fn find_token_id_by_hash(pool: &fieldwork::db::Pool, token_hash: &str)
 
 /// Update last_status_at timestamp on a persona.
 pub async fn touch_persona_last_status(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     persona_id: i64,
     now: i64,
 ) -> Result<(), sqlx::Error> {
@@ -95,7 +95,7 @@ pub async fn touch_persona_last_status(
 
 /// Attach unattached media to a post (conditional UPDATE).
 pub async fn attach_media_to_post(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     post_id: i64,
     media_id: i64,
     persona_id: i64,
@@ -113,7 +113,7 @@ pub async fn attach_media_to_post(
 
 /// Update media description.
 pub async fn update_media_description(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     media_id: i64,
     description: Option<&str>,
 ) -> Result<(), sqlx::Error> {
@@ -130,7 +130,7 @@ pub async fn update_media_description(
 // ---------------------------------------------------------------------------
 
 /// Check if the viewer has boosted a given post.
-pub async fn count_boosts_by_persona(pool: &fieldwork::db::Pool, persona_id: i64, post_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn count_boosts_by_persona(pool: &fieldwork_db::db::Pool, persona_id: i64, post_id: i64) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND boost_of_id = ?")
         .bind(persona_id)
         .bind(post_id)
@@ -140,7 +140,7 @@ pub async fn count_boosts_by_persona(pool: &fieldwork::db::Pool, persona_id: i64
 }
 
 /// Check if a post is bookmarked by a persona.
-pub async fn count_bookmarks(pool: &fieldwork::db::Pool, persona_id: i64, post_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn count_bookmarks(pool: &fieldwork_db::db::Pool, persona_id: i64, post_id: i64) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookmarks WHERE persona_id = ? AND post_id = ?")
         .bind(persona_id)
         .bind(post_id)
@@ -150,7 +150,7 @@ pub async fn count_bookmarks(pool: &fieldwork::db::Pool, persona_id: i64, post_i
 }
 
 /// Check if a post is pinned by a persona.
-pub async fn is_pinned(pool: &fieldwork::db::Pool, persona_id: i64, post_id: i64) -> Result<bool, sqlx::Error> {
+pub async fn is_pinned(pool: &fieldwork_db::db::Pool, persona_id: i64, post_id: i64) -> Result<bool, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pinned_posts WHERE persona_id = ? AND post_id = ?")
         .bind(persona_id)
         .bind(post_id)
@@ -160,7 +160,7 @@ pub async fn is_pinned(pool: &fieldwork::db::Pool, persona_id: i64, post_id: i64
 }
 
 /// Look up the ap_id of a post by its ID.
-pub async fn get_post_ap_id(pool: &fieldwork::db::Pool, post_id: i64) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_post_ap_id(pool: &fieldwork_db::db::Pool, post_id: i64) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> = sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
         .bind(post_id)
         .fetch_optional(sq(pool))
@@ -169,7 +169,7 @@ pub async fn get_post_ap_id(pool: &fieldwork::db::Pool, post_id: i64) -> Result<
 }
 
 /// Look up post id and persona_id by ap_id (for inbox Like/Announce lookups).
-pub async fn find_post_by_ap_id(pool: &fieldwork::db::Pool, ap_id: &str) -> Result<Option<(i64, i64)>, sqlx::Error> {
+pub async fn find_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str) -> Result<Option<(i64, i64)>, sqlx::Error> {
     sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
         .bind(ap_id)
         .fetch_optional(sq(pool))
@@ -177,7 +177,7 @@ pub async fn find_post_by_ap_id(pool: &fieldwork::db::Pool, ap_id: &str) -> Resu
 }
 
 /// Check if a local post exists by ap_id.
-pub async fn post_exists_by_ap_id(pool: &fieldwork::db::Pool, ap_id: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn post_exists_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM posts WHERE ap_id = ? LIMIT 1")
         .bind(ap_id)
         .fetch_optional(sq(pool))
@@ -186,7 +186,7 @@ pub async fn post_exists_by_ap_id(pool: &fieldwork::db::Pool, ap_id: &str) -> Re
 }
 
 /// Check if a remote post exists by URI.
-pub async fn remote_post_exists_by_uri(pool: &fieldwork::db::Pool, uri: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn remote_post_exists_by_uri(pool: &fieldwork_db::db::Pool, uri: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM remote_posts WHERE ap_uri = ? LIMIT 1")
         .bind(uri)
         .fetch_optional(sq(pool))
@@ -195,7 +195,7 @@ pub async fn remote_post_exists_by_uri(pool: &fieldwork::db::Pool, uri: &str) ->
 }
 
 /// Count public posts for a persona.
-pub async fn count_public_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn count_public_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND visibility = 'public'")
         .bind(persona_id)
         .fetch_one(sq(pool))
@@ -204,7 +204,7 @@ pub async fn count_public_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> 
 }
 
 /// Count all posts for a persona.
-pub async fn count_posts_for_persona(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn count_posts_for_persona(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
         .bind(persona_id)
         .fetch_one(sq(pool))
@@ -213,7 +213,7 @@ pub async fn count_posts_for_persona(pool: &fieldwork::db::Pool, persona_id: i64
 }
 
 /// Save a post edit history record (INSERT ... SELECT from current post).
-pub async fn save_post_edit_history(pool: &fieldwork::db::Pool, edit_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
+pub async fn save_post_edit_history(pool: &fieldwork_db::db::Pool, edit_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO post_edits (id, post_id, content, content_html, spoiler_text, sensitive, created_at) \
          SELECT ?, id, content, content_html, spoiler_text, sensitive, COALESCE(edited_at, created_at) FROM posts WHERE id = ?",
@@ -227,7 +227,7 @@ pub async fn save_post_edit_history(pool: &fieldwork::db::Pool, edit_id: i64, po
 
 /// Update a post's content and metadata (for edit).
 pub async fn update_post_full(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     post_id: i64,
     content: &str,
     content_html: &str,
@@ -253,7 +253,7 @@ pub async fn update_post_full(
 }
 
 /// Get post edit history.
-pub async fn get_post_edits(pool: &fieldwork::db::Pool, post_id: i64) -> Result<Vec<(String, String, String, bool, i64)>, sqlx::Error> {
+pub async fn get_post_edits(pool: &fieldwork_db::db::Pool, post_id: i64) -> Result<Vec<(String, String, String, bool, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT content, content_html, spoiler_text, sensitive, created_at \
          FROM post_edits WHERE post_id = ? ORDER BY created_at ASC",
@@ -264,7 +264,7 @@ pub async fn get_post_edits(pool: &fieldwork::db::Pool, post_id: i64) -> Result<
 }
 
 /// Delete a specific reblog notification.
-pub async fn delete_reblog_notification(pool: &fieldwork::db::Pool, from_persona_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_reblog_notification(pool: &fieldwork_db::db::Pool, from_persona_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM notifications WHERE kind = 'reblog' AND from_persona_id = ? AND post_id = ?")
         .bind(from_persona_id)
         .bind(post_id)
@@ -274,7 +274,7 @@ pub async fn delete_reblog_notification(pool: &fieldwork::db::Pool, from_persona
 }
 
 /// Dismiss a single notification by ID and persona.
-pub async fn dismiss_notification(pool: &fieldwork::db::Pool, notif_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
+pub async fn dismiss_notification(pool: &fieldwork_db::db::Pool, notif_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM notifications WHERE id = ? AND persona_id = ?")
         .bind(notif_id)
         .bind(persona_id)
@@ -284,7 +284,7 @@ pub async fn dismiss_notification(pool: &fieldwork::db::Pool, notif_id: i64, per
 }
 
 /// Detach media from a post (set post_id to NULL).
-pub async fn detach_media_from_post(pool: &fieldwork::db::Pool, post_id: i64) -> Result<(), sqlx::Error> {
+pub async fn detach_media_from_post(pool: &fieldwork_db::db::Pool, post_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE media SET post_id = NULL WHERE post_id = ?")
         .bind(post_id)
         .execute(sq(pool))
@@ -328,7 +328,7 @@ pub async fn delete_post_related<'a>(
 
 /// Look up a remote account by ID (basic fields).
 pub async fn get_remote_account_by_id(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
 ) -> Result<Option<(i64, String, String, String, String)>, sqlx::Error> {
     sqlx::query_as(
@@ -341,7 +341,7 @@ pub async fn get_remote_account_by_id(
 
 /// Look up a remote account by ID (with inbox fields for interactions).
 pub async fn get_remote_account_full(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
 ) -> Result<Option<(i64, String, String, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
@@ -353,7 +353,7 @@ pub async fn get_remote_account_full(
 }
 
 /// Get the inbox URL for a remote account by actor_uri (preferring shared inbox).
-pub async fn get_remote_inbox_by_actor(pool: &fieldwork::db::Pool, actor_uri: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_remote_inbox_by_actor(pool: &fieldwork_db::db::Pool, actor_uri: &str) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT COALESCE(shared_inbox_url, inbox_url) FROM remote_accounts WHERE actor_uri = ?",
     )
@@ -364,7 +364,7 @@ pub async fn get_remote_inbox_by_actor(pool: &fieldwork::db::Pool, actor_uri: &s
 }
 
 /// Look up a remote account's display name by ID (for test verification).
-pub async fn get_remote_display_name(pool: &fieldwork::db::Pool, id: i64) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_remote_display_name(pool: &fieldwork_db::db::Pool, id: i64) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> = sqlx::query_as("SELECT display_name FROM remote_accounts WHERE id = ?")
         .bind(id)
         .fetch_optional(sq(pool))
@@ -373,7 +373,7 @@ pub async fn get_remote_display_name(pool: &fieldwork::db::Pool, id: i64) -> Res
 }
 
 /// Find a remote account ID by actor_uri.
-pub async fn find_remote_by_actor_uri(pool: &fieldwork::db::Pool, uri: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn find_remote_by_actor_uri(pool: &fieldwork_db::db::Pool, uri: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM remote_accounts WHERE actor_uri = ?")
         .bind(uri)
         .fetch_optional(sq(pool))
@@ -382,7 +382,7 @@ pub async fn find_remote_by_actor_uri(pool: &fieldwork::db::Pool, uri: &str) -> 
 }
 
 /// Look up a remote account's actor_uri by username and domain.
-pub async fn get_remote_actor_uri_by_webfinger(pool: &fieldwork::db::Pool, username: &str, domain: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_remote_actor_uri_by_webfinger(pool: &fieldwork_db::db::Pool, username: &str, domain: &str) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
     )
@@ -399,7 +399,7 @@ pub async fn get_remote_actor_uri_by_webfinger(pool: &fieldwork::db::Pool, usern
 
 /// Insert a remote post.
 pub async fn insert_remote_post(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
     ap_uri: &str,
     remote_account_id: i64,
@@ -437,7 +437,7 @@ pub async fn insert_remote_post(
 
 /// Update a remote post's content (for inbox Update{Note}).
 pub async fn update_remote_post(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     ap_uri: &str,
     remote_account_id: i64,
     content_html: &str,
@@ -461,7 +461,7 @@ pub async fn update_remote_post(
 }
 
 /// Delete a remote post by URI and account (ownership check).
-pub async fn delete_remote_post(pool: &fieldwork::db::Pool, ap_uri: &str, remote_account_id: i64) -> Result<u64, sqlx::Error> {
+pub async fn delete_remote_post(pool: &fieldwork_db::db::Pool, ap_uri: &str, remote_account_id: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?")
         .bind(ap_uri)
         .bind(remote_account_id)
@@ -471,7 +471,7 @@ pub async fn delete_remote_post(pool: &fieldwork::db::Pool, ap_uri: &str, remote
 }
 
 /// Clean up orphan mentions (referencing deleted remote posts).
-pub async fn cleanup_orphan_mentions(pool: &fieldwork::db::Pool) -> Result<(), sqlx::Error> {
+pub async fn cleanup_orphan_mentions(pool: &fieldwork_db::db::Pool) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM mentions WHERE remote_post_id NOT IN (SELECT id FROM remote_posts)")
         .execute(sq(pool))
         .await?;
@@ -483,7 +483,7 @@ pub async fn cleanup_orphan_mentions(pool: &fieldwork::db::Pool) -> Result<(), s
 // ---------------------------------------------------------------------------
 
 /// Delete all data associated with a remote account (cascade).
-pub async fn cascade_delete_remote_account(pool: &fieldwork::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
+pub async fn cascade_delete_remote_account(pool: &fieldwork_db::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM notifications WHERE from_remote_account_id = ?")
         .bind(remote_id).execute(sq(pool)).await?;
     sqlx::query("DELETE FROM favourites WHERE remote_post_id IN (SELECT id FROM remote_posts WHERE remote_account_id = ?)")
@@ -506,21 +506,21 @@ pub async fn cascade_delete_remote_account(pool: &fieldwork::db::Pool, remote_id
 }
 
 /// Delete all followers by a remote account.
-pub async fn delete_followers_by_remote(pool: &fieldwork::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_followers_by_remote(pool: &fieldwork_db::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
         .bind(remote_id).execute(sq(pool)).await?;
     Ok(())
 }
 
 /// Delete all follows to a remote account.
-pub async fn delete_follows_to_remote(pool: &fieldwork::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_follows_to_remote(pool: &fieldwork_db::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
         .bind(remote_id).execute(sq(pool)).await?;
     Ok(())
 }
 
 /// Delete follow requests from a remote account.
-pub async fn delete_follow_requests_from_remote(pool: &fieldwork::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_follow_requests_from_remote(pool: &fieldwork_db::db::Pool, remote_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
         .bind(remote_id).execute(sq(pool)).await?;
     Ok(())
@@ -531,7 +531,7 @@ pub async fn delete_follow_requests_from_remote(pool: &fieldwork::db::Pool, remo
 // ---------------------------------------------------------------------------
 
 /// Insert a mention for a remote post.
-pub async fn insert_remote_mention(pool: &fieldwork::db::Pool, remote_post_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
+pub async fn insert_remote_mention(pool: &fieldwork_db::db::Pool, remote_post_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id) VALUES (?, ?)")
         .bind(remote_post_id)
         .bind(persona_id)
@@ -541,7 +541,7 @@ pub async fn insert_remote_mention(pool: &fieldwork::db::Pool, remote_post_id: i
 }
 
 /// Check if a mention notification already exists.
-pub async fn mention_notification_exists(pool: &fieldwork::db::Pool, persona_id: i64, remote_post_id: i64) -> Result<bool, sqlx::Error> {
+pub async fn mention_notification_exists(pool: &fieldwork_db::db::Pool, persona_id: i64, remote_post_id: i64) -> Result<bool, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM notifications WHERE persona_id = ? AND kind = 'mention' AND remote_post_id = ?",
     )
@@ -558,7 +558,7 @@ pub async fn mention_notification_exists(pool: &fieldwork::db::Pool, persona_id:
 
 /// Insert a follow request (locked accounts).
 pub async fn insert_follow_request(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
     requester_remote_id: i64,
     target_persona_id: i64,
@@ -579,7 +579,7 @@ pub async fn insert_follow_request(
 }
 
 /// Delete a follow request by requester and target.
-pub async fn delete_follow_request_by_remote(pool: &fieldwork::db::Pool, remote_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_follow_request_by_remote(pool: &fieldwork_db::db::Pool, remote_id: i64, persona_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?")
         .bind(remote_id)
         .bind(persona_id)
@@ -589,7 +589,7 @@ pub async fn delete_follow_request_by_remote(pool: &fieldwork::db::Pool, remote_
 }
 
 /// Delete a follow request by ID.
-pub async fn delete_follow_request(pool: &fieldwork::db::Pool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_follow_request(pool: &fieldwork_db::db::Pool, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM follow_requests WHERE id = ?")
         .bind(id)
         .execute(sq(pool))
@@ -598,7 +598,7 @@ pub async fn delete_follow_request(pool: &fieldwork::db::Pool, id: i64) -> Resul
 }
 
 /// Get pending follow requests for a persona.
-pub async fn get_follow_requests(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Vec<(i64, i64, i64)>, sqlx::Error> {
+pub async fn get_follow_requests(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, i64, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT fr.id, fr.requester_remote_id, fr.created_at FROM follow_requests fr WHERE fr.target_persona_id = ? ORDER BY fr.created_at DESC",
     )
@@ -608,7 +608,7 @@ pub async fn get_follow_requests(pool: &fieldwork::db::Pool, persona_id: i64) ->
 }
 
 /// Find a follow request by requester and target.
-pub async fn find_follow_request(pool: &fieldwork::db::Pool, remote_id: i64, persona_id: i64) -> Result<Option<(i64, String)>, sqlx::Error> {
+pub async fn find_follow_request(pool: &fieldwork_db::db::Pool, remote_id: i64, persona_id: i64) -> Result<Option<(i64, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, ap_id FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?",
     )
@@ -619,7 +619,7 @@ pub async fn find_follow_request(pool: &fieldwork::db::Pool, remote_id: i64, per
 }
 
 /// Get remote account inbox info by ID.
-pub async fn get_remote_inbox(pool: &fieldwork::db::Pool, id: i64) -> Result<Option<(String, String, Option<String>)>, sqlx::Error> {
+pub async fn get_remote_inbox(pool: &fieldwork_db::db::Pool, id: i64) -> Result<Option<(String, String, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT actor_uri, inbox_url, shared_inbox_url FROM remote_accounts WHERE id = ?",
     )
@@ -633,7 +633,7 @@ pub async fn get_remote_inbox(pool: &fieldwork::db::Pool, id: i64) -> Result<Opt
 // ---------------------------------------------------------------------------
 
 /// Count follows from source to target (local).
-pub async fn count_follows_local(pool: &fieldwork::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn count_follows_local(pool: &fieldwork_db::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
         .bind(persona_id)
         .bind(followee_persona_id)
@@ -643,7 +643,7 @@ pub async fn count_follows_local(pool: &fieldwork::db::Pool, persona_id: i64, fo
 }
 
 /// Get show_reblogs setting for a local follow.
-pub async fn get_follow_show_reblogs(pool: &fieldwork::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<Option<bool>, sqlx::Error> {
+pub async fn get_follow_show_reblogs(pool: &fieldwork_db::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<Option<bool>, sqlx::Error> {
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_persona_id = ?",
     )
@@ -655,7 +655,7 @@ pub async fn get_follow_show_reblogs(pool: &fieldwork::db::Pool, persona_id: i64
 }
 
 /// Get show_reblogs setting for a remote follow.
-pub async fn get_follow_show_reblogs_remote(pool: &fieldwork::db::Pool, persona_id: i64, followee_remote_id: i64) -> Result<Option<bool>, sqlx::Error> {
+pub async fn get_follow_show_reblogs_remote(pool: &fieldwork_db::db::Pool, persona_id: i64, followee_remote_id: i64) -> Result<Option<bool>, sqlx::Error> {
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_remote_id = ?",
     )
@@ -667,7 +667,7 @@ pub async fn get_follow_show_reblogs_remote(pool: &fieldwork::db::Pool, persona_
 }
 
 /// Get notify setting for a local follow.
-pub async fn get_follow_notify(pool: &fieldwork::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<Option<bool>, sqlx::Error> {
+pub async fn get_follow_notify(pool: &fieldwork_db::db::Pool, persona_id: i64, followee_persona_id: i64) -> Result<Option<bool>, sqlx::Error> {
     let row: Option<(bool,)> = sqlx::query_as("SELECT notify FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
         .bind(persona_id)
         .bind(followee_persona_id)
@@ -681,7 +681,7 @@ pub async fn get_follow_notify(pool: &fieldwork::db::Pool, persona_id: i64, foll
 // ---------------------------------------------------------------------------
 
 /// Get local followers of an account (with AccountRow compatible projection).
-pub async fn get_local_followers(pool: &fieldwork::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
+pub async fn get_local_followers(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
@@ -695,7 +695,7 @@ pub async fn get_local_followers(pool: &fieldwork::db::Pool, account_id: i64, li
 }
 
 /// Get remote followers of an account.
-pub async fn get_remote_followers(pool: &fieldwork::db::Pool, account_id: i64, limit: i64) -> Result<Vec<(i64, String, String, String, String)>, sqlx::Error> {
+pub async fn get_remote_followers(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<(i64, String, String, String, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
          FROM followers f JOIN remote_accounts ra ON f.remote_account_id = ra.id \
@@ -708,7 +708,7 @@ pub async fn get_remote_followers(pool: &fieldwork::db::Pool, account_id: i64, l
 }
 
 /// Get local accounts that this account follows.
-pub async fn get_local_following(pool: &fieldwork::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
+pub async fn get_local_following(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
@@ -723,7 +723,7 @@ pub async fn get_local_following(pool: &fieldwork::db::Pool, account_id: i64, li
 }
 
 /// Get remote accounts that this account follows.
-pub async fn get_remote_following(pool: &fieldwork::db::Pool, account_id: i64, limit: i64) -> Result<Vec<(i64, String, String, String, String)>, sqlx::Error> {
+pub async fn get_remote_following(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<(i64, String, String, String, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
          FROM follows f JOIN remote_accounts ra ON f.followee_remote_id = ra.id \
@@ -741,7 +741,7 @@ pub async fn get_remote_following(pool: &fieldwork::db::Pool, account_id: i64, l
 // ---------------------------------------------------------------------------
 
 /// Look up an OAuth app by client_id (returning id and client_secret).
-pub async fn get_oauth_app_secret(pool: &fieldwork::db::Pool, client_id: &str) -> Result<Option<(i64, String)>, sqlx::Error> {
+pub async fn get_oauth_app_secret(pool: &fieldwork_db::db::Pool, client_id: &str) -> Result<Option<(i64, String)>, sqlx::Error> {
     sqlx::query_as("SELECT id, client_secret FROM oauth_apps WHERE client_id = ?")
         .bind(client_id)
         .fetch_optional(sq(pool))
@@ -749,7 +749,7 @@ pub async fn get_oauth_app_secret(pool: &fieldwork::db::Pool, client_id: &str) -
 }
 
 /// Look up the most recent app for an account (for verify_app_credentials).
-pub async fn get_app_for_account(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Option<(String, Option<String>)>, sqlx::Error> {
+pub async fn get_app_for_account(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Option<(String, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT oa.name, oa.website FROM oauth_tokens ot JOIN oauth_apps oa ON ot.app_id = oa.id WHERE ot.persona_id = ? AND ot.revoked_at IS NULL ORDER BY ot.last_used_at DESC LIMIT 1",
     )
@@ -759,7 +759,7 @@ pub async fn get_app_for_account(pool: &fieldwork::db::Pool, persona_id: i64) ->
 }
 
 /// List active sessions for a persona.
-pub async fn list_sessions(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, String, i64, Option<i64>)>, sqlx::Error> {
+pub async fn list_sessions(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, String, i64, Option<i64>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT t.id, oa.name, t.scopes, t.created_at, t.last_used_at \
          FROM oauth_tokens t JOIN oauth_apps oa ON t.app_id = oa.id \
@@ -771,7 +771,7 @@ pub async fn list_sessions(pool: &fieldwork::db::Pool, persona_id: i64) -> Resul
 }
 
 /// Revoke a specific session.
-pub async fn revoke_session(pool: &fieldwork::db::Pool, token_id: i64, persona_id: i64, now: i64) -> Result<u64, sqlx::Error> {
+pub async fn revoke_session(pool: &fieldwork_db::db::Pool, token_id: i64, persona_id: i64, now: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND persona_id = ? AND revoked_at IS NULL",
     )
@@ -784,7 +784,7 @@ pub async fn revoke_session(pool: &fieldwork::db::Pool, token_id: i64, persona_i
 }
 
 /// Revoke all sessions except the current one.
-pub async fn revoke_all_sessions(pool: &fieldwork::db::Pool, persona_id: i64, except_token_hash: &str, now: i64) -> Result<u64, sqlx::Error> {
+pub async fn revoke_all_sessions(pool: &fieldwork_db::db::Pool, persona_id: i64, except_token_hash: &str, now: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND token_hash != ? AND revoked_at IS NULL",
     )
@@ -801,7 +801,7 @@ pub async fn revoke_all_sessions(pool: &fieldwork::db::Pool, persona_id: i64, ex
 // ---------------------------------------------------------------------------
 
 /// Create a list.
-pub async fn create_list(pool: &fieldwork::db::Pool, id: i64, user_id: i64, title: &str, replies_policy: &str, now: i64) -> Result<(), sqlx::Error> {
+pub async fn create_list(pool: &fieldwork_db::db::Pool, id: i64, user_id: i64, title: &str, replies_policy: &str, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO lists (id, user_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)")
         .bind(id)
         .bind(user_id)
@@ -814,7 +814,7 @@ pub async fn create_list(pool: &fieldwork::db::Pool, id: i64, user_id: i64, titl
 }
 
 /// Update a list's title and replies policy.
-pub async fn update_list(pool: &fieldwork::db::Pool, list_id: i64, title: &str, replies_policy: &str) -> Result<(), sqlx::Error> {
+pub async fn update_list(pool: &fieldwork_db::db::Pool, list_id: i64, title: &str, replies_policy: &str) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE lists SET title = ?, replies_policy = ? WHERE id = ?")
         .bind(title)
         .bind(replies_policy)
@@ -825,7 +825,7 @@ pub async fn update_list(pool: &fieldwork::db::Pool, list_id: i64, title: &str, 
 }
 
 /// Get accounts in a list.
-pub async fn get_list_account_rows(pool: &fieldwork::db::Pool, list_id: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
+pub async fn get_list_account_rows(pool: &fieldwork_db::db::Pool, list_id: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
@@ -842,7 +842,7 @@ pub async fn get_list_account_rows(pool: &fieldwork::db::Pool, list_id: i64) -> 
 // ---------------------------------------------------------------------------
 
 /// Get a filter row (for filter_to_json).
-pub async fn get_filter_row(pool: &fieldwork::db::Pool, filter_id: i64) -> Result<(i64, String, String, String, Option<i64>, i64), sqlx::Error> {
+pub async fn get_filter_row(pool: &fieldwork_db::db::Pool, filter_id: i64) -> Result<(i64, String, String, String, Option<i64>, i64), sqlx::Error> {
     sqlx::query_as(
         "SELECT id, title, context, filter_action, expires_at, created_at FROM filters WHERE id = ?",
     )
@@ -852,7 +852,7 @@ pub async fn get_filter_row(pool: &fieldwork::db::Pool, filter_id: i64) -> Resul
 }
 
 /// Get keywords for a filter.
-pub async fn get_filter_keywords(pool: &fieldwork::db::Pool, filter_id: i64) -> Result<Vec<(i64, String, bool)>, sqlx::Error> {
+pub async fn get_filter_keywords(pool: &fieldwork_db::db::Pool, filter_id: i64) -> Result<Vec<(i64, String, bool)>, sqlx::Error> {
     sqlx::query_as("SELECT id, keyword, whole_word FROM filter_keywords WHERE filter_id = ? ORDER BY id")
         .bind(filter_id)
         .fetch_all(sq(pool))
@@ -861,7 +861,7 @@ pub async fn get_filter_keywords(pool: &fieldwork::db::Pool, filter_id: i64) -> 
 
 /// Create a filter.
 pub async fn create_filter(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
     user_id: i64,
     title: &str,
@@ -886,7 +886,7 @@ pub async fn create_filter(
 }
 
 /// Insert a filter keyword.
-pub async fn insert_filter_keyword(pool: &fieldwork::db::Pool, id: i64, filter_id: i64, keyword: &str, whole_word: bool) -> Result<(), sqlx::Error> {
+pub async fn insert_filter_keyword(pool: &fieldwork_db::db::Pool, id: i64, filter_id: i64, keyword: &str, whole_word: bool) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) VALUES (?, ?, ?, ?)")
         .bind(id)
         .bind(filter_id)
@@ -898,7 +898,7 @@ pub async fn insert_filter_keyword(pool: &fieldwork::db::Pool, id: i64, filter_i
 }
 
 /// Get a filter row for updating.
-pub async fn get_filter_for_update(pool: &fieldwork::db::Pool, filter_id: i64, user_id: i64) -> Result<Option<(i64, String, String, String, Option<i64>)>, sqlx::Error> {
+pub async fn get_filter_for_update(pool: &fieldwork_db::db::Pool, filter_id: i64, user_id: i64) -> Result<Option<(i64, String, String, String, Option<i64>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, title, context, filter_action, expires_at FROM filters WHERE id = ? AND user_id = ?",
     )
@@ -909,7 +909,7 @@ pub async fn get_filter_for_update(pool: &fieldwork::db::Pool, filter_id: i64, u
 }
 
 /// Update a filter.
-pub async fn update_filter(pool: &fieldwork::db::Pool, filter_id: i64, title: &str, context_json: &str, filter_action: &str, expires_at: Option<i64>) -> Result<(), sqlx::Error> {
+pub async fn update_filter(pool: &fieldwork_db::db::Pool, filter_id: i64, title: &str, context_json: &str, filter_action: &str, expires_at: Option<i64>) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE filters SET title = ?, context = ?, filter_action = ?, expires_at = ? WHERE id = ?")
         .bind(title)
         .bind(context_json)
@@ -922,7 +922,7 @@ pub async fn update_filter(pool: &fieldwork::db::Pool, filter_id: i64, title: &s
 }
 
 /// Delete a filter keyword by ID with ownership check.
-pub async fn delete_filter_keyword_owned(pool: &fieldwork::db::Pool, keyword_id: i64, user_id: i64) -> Result<u64, sqlx::Error> {
+pub async fn delete_filter_keyword_owned(pool: &fieldwork_db::db::Pool, keyword_id: i64, user_id: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "DELETE FROM filter_keywords WHERE id = ? AND filter_id IN (SELECT id FROM filters WHERE user_id = ?)",
     )
@@ -934,7 +934,7 @@ pub async fn delete_filter_keyword_owned(pool: &fieldwork::db::Pool, keyword_id:
 }
 
 /// List v1-compatible filter entries (flat keyword list).
-pub async fn list_filters_v1(pool: &fieldwork::db::Pool, user_id: i64) -> Result<Vec<(i64, String, String, bool, Option<i64>)>, sqlx::Error> {
+pub async fn list_filters_v1(pool: &fieldwork_db::db::Pool, user_id: i64) -> Result<Vec<(i64, String, String, bool, Option<i64>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT fk.id, fk.keyword, f.context, fk.whole_word, f.expires_at \
          FROM filter_keywords fk JOIN filters f ON fk.filter_id = f.id \
@@ -950,7 +950,7 @@ pub async fn list_filters_v1(pool: &fieldwork::db::Pool, user_id: i64) -> Result
 // ---------------------------------------------------------------------------
 
 /// Search local personas by username or display_name.
-pub async fn search_local_personas(pool: &fieldwork::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
+pub async fn search_local_personas(pool: &fieldwork_db::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<crate::api::AccountRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, \
          bot, fields_json, created_at, last_status_at \
@@ -965,7 +965,7 @@ pub async fn search_local_personas(pool: &fieldwork::db::Pool, like_pattern: &st
 }
 
 /// Search remote accounts by username or display_name.
-pub async fn search_remote_accounts(pool: &fieldwork::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<(i64, String, String, String, String, bool, bool)>, sqlx::Error> {
+pub async fn search_remote_accounts(pool: &fieldwork_db::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<(i64, String, String, String, String, bool, bool)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, username, domain, display_name, bio_html, is_locked, bot \
          FROM remote_accounts \
@@ -979,7 +979,7 @@ pub async fn search_remote_accounts(pool: &fieldwork::db::Pool, like_pattern: &s
 }
 
 /// Search tags by name.
-pub async fn search_tags(pool: &fieldwork::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<String>, sqlx::Error> {
+pub async fn search_tags(pool: &fieldwork_db::db::Pool, like_pattern: &str, limit: i64) -> Result<Vec<String>, sqlx::Error> {
     let rows: Vec<(String,)> = sqlx::query_as(
         "SELECT DISTINCT tag FROM post_tags WHERE tag LIKE ? ESCAPE '\' LIMIT ?",
     )
@@ -991,7 +991,7 @@ pub async fn search_tags(pool: &fieldwork::db::Pool, like_pattern: &str, limit: 
 }
 
 /// Get signing credentials for a persona (for WebFinger resolve search).
-pub async fn get_persona_signing_key(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Option<(String, String)>, sqlx::Error> {
+pub async fn get_persona_signing_key(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Option<(String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT username, private_key_pem FROM personas WHERE id = ?")
         .bind(persona_id)
         .fetch_optional(sq(pool))
@@ -1003,7 +1003,7 @@ pub async fn get_persona_signing_key(pool: &fieldwork::db::Pool, persona_id: i64
 // ---------------------------------------------------------------------------
 
 /// Get account statuses with max_id pagination.
-pub async fn account_statuses_max_id(pool: &fieldwork::db::Pool, account_id: i64, max_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
+pub async fn account_statuses_max_id(pool: &fieldwork_db::db::Pool, account_id: i64, max_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
     )
@@ -1015,7 +1015,7 @@ pub async fn account_statuses_max_id(pool: &fieldwork::db::Pool, account_id: i64
 }
 
 /// Get account statuses with min_id pagination.
-pub async fn account_statuses_min_id(pool: &fieldwork::db::Pool, account_id: i64, min_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
+pub async fn account_statuses_min_id(pool: &fieldwork_db::db::Pool, account_id: i64, min_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
     )
@@ -1027,7 +1027,7 @@ pub async fn account_statuses_min_id(pool: &fieldwork::db::Pool, account_id: i64
 }
 
 /// Get account statuses (no pagination).
-pub async fn account_statuses_default(pool: &fieldwork::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
+pub async fn account_statuses_default(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
     )
@@ -1042,7 +1042,7 @@ pub async fn account_statuses_default(pool: &fieldwork::db::Pool, account_id: i6
 // ---------------------------------------------------------------------------
 
 /// List personas (CLI output).
-pub async fn list_personas_cli(pool: &fieldwork::db::Pool) -> Result<Vec<(String, String, String, i64)>, sqlx::Error> {
+pub async fn list_personas_cli(pool: &fieldwork_db::db::Pool) -> Result<Vec<(String, String, String, i64)>, sqlx::Error> {
     sqlx::query_as("SELECT id, username, display_name, created_at FROM personas ORDER BY created_at")
         .fetch_all(sq(pool))
         .await
@@ -1050,7 +1050,7 @@ pub async fn list_personas_cli(pool: &fieldwork::db::Pool) -> Result<Vec<(String
 
 /// Create a persona (CLI).
 pub async fn create_persona(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     id: i64,
     user_id: i64,
     username: &str,
@@ -1079,7 +1079,7 @@ pub async fn create_persona(
 }
 
 /// Update DID key for the user.
-pub async fn update_user_did(pool: &fieldwork::db::Pool, user_id: i64, did_key: &str, recovery_pubkey: &str) -> Result<(), sqlx::Error> {
+pub async fn update_user_did(pool: &fieldwork_db::db::Pool, user_id: i64, did_key: &str, recovery_pubkey: &str) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE users SET did_key = ?, recovery_pubkey = ? WHERE id = ?")
         .bind(did_key)
         .bind(recovery_pubkey)
@@ -1090,7 +1090,7 @@ pub async fn update_user_did(pool: &fieldwork::db::Pool, user_id: i64, did_key: 
 }
 
 /// Set admin password (CLI).
-pub async fn cli_set_admin_password(pool: &fieldwork::db::Pool, hash: &str, now: i64) -> Result<(), sqlx::Error> {
+pub async fn cli_set_admin_password(pool: &fieldwork_db::db::Pool, hash: &str, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO admin (id, password_hash, created_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash",
     )
@@ -1102,7 +1102,7 @@ pub async fn cli_set_admin_password(pool: &fieldwork::db::Pool, hash: &str, now:
 }
 
 /// List all active tokens (CLI).
-pub async fn list_tokens_cli(pool: &fieldwork::db::Pool) -> Result<Vec<(String, String, String, i64, Option<i64>, String)>, sqlx::Error> {
+pub async fn list_tokens_cli(pool: &fieldwork_db::db::Pool) -> Result<Vec<(String, String, String, i64, Option<i64>, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT t.id, a.username, t.scopes, t.created_at, t.last_used_at, oa.name \
          FROM oauth_tokens t JOIN personas a ON t.persona_id = a.id \
@@ -1114,7 +1114,7 @@ pub async fn list_tokens_cli(pool: &fieldwork::db::Pool) -> Result<Vec<(String, 
 }
 
 /// Revoke a token by ID (CLI).
-pub async fn revoke_token_cli(pool: &fieldwork::db::Pool, token_id: i64, now: i64) -> Result<u64, sqlx::Error> {
+pub async fn revoke_token_cli(pool: &fieldwork_db::db::Pool, token_id: i64, now: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
         .bind(now)
         .bind(token_id)
@@ -1124,7 +1124,7 @@ pub async fn revoke_token_cli(pool: &fieldwork::db::Pool, token_id: i64, now: i6
 }
 
 /// Get persona ID by username.
-pub async fn get_persona_id_by_username(pool: &fieldwork::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn get_persona_id_by_username(pool: &fieldwork_db::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
         .bind(username)
         .fetch_optional(sq(pool))
@@ -1133,7 +1133,7 @@ pub async fn get_persona_id_by_username(pool: &fieldwork::db::Pool, username: &s
 }
 
 /// Revoke all tokens globally (CLI).
-pub async fn revoke_all_tokens(pool: &fieldwork::db::Pool, now: i64) -> Result<u64, sqlx::Error> {
+pub async fn revoke_all_tokens(pool: &fieldwork_db::db::Pool, now: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE revoked_at IS NULL")
         .bind(now)
         .execute(sq(pool))
@@ -1142,7 +1142,7 @@ pub async fn revoke_all_tokens(pool: &fieldwork::db::Pool, now: i64) -> Result<u
 }
 
 /// List sessions for a persona (CLI).
-pub async fn list_sessions_cli(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Vec<(String, String, String, Option<i64>)>, sqlx::Error> {
+pub async fn list_sessions_cli(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(String, String, String, Option<i64>)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT t.id, oa.name, t.scopes, t.last_used_at \
          FROM oauth_tokens t JOIN oauth_apps oa ON t.app_id = oa.id \
@@ -1155,7 +1155,7 @@ pub async fn list_sessions_cli(pool: &fieldwork::db::Pool, persona_id: i64) -> R
 }
 
 /// Get or create the CLI app ID.
-pub async fn get_cli_app_id(pool: &fieldwork::db::Pool) -> Result<Option<i64>, sqlx::Error> {
+pub async fn get_cli_app_id(pool: &fieldwork_db::db::Pool) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM oauth_apps WHERE client_id = 'cli'")
         .fetch_optional(sq(pool))
         .await?;
@@ -1163,7 +1163,7 @@ pub async fn get_cli_app_id(pool: &fieldwork::db::Pool) -> Result<Option<i64>, s
 }
 
 /// Create the CLI app.
-pub async fn create_cli_app(pool: &fieldwork::db::Pool, id: i64, now: i64) -> Result<(), sqlx::Error> {
+pub async fn create_cli_app(pool: &fieldwork_db::db::Pool, id: i64, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO oauth_apps (id, client_id, client_secret, name, redirect_uri, scopes, created_at) VALUES (?, 'cli', 'cli', 'CLI', 'urn:ietf:wg:oauth:2.0:oob', 'read write follow', ?)",
     )
@@ -1175,7 +1175,7 @@ pub async fn create_cli_app(pool: &fieldwork::db::Pool, id: i64, now: i64) -> Re
 }
 
 /// Add a domain block (CLI).
-pub async fn add_domain_block(pool: &fieldwork::db::Pool, domain: &str, severity: &str, reject_media: bool, reason: &str, now: i64) -> Result<(), sqlx::Error> {
+pub async fn add_domain_block(pool: &fieldwork_db::db::Pool, domain: &str, severity: &str, reject_media: bool, reason: &str, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO domain_blocks (domain, severity, reject_media, reason, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(domain) DO UPDATE SET severity = excluded.severity, reject_media = excluded.reject_media, reason = excluded.reason",
     )
@@ -1190,14 +1190,14 @@ pub async fn add_domain_block(pool: &fieldwork::db::Pool, domain: &str, severity
 }
 
 /// List domain blocks (CLI).
-pub async fn list_domain_blocks(pool: &fieldwork::db::Pool) -> Result<Vec<(String, String, String)>, sqlx::Error> {
+pub async fn list_domain_blocks(pool: &fieldwork_db::db::Pool) -> Result<Vec<(String, String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT domain, severity, reason FROM domain_blocks ORDER BY domain")
         .fetch_all(sq(pool))
         .await
 }
 
 /// Look up account by DID key (CLI recover).
-pub async fn find_account_by_did(pool: &fieldwork::db::Pool, did_key: &str) -> Result<Option<(i64, String, String)>, sqlx::Error> {
+pub async fn find_account_by_did(pool: &fieldwork_db::db::Pool, did_key: &str) -> Result<Option<(i64, String, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT u.id, p.username, p.display_name FROM users u JOIN personas p ON p.user_id = u.id WHERE u.did_key = ?",
     )
@@ -1207,7 +1207,7 @@ pub async fn find_account_by_did(pool: &fieldwork::db::Pool, did_key: &str) -> R
 }
 
 /// Check if user needs DID backfill.
-pub async fn user_needs_did(pool: &fieldwork::db::Pool) -> Result<bool, sqlx::Error> {
+pub async fn user_needs_did(pool: &fieldwork_db::db::Pool) -> Result<bool, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM users WHERE did_key IS NULL")
         .fetch_optional(sq(pool))
         .await?;
@@ -1215,28 +1215,28 @@ pub async fn user_needs_did(pool: &fieldwork::db::Pool) -> Result<bool, sqlx::Er
 }
 
 /// List personas for DID backfill.
-pub async fn list_personas_for_backfill(pool: &fieldwork::db::Pool) -> Result<Vec<(i64, String)>, sqlx::Error> {
+pub async fn list_personas_for_backfill(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String)>, sqlx::Error> {
     sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at")
         .fetch_all(sq(pool))
         .await
 }
 
 /// Get first persona (for relay and other commands).
-pub async fn get_first_persona_with_key(pool: &fieldwork::db::Pool) -> Result<Option<(i64, String, String)>, sqlx::Error> {
+pub async fn get_first_persona_with_key(pool: &fieldwork_db::db::Pool) -> Result<Option<(i64, String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT id, username, private_key_pem FROM personas ORDER BY created_at LIMIT 1")
         .fetch_optional(sq(pool))
         .await
 }
 
 /// Get first persona (id and username only).
-pub async fn get_first_persona(pool: &fieldwork::db::Pool) -> Result<Option<(i64, String)>, sqlx::Error> {
+pub async fn get_first_persona(pool: &fieldwork_db::db::Pool) -> Result<Option<(i64, String)>, sqlx::Error> {
     sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at LIMIT 1")
         .fetch_optional(sq(pool))
         .await
 }
 
 /// Insert a relay subscription.
-pub async fn insert_relay(pool: &fieldwork::db::Pool, id: i64, inbox_url: &str, actor_uri: &str, follow_id: &str, now: i64) -> Result<(), sqlx::Error> {
+pub async fn insert_relay(pool: &fieldwork_db::db::Pool, id: i64, inbox_url: &str, actor_uri: &str, follow_id: &str, now: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO relays (id, inbox_url, actor_uri, follow_id, state, created_at) VALUES (?, ?, ?, ?, 'pending', ?) \
          ON CONFLICT(inbox_url) DO UPDATE SET state = 'pending', follow_id = excluded.follow_id",
@@ -1252,7 +1252,7 @@ pub async fn insert_relay(pool: &fieldwork::db::Pool, id: i64, inbox_url: &str, 
 }
 
 /// List relays (CLI).
-pub async fn list_relays(pool: &fieldwork::db::Pool) -> Result<Vec<(String, String, String)>, sqlx::Error> {
+pub async fn list_relays(pool: &fieldwork_db::db::Pool) -> Result<Vec<(String, String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT actor_uri, inbox_url, state FROM relays ORDER BY created_at")
         .fetch_all(sq(pool))
         .await
@@ -1263,7 +1263,7 @@ pub async fn list_relays(pool: &fieldwork::db::Pool) -> Result<Vec<(String, Stri
 // ---------------------------------------------------------------------------
 
 /// Fetch account row with DID data for AP actor documents.
-pub async fn fetch_ap_account(pool: &fieldwork::db::Pool, username: &str) -> Result<Option<sqlx::sqlite::SqliteRow>, sqlx::Error> {
+pub async fn fetch_ap_account(pool: &fieldwork_db::db::Pool, username: &str) -> Result<Option<sqlx::sqlite::SqliteRow>, sqlx::Error> {
     sqlx::query(
         "SELECT p.username, p.display_name, p.bio_html, p.public_key_pem, \
          p.is_locked, p.discoverable, p.bot, p.fields_json, p.created_at, \
@@ -1277,7 +1277,7 @@ pub async fn fetch_ap_account(pool: &fieldwork::db::Pool, username: &str) -> Res
 }
 
 /// Get persona ID by username (for outbox, context, featured).
-pub async fn get_persona_id(pool: &fieldwork::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn get_persona_id(pool: &fieldwork_db::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
         .bind(username)
         .fetch_optional(sq(pool))
@@ -1286,14 +1286,14 @@ pub async fn get_persona_id(pool: &fieldwork::db::Pool, username: &str) -> Resul
 }
 
 /// List personas for index page.
-pub async fn list_personas_display(pool: &fieldwork::db::Pool) -> Result<Vec<(String, String)>, sqlx::Error> {
+pub async fn list_personas_display(pool: &fieldwork_db::db::Pool) -> Result<Vec<(String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT username, display_name FROM personas ORDER BY created_at")
         .fetch_all(sq(pool))
         .await
 }
 
 /// Check if a post exists and belongs to a user.
-pub async fn post_exists_for_user(pool: &fieldwork::db::Pool, post_id: i64, user_id: i64) -> Result<bool, sqlx::Error> {
+pub async fn post_exists_for_user(pool: &fieldwork_db::db::Pool, post_id: i64, user_id: i64) -> Result<bool, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM posts WHERE id = ? AND user_id = ?")
         .bind(post_id)
         .bind(user_id)
@@ -1307,7 +1307,7 @@ pub async fn post_exists_for_user(pool: &fieldwork::db::Pool, post_id: i64, user
 // ---------------------------------------------------------------------------
 
 /// Get follower actor URIs for a domain (FEP-8fcf sync digest).
-pub async fn get_follower_uris_by_domain(pool: &fieldwork::db::Pool, account_id: i64, target_domain: &str) -> Result<Vec<String>, sqlx::Error> {
+pub async fn get_follower_uris_by_domain(pool: &fieldwork_db::db::Pool, account_id: i64, target_domain: &str) -> Result<Vec<String>, sqlx::Error> {
     let rows: Vec<(String,)> = sqlx::query_as(
         "SELECT ra.actor_uri FROM followers f \
          JOIN remote_accounts ra ON f.remote_account_id = ra.id \
@@ -1321,7 +1321,7 @@ pub async fn get_follower_uris_by_domain(pool: &fieldwork::db::Pool, account_id:
 }
 
 /// Get local followers of a remote account (for Move processing).
-pub async fn get_local_followers_of_remote(pool: &fieldwork::db::Pool, remote_id: i64) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
+pub async fn get_local_followers_of_remote(pool: &fieldwork_db::db::Pool, remote_id: i64) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT a.id, a.username, a.private_key_pem FROM follows f \
          JOIN personas a ON a.id = f.persona_id WHERE f.followee_remote_id = ?",
@@ -1336,7 +1336,7 @@ pub async fn get_local_followers_of_remote(pool: &fieldwork::db::Pool, remote_id
 // ---------------------------------------------------------------------------
 
 /// Fetch pending deliveries with persona join (for the delivery worker).
-pub async fn fetch_pending_deliveries(pool: &fieldwork::db::Pool, now: i64, limit: i64) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
+pub async fn fetch_pending_deliveries(pool: &fieldwork_db::db::Pool, now: i64, limit: i64) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
     sqlx::query(
         "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
                 a.private_key_pem, a.username \
@@ -1357,7 +1357,7 @@ pub async fn fetch_pending_deliveries(pool: &fieldwork::db::Pool, now: i64, limi
 // ---------------------------------------------------------------------------
 
 /// Get public posts for RSS/Atom feeds.
-pub async fn get_public_feed_posts(pool: &fieldwork::db::Pool, account_id: i64) -> Result<Vec<(i64, String, i64)>, sqlx::Error> {
+pub async fn get_public_feed_posts(pool: &fieldwork_db::db::Pool, account_id: i64) -> Result<Vec<(i64, String, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, content_html, created_at FROM posts \
          WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
@@ -1373,7 +1373,7 @@ pub async fn get_public_feed_posts(pool: &fieldwork::db::Pool, account_id: i64) 
 // ---------------------------------------------------------------------------
 
 /// Get persona ID for import.
-pub async fn get_persona_id_for_import(pool: &fieldwork::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
+pub async fn get_persona_id_for_import(pool: &fieldwork_db::db::Pool, username: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
         .bind(username)
         .fetch_optional(sq(pool))
@@ -1383,7 +1383,7 @@ pub async fn get_persona_id_for_import(pool: &fieldwork::db::Pool, username: &st
 
 /// Update persona profile from import.
 pub async fn update_persona_profile_import(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     display_name: &str,
     bio: &str,
@@ -1475,7 +1475,7 @@ pub async fn import_insert_media<'a>(
 // ---------------------------------------------------------------------------
 
 /// Get all posts for search reindexing.
-pub async fn get_all_posts_for_search(pool: &fieldwork::db::Pool) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
+pub async fn get_all_posts_for_search(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
     sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
         .fetch_all(sq(pool))
         .await
@@ -1486,7 +1486,7 @@ pub async fn get_all_posts_for_search(pool: &fieldwork::db::Pool) -> Result<Vec<
 // ---------------------------------------------------------------------------
 
 /// Get admin password hash (for webauthn registration auth).
-pub async fn get_admin_hash_for_webauthn(pool: &fieldwork::db::Pool) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_admin_hash_for_webauthn(pool: &fieldwork_db::db::Pool) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(String,)> = sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
         .fetch_optional(sq(pool))
         .await?;
@@ -1500,7 +1500,7 @@ pub async fn get_admin_hash_for_webauthn(pool: &fieldwork::db::Pool) -> Result<O
 /// Fetch remote posts from followed accounts for the home timeline.
 #[allow(clippy::type_complexity)]
 pub async fn fetch_remote_timeline_posts(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     account_id: i64,
     limit: i64,
 ) -> Result<Vec<(i64, String, String, String, i64, String, Option<String>, i64, i64, String, String, Option<String>, Option<String>)>, sqlx::Error> {
@@ -1526,7 +1526,7 @@ pub async fn fetch_remote_timeline_posts(
 // ---------------------------------------------------------------------------
 
 /// Insert a test user (for test fixtures).
-pub async fn test_insert_user(pool: &fieldwork::db::Pool) -> Result<(), sqlx::Error> {
+pub async fn test_insert_user(pool: &fieldwork_db::db::Pool) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES (1000000000001, 'test@test', 'Test', 'admin', 0)")
         .execute(sq(pool))
         .await?;
@@ -1534,7 +1534,7 @@ pub async fn test_insert_user(pool: &fieldwork::db::Pool) -> Result<(), sqlx::Er
 }
 
 /// Insert a test persona (for test fixtures).
-pub async fn test_insert_persona(pool: &fieldwork::db::Pool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn test_insert_persona(pool: &fieldwork_db::db::Pool, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at) VALUES (?, 1000000000001, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
     )
@@ -1545,7 +1545,7 @@ pub async fn test_insert_persona(pool: &fieldwork::db::Pool, id: i64) -> Result<
 }
 
 /// Insert a test follower (for test fixtures).
-pub async fn test_insert_follower(pool: &fieldwork::db::Pool, persona_id: i64, user_id: i64, remote_account_id: i64) -> Result<(), sqlx::Error> {
+pub async fn test_insert_follower(pool: &fieldwork_db::db::Pool, persona_id: i64, user_id: i64, remote_account_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
     )
@@ -1562,7 +1562,7 @@ pub async fn test_insert_follower(pool: &fieldwork::db::Pool, persona_id: i64, u
 // ---------------------------------------------------------------------------
 
 /// Get a post for the profile post page (JOIN with persona for username check).
-pub async fn get_post_for_page(pool: &fieldwork::db::Pool, post_id: i64, username: &str) -> Result<Option<(i64, String, i64)>, sqlx::Error> {
+pub async fn get_post_for_page(pool: &fieldwork_db::db::Pool, post_id: i64, username: &str) -> Result<Option<(i64, String, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT p.id, p.content_html, p.created_at FROM posts p \
          JOIN personas a ON p.persona_id = a.id \
@@ -1575,7 +1575,7 @@ pub async fn get_post_for_page(pool: &fieldwork::db::Pool, post_id: i64, usernam
 }
 
 /// Get outbox posts (public only, with context_url).
-pub async fn get_outbox_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
+pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, content_html, context_url, created_at \
          FROM posts \
@@ -1589,7 +1589,7 @@ pub async fn get_outbox_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> Re
 }
 
 /// Get featured (pinned) posts.
-pub async fn get_featured_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
+pub async fn get_featured_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
@@ -1602,7 +1602,7 @@ pub async fn get_featured_posts(pool: &fieldwork::db::Pool, persona_id: i64) -> 
 }
 
 /// Get posts in a context collection (FEP-f228).
-pub async fn get_context_posts(pool: &fieldwork::db::Pool, context_url: &str) -> Result<Vec<(i64, String, Option<String>, i64, String)>, sqlx::Error> {
+pub async fn get_context_posts(pool: &fieldwork_db::db::Pool, context_url: &str) -> Result<Vec<(i64, String, Option<String>, i64, String)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
          FROM posts p \
@@ -1618,7 +1618,7 @@ pub async fn get_context_posts(pool: &fieldwork::db::Pool, context_url: &str) ->
 
 /// Fetch paginated dynamic SQL query (for posting.rs timelines, notifications, etc.).
 /// The caller provides the full SQL string and bind values. Limit is appended.
-pub async fn execute_dynamic_query(pool: &fieldwork::db::Pool, sql: &str, binds: &[String], limit: i64) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
+pub async fn execute_dynamic_query(pool: &fieldwork_db::db::Pool, sql: &str, binds: &[String], limit: i64) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
     let mut query = sqlx::query(sql);
     for b in binds {
         query = query.bind(b);
@@ -1628,7 +1628,7 @@ pub async fn execute_dynamic_query(pool: &fieldwork::db::Pool, sql: &str, binds:
 }
 
 /// Execute a raw dynamic SQL query with string bind values (no appended limit).
-pub async fn execute_raw_query(pool: &fieldwork::db::Pool, sql: &str, binds: &[String]) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
+pub async fn execute_raw_query(pool: &fieldwork_db::db::Pool, sql: &str, binds: &[String]) -> Result<Vec<sqlx::sqlite::SqliteRow>, sqlx::Error> {
     let mut query = sqlx::query(sql);
     for b in binds {
         query = query.bind(b);
@@ -1637,7 +1637,7 @@ pub async fn execute_raw_query(pool: &fieldwork::db::Pool, sql: &str, binds: &[S
 }
 
 /// Fetch a single notification by ID and persona.
-pub async fn get_notification_row(pool: &fieldwork::db::Pool, notif_id: i64, persona_id: i64) -> Result<Option<sqlx::sqlite::SqliteRow>, sqlx::Error> {
+pub async fn get_notification_row(pool: &fieldwork_db::db::Pool, notif_id: i64, persona_id: i64) -> Result<Option<sqlx::sqlite::SqliteRow>, sqlx::Error> {
     sqlx::query(
         "SELECT id, persona_id, kind, from_persona_id, from_remote_account_id, \
          post_id, created_at \

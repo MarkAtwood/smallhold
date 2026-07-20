@@ -14,7 +14,7 @@ pub struct ImportStats {
 }
 
 pub async fn import_mastodon_archive(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     config: &Config,
     username: &str,
     archive_path: &Path,
@@ -150,7 +150,7 @@ fn find_extract_root(base: &Path) -> std::path::PathBuf {
     base.to_path_buf()
 }
 
-async fn apply_actor_profile(pool: &fieldwork::db::Pool, account_id: i64, path: &Path) -> Result<bool> {
+async fn apply_actor_profile(pool: &fieldwork_db::db::Pool, account_id: i64, path: &Path) -> Result<bool> {
     let data = std::fs::read_to_string(path).context("Failed to read actor.json")?;
     let actor: serde_json::Value = serde_json::from_str(&data).context("Invalid actor.json")?;
 
@@ -191,7 +191,7 @@ async fn apply_actor_profile(pool: &fieldwork::db::Pool, account_id: i64, path: 
 
 #[allow(clippy::too_many_arguments)]
 async fn import_outbox(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     config: &Config,
     account_id: i64,
     username: &str,

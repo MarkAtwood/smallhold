@@ -43,7 +43,7 @@ pub fn publish(event: StreamEvent) {
 // ---------------------------------------------------------------------------
 
 async fn authenticate(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     headers: &HeaderMap,
     params: &HashMap<String, String>,
 ) -> Result<AuthenticatedAccount, AppError> {
@@ -58,7 +58,7 @@ async fn authenticate(
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
 
     let (account_id, username, scopes) =
-        fieldwork::oauth_db::verify_token(pool, &token_hash)
+        fieldwork_db::oauth_db::verify_token(pool, &token_hash)
             .await
             .map_err(AppError::from)?
             .ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
@@ -168,7 +168,7 @@ struct WsCommand {
 async fn handle_ws(
     socket: WebSocket,
     account: AuthenticatedAccount,
-    _pool: fieldwork::db::Pool,
+    _pool: fieldwork_db::db::Pool,
     initial_params: HashMap<String, String>,
 ) {
     let (mut ws_tx, mut ws_rx) = futures::StreamExt::split(socket);

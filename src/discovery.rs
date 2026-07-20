@@ -68,7 +68,7 @@ async fn webfinger(
         return Err(AppError::not_found("unknown domain"));
     }
 
-    let persona = fieldwork::persona_db::get_persona_by_username(
+    let persona = fieldwork_db::persona_db::get_persona_by_username(
         &state.pool,
         username,
     )
@@ -139,11 +139,11 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
     // fieldwork function covers this; posts_count requires a persona_id and
     // list_personas returns all personas but doesn't count them.
     let fwp = state.pool.clone();
-    let personas = fieldwork::persona_db::list_personas(&fwp).await?;
+    let personas = fieldwork_db::persona_db::list_personas(&fwp).await?;
     let user_count = personas.len() as i64;
     let mut local_posts = 0i64;
     for p in &personas {
-        local_posts += fieldwork::posts_db::posts_count(&fwp, p.id).await?;
+        local_posts += fieldwork_db::posts_db::posts_count(&fwp, p.id).await?;
     }
 
     let body = serde_json::json!({

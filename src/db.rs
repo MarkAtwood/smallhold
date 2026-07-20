@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use fieldwork::db::sqlx;
+use fieldwork_db::db::sqlx;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use std::str::FromStr;
 
@@ -9,21 +9,21 @@ pub const DEFAULT_USER_ID: i64 = 1_000_000_000_001;
 
 /// Ensure the default single-user row exists. Called on startup and before
 /// persona creation on fresh installs.
-pub async fn ensure_default_user(pool: &fieldwork::db::Pool) -> Result<()> {
-    let existing = fieldwork::tenant_db::get_user_by_id(pool, DEFAULT_USER_ID).await?;
+pub async fn ensure_default_user(pool: &fieldwork_db::db::Pool) -> Result<()> {
+    let existing = fieldwork_db::tenant_db::get_user_by_id(pool, DEFAULT_USER_ID).await?;
     if existing.is_none() {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64;
-        fieldwork::tenant_db::create_user(pool, DEFAULT_USER_ID, "admin@localhost", None, "admin", now)
+        fieldwork_db::tenant_db::create_user(pool, DEFAULT_USER_ID, "admin@localhost", None, "admin", now)
             .await
             .context("Failed to ensure default user")?;
     }
     Ok(())
 }
 
-pub async fn create_pool(database_path: &str) -> Result<fieldwork::db::Pool> {
+pub async fn create_pool(database_path: &str) -> Result<fieldwork_db::db::Pool> {
     let options = SqliteConnectOptions::from_str(database_path)?
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)
@@ -38,10 +38,10 @@ pub async fn create_pool(database_path: &str) -> Result<fieldwork::db::Pool> {
         .await
         .context("Failed to connect to SQLite database")?;
 
-    let pool = fieldwork::db::Pool::Sqlite(sqlite_pool.clone());
+    let pool = fieldwork_db::db::Pool::Sqlite(sqlite_pool.clone());
 
     // Delegate schema creation and migration to fieldwork's canonical schema.
-    fieldwork::db::migrate_full(&pool, Some(&fieldwork::db::LEGACY_SMALLHOLD), &[])
+    fieldwork_db::db::migrate_full(&pool, Some(&fieldwork_db::db::LEGACY_SMALLHOLD), &[])
         .await
         .context("Failed to run fieldwork schema migrations")?;
 
@@ -65,15 +65,15 @@ pub async fn create_pool(database_path: &str) -> Result<fieldwork::db::Pool> {
 }
 
 /// Begin a SQLite transaction from the pool abstraction.
-pub async fn begin_tx(pool: &fieldwork::db::Pool) -> Result<sqlx::Transaction<'static, sqlx::Sqlite>> {
+pub async fn begin_tx(pool: &fieldwork_db::db::Pool) -> Result<sqlx::Transaction<'static, sqlx::Sqlite>> {
     match pool {
-        fieldwork::db::Pool::Sqlite(sq) => sq.begin().await.context("Failed to begin transaction"),
+        fieldwork_db::db::Pool::Sqlite(sq) => sq.begin().await.context("Failed to begin transaction"),
     }
 }
 
 /// Create an in-memory pool for tests.
 #[cfg(test)]
-pub async fn test_pool() -> fieldwork::db::Pool {
+pub async fn test_pool() -> fieldwork_db::db::Pool {
     create_pool("sqlite::memory:").await.unwrap()
 }
 
@@ -86,7 +86,7 @@ mod tests {
         let pool = test_pool().await;
         // Verify tables exist — extract the inner SqlitePool for the raw query
         match &pool {
-            fieldwork::db::Pool::Sqlite(sq) => {
+            fieldwork_db::db::Pool::Sqlite(sq) => {
                 let result: (i64,) =
                     sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
                         .fetch_one(sq)

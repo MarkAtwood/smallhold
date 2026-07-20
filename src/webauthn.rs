@@ -59,13 +59,13 @@ fn random_hex(len: usize) -> String {
     hex_encode(&bytes)
 }
 
-async fn has_passkeys(pool: &fieldwork::db::Pool) -> Result<bool, AppError> {
-    let creds = fieldwork::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
+async fn has_passkeys(pool: &fieldwork_db::db::Pool) -> Result<bool, AppError> {
+    let creds = fieldwork_db::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
     Ok(!creds.is_empty())
 }
 
-async fn load_passkeys(pool: &fieldwork::db::Pool) -> Result<Vec<Passkey>, AppError> {
-    let rows = fieldwork::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
+async fn load_passkeys(pool: &fieldwork_db::db::Pool) -> Result<Vec<Passkey>, AppError> {
+    let rows = fieldwork_db::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
 
     let mut creds = Vec::with_capacity(rows.len());
     for (_id, json_str) in &rows {
@@ -77,7 +77,7 @@ async fn load_passkeys(pool: &fieldwork::db::Pool) -> Result<Vec<Passkey>, AppEr
 }
 
 async fn store_challenge(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     challenge_id: &str,
     state: &impl serde::Serialize,
 ) -> Result<(), AppError> {
@@ -88,27 +88,27 @@ async fn store_challenge(
 
     // Clean up expired challenges while we're here
     let cutoff = now - CHALLENGE_TTL_MS;
-    let _ = fieldwork::webauthn_db::purge_old_challenges(&fwp, cutoff).await;
+    let _ = fieldwork_db::webauthn_db::purge_old_challenges(&fwp, cutoff).await;
 
-    fieldwork::webauthn_db::store_challenge(&fwp, challenge_id, &state_json, now).await?;
+    fieldwork_db::webauthn_db::store_challenge(&fwp, challenge_id, &state_json, now).await?;
 
     Ok(())
 }
 
 async fn consume_challenge<T: serde::de::DeserializeOwned>(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     challenge_id: &str,
 ) -> Result<T, AppError> {
     let now = now_millis();
     let cutoff = now - CHALLENGE_TTL_MS;
     let fwp = pool.clone();
 
-    let state_json = fieldwork::webauthn_db::get_challenge(&fwp, challenge_id)
+    let state_json = fieldwork_db::webauthn_db::get_challenge(&fwp, challenge_id)
         .await?
         .ok_or_else(|| AppError::bad_request("Invalid or expired challenge"))?;
 
     // Delete the consumed challenge
-    fieldwork::webauthn_db::delete_challenge(&fwp, challenge_id).await?;
+    fieldwork_db::webauthn_db::delete_challenge(&fwp, challenge_id).await?;
 
     // Verify it hasn't expired (get_challenge doesn't filter by created_at)
     // ponytail: webauthn_db doesn't expose created_at in get_challenge.
@@ -175,7 +175,7 @@ async fn register_complete(
     let id = crate::id::generate_id();
     let now = now_millis();
 
-    fieldwork::webauthn_db::store_credential(
+    fieldwork_db::webauthn_db::store_credential(
         &state.pool,
         id,
         crate::db::DEFAULT_USER_ID,
@@ -420,20 +420,20 @@ async fn auth_complete(
 }
 
 async fn update_credential_bycred_id(
-    pool: &fieldwork::db::Pool,
+    pool: &fieldwork_db::db::Pool,
     cred_id: &[u8],
     new_json: &str,
 ) -> Result<(), AppError> {
     // Reload all credentials and find the one matching this cred_id
-    let rows = fieldwork::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
+    let rows = fieldwork_db::webauthn_db::get_credentials(pool, crate::db::DEFAULT_USER_ID).await?;
 
     for (id, json_str) in &rows {
         if let Ok(pk) = serde_json::from_str::<Passkey>(json_str) {
             if pk.cred_id().to_vec() == cred_id {
                 // ponytail: fieldwork::webauthn_db has no update_credential
                 // function. Delete and re-insert to update the credential JSON.
-                fieldwork::webauthn_db::delete_credential(pool, *id).await?;
-                fieldwork::webauthn_db::store_credential(
+                fieldwork_db::webauthn_db::delete_credential(pool, *id).await?;
+                fieldwork_db::webauthn_db::store_credential(
                     pool,
                     *id,
                     crate::db::DEFAULT_USER_ID,
@@ -471,7 +471,7 @@ pub fn verify_passkey_token(token: &str) -> bool {
 }
 
 /// Check whether any passkeys are registered.
-pub async fn passkeys_registered(pool: &fieldwork::db::Pool) -> bool {
+pub async fn passkeys_registered(pool: &fieldwork_db::db::Pool) -> bool {
     has_passkeys(pool).await.unwrap_or(false)
 }
 

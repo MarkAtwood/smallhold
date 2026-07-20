@@ -5,7 +5,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 pub struct AppState {
     pub config: Config,
-    pub pool: fieldwork::db::Pool,
+    pub pool: fieldwork_db::db::Pool,
     pub search: Option<std::sync::Arc<crate::search::SearchIndex>>,
 }
 
