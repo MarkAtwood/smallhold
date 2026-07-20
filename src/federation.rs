@@ -463,7 +463,7 @@ pub async fn upsert_remote_account(
 /// `target_domain`. Returns `None` if there are no followers on that domain.
 pub async fn compute_follower_sync_digest(
     pool: &SqlitePool,
-    account_id: i64,
+    account_id: &str,
     target_domain: &str,
 ) -> Option<String> {
     let uris: Vec<(String,)> = sqlx::query_as(
@@ -853,20 +853,20 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         // Create a local account
-        let acct_id = crate::id::generate_id();
+        let acct_id = crate::id::generate_id().to_string();
         sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
             .execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
              VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
-        .bind(acct_id)
+        .bind(&acct_id)
         .execute(&pool)
         .await
         .unwrap();
 
         // No followers => None
-        let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
+        let result = compute_follower_sync_digest(&pool, &acct_id, "remote.example").await;
         assert!(result.is_none());
     }
 
@@ -875,14 +875,14 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         // Create a local account
-        let acct_id = crate::id::generate_id();
+        let acct_id = crate::id::generate_id().to_string();
         sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
             .execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
              VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
-        .bind(acct_id)
+        .bind(&acct_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -911,14 +911,14 @@ zloXrMaFLBPp2UUN/amDTUIJ
         sqlx::query(
             "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
         )
-        .bind(acct_id)
+        .bind(&acct_id)
         .bind(crate::db::DEFAULT_USER_ID)
         .bind(rid)
         .execute(&pool)
         .await
         .unwrap();
 
-        let result = compute_follower_sync_digest(&pool, acct_id, "remote.example").await;
+        let result = compute_follower_sync_digest(&pool, &acct_id, "remote.example").await;
         assert!(result.is_some());
         let digest = result.unwrap();
         assert!(digest.starts_with("sha-256="));
@@ -937,14 +937,14 @@ zloXrMaFLBPp2UUN/amDTUIJ
     async fn compute_follower_sync_digest_xor_is_commutative() {
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
-        let acct_id = crate::id::generate_id();
+        let acct_id = crate::id::generate_id().to_string();
         sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
             .execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
              VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
-        .bind(acct_id)
+        .bind(&acct_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -971,7 +971,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             sqlx::query(
                 "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
             )
-            .bind(acct_id)
+            .bind(&acct_id)
         .bind(crate::db::DEFAULT_USER_ID)
             .bind(rid)
             .execute(&pool)
@@ -979,7 +979,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             .unwrap();
         }
 
-        let digest = compute_follower_sync_digest(&pool, acct_id, "remote.example")
+        let digest = compute_follower_sync_digest(&pool, &acct_id, "remote.example")
             .await
             .unwrap();
 
@@ -1003,14 +1003,14 @@ zloXrMaFLBPp2UUN/amDTUIJ
     async fn compute_follower_sync_digest_filters_by_domain() {
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
-        let acct_id = crate::id::generate_id();
+        let acct_id = crate::id::generate_id().to_string();
         sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
             .execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
              VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
-        .bind(acct_id)
+        .bind(&acct_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -1057,7 +1057,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
             sqlx::query(
                 "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
             )
-            .bind(acct_id)
+            .bind(&acct_id)
         .bind(crate::db::DEFAULT_USER_ID)
             .bind(rid)
             .execute(&pool)
@@ -1066,7 +1066,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         }
 
         // Digest for remote.example should only include eve
-        let digest_remote = compute_follower_sync_digest(&pool, acct_id, "remote.example")
+        let digest_remote = compute_follower_sync_digest(&pool, &acct_id, "remote.example")
             .await
             .unwrap();
         use sha2::Digest;
@@ -1078,7 +1078,7 @@ zloXrMaFLBPp2UUN/amDTUIJ
         assert_eq!(digest_remote, expected_remote);
 
         // Digest for other.example should only include frank
-        let digest_other = compute_follower_sync_digest(&pool, acct_id, "other.example")
+        let digest_other = compute_follower_sync_digest(&pool, &acct_id, "other.example")
             .await
             .unwrap();
         let frank_hash = sha2::Sha256::digest(b"https://other.example/users/frank");

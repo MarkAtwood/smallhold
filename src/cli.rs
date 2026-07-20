@@ -543,7 +543,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             eprintln!("{recovery_phrase}");
         }
         PersonaCommands::List => {
-            let rows: Vec<(i64, String, String, i64)> = sqlx::query_as(
+            let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
                 "SELECT id, username, display_name, created_at FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
@@ -663,7 +663,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
     match cmd {
         TokenCommands::Mint { username, scopes } => {
-            let account: Option<(i64,)> =
+            let account: Option<(String,)> =
                 sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                     .bind(&username)
                     .fetch_optional(&pool)
@@ -710,7 +710,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("This token will not be shown again.");
         }
         TokenCommands::List => {
-            let rows: Vec<(i64, String, String, i64, Option<i64>, String)> = sqlx::query_as(
+            let rows: Vec<(String, String, String, i64, Option<i64>, String)> = sqlx::query_as(
                 "SELECT t.id, a.username, t.scopes, t.created_at, t.last_used_at, oa.name \
                  FROM oauth_tokens t \
                  JOIN personas a ON t.persona_id = a.id \
@@ -763,7 +763,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             let result = if let Some(ref uname) = username {
-                let account: Option<(i64,)> =
+                let account: Option<(String,)> =
                     sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                         .bind(uname)
                         .fetch_optional(&pool)
@@ -792,7 +792,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("Revoked {} token(s){scope}.", result.rows_affected());
         }
         TokenCommands::Sessions => {
-            let accounts: Vec<(i64, String)> =
+            let accounts: Vec<(String, String)> =
                 sqlx::query_as("SELECT id, username FROM personas ORDER BY username")
                     .fetch_all(&pool)
                     .await?;
@@ -800,7 +800,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             for (account_id, username) in &accounts {
                 eprintln!("Sessions for @{username}:");
 
-                let rows: Vec<(i64, String, String, Option<i64>)> = sqlx::query_as(
+                let rows: Vec<(String, String, String, Option<i64>)> = sqlx::query_as(
                     "SELECT t.id, oa.name, t.scopes, t.last_used_at \
                      FROM oauth_tokens t \
                      JOIN oauth_apps oa ON t.app_id = oa.id \
@@ -1077,7 +1077,7 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
                 return Ok(());
             }
 
-            let personas: Vec<(i64, String)> = sqlx::query_as(
+            let personas: Vec<(String, String)> = sqlx::query_as(
                 "SELECT id, username FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
@@ -1123,7 +1123,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
     match cmd {
         RelayCommands::Add { url } => {
             // Fetch the relay's actor document to get its inbox URL.
-            let first_account: Option<(i64, String, String)> = sqlx::query_as(
+            let first_account: Option<(String, String, String)> = sqlx::query_as(
                 "SELECT id, username, private_key_pem FROM personas ORDER BY created_at LIMIT 1",
             )
             .fetch_optional(&pool)
@@ -1177,7 +1177,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 "object": &url
             });
 
-            crate::delivery::enqueue_delivery(&pool, inbox_url, account_id, &follow_activity)
+            crate::delivery::enqueue_delivery(&pool, inbox_url, &account_id, &follow_activity)
                 .await
                 .context("Failed to enqueue Follow activity")?;
 
@@ -1192,7 +1192,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let stored_follow_id = relay.follow_id.clone();
 
             // Get the first local account to send the Undo.
-            let first_account: Option<(i64, String)> =
+            let first_account: Option<(String, String)> =
                 sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at LIMIT 1")
                     .fetch_optional(&pool)
                     .await?;
@@ -1216,7 +1216,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 }
             });
 
-            crate::delivery::enqueue_delivery(&pool, &inbox_url, account_id, &undo_activity)
+            crate::delivery::enqueue_delivery(&pool, &inbox_url, &account_id, &undo_activity)
                 .await
                 .context("Failed to enqueue Undo activity")?;
 

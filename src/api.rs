@@ -104,7 +104,7 @@ fn millis_to_date(ms: i64) -> String {
 
 #[derive(sqlx::FromRow)]
 pub struct AccountRow {
-    pub id: i64,
+    pub id: String,
     pub username: String,
     pub display_name: String,
     pub bio: String,
@@ -120,7 +120,7 @@ pub struct AccountRow {
 #[derive(sqlx::FromRow)]
 pub struct StatusRow {
     pub id: i64,
-    pub persona_id: i64,
+    pub persona_id: String,
     pub ap_id: String,
     pub content_html: String,
     pub spoiler_text: String,
@@ -169,7 +169,7 @@ pub fn account_to_json_with_counts(
     })
 }
 
-pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
+pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: &str) -> (i64, i64, i64) {
     let (followers,): (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
             .bind(account_id)
@@ -192,7 +192,7 @@ pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (
     (followers, following, statuses)
 }
 
-pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
+pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: &str) -> Result<AccountRow, AppError> {
     sqlx::query_as::<_, AccountRow>(
         "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM personas WHERE id = ?",
     )
@@ -223,7 +223,7 @@ async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<V
     .await?;
     match row {
         Some(r) => {
-            let (f, fo, s) = fetch_account_counts(pool, r.id).await;
+            let (f, fo, s) = fetch_account_counts(pool, &r.id).await;
             Ok(account_to_json_with_counts(&r, domain, f, fo, s))
         }
         None => Ok(json!(null)),
@@ -235,7 +235,7 @@ async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<V
 // ---------------------------------------------------------------------------
 
 pub struct AuthenticatedAccount {
-    pub account_id: i64,
+    pub account_id: String,
     pub username: String,
     pub scopes: String,
     pub token_hash: String,
@@ -277,7 +277,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
         // ponytail: SQL equality on SHA-256 hash is acceptable — attacker would
         // need to brute-force the hash, not the token. Constant-time comparison
         // of the hash would require fetching all rows, which is worse.
-        let row: Option<(i64, String, String)> = sqlx::query_as(
+        let row: Option<(String, String, String)> = sqlx::query_as(
             "SELECT t.persona_id, a.username, t.scopes FROM oauth_tokens t JOIN personas a ON t.persona_id = a.id WHERE t.token_hash = ? AND t.revoked_at IS NULL",
         )
         .bind(&token_hash)
@@ -395,7 +395,7 @@ async fn authorize_form(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AuthorizeQuery>,
 ) -> Result<Html<String>, AppError> {
-    let accounts: Vec<(i64, String, String)> =
+    let accounts: Vec<(String, String, String)> =
         sqlx::query_as("SELECT id, username, display_name FROM personas ORDER BY username")
             .fetch_all(&state.pool)
             .await?;
@@ -583,7 +583,7 @@ struct AuthorizeForm {
     password: Option<String>,
     #[serde(default)]
     passkey_token: Option<String>,
-    account_id: i64,
+    account_id: String,
     client_id: String,
     redirect_uri: String,
     #[serde(default)]
@@ -620,8 +620,8 @@ async fn authorize_submit(
     }
 
     // Verify account exists
-    let account_exists: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
-        .bind(form.account_id)
+    let account_exists: Option<(String,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
+        .bind(&form.account_id)
         .fetch_optional(&state.pool)
         .await?;
     if account_exists.is_none() {
@@ -655,7 +655,7 @@ async fn authorize_submit(
     .bind(&code_hash)
     .bind(app_id)
     .bind(crate::db::DEFAULT_USER_ID)
-    .bind(form.account_id)
+    .bind(&form.account_id)
     .bind(scope)
     .bind(&form.redirect_uri)
     .bind(expires_at)
@@ -734,7 +734,7 @@ async fn token(
     let now = now_millis();
 
     // Atomically fetch and consume the authorization code (single-use)
-    let code_row: Option<(i64, i64, String, String)> = sqlx::query_as(
+    let code_row: Option<(i64, String, String, String)> = sqlx::query_as(
         "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, persona_id, scopes, redirect_uri",
     )
     .bind(&code_hash)
@@ -793,7 +793,7 @@ async fn token(
     .bind(&token_hash)
     .bind(app_id)
     .bind(crate::db::DEFAULT_USER_ID)
-    .bind(account_id)
+    .bind(&account_id)
     .bind(&scopes)
     .bind(now)
     .execute(&state.pool)
@@ -979,8 +979,8 @@ async fn verify_credentials(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
-    let row = fetch_account_row(&state.pool, auth.account_id).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, auth.account_id).await;
+    let row = fetch_account_row(&state.pool, &auth.account_id).await?;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, &auth.account_id).await;
     let mut v = account_to_json_with_counts(&row, domain, followers, following, statuses);
     let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
     v["source"] = json!({
@@ -999,12 +999,9 @@ async fn get_account(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let id: i64 = id
-        .parse()
-        .map_err(|_| AppError::not_found("Account not found"))?;
     let domain = &state.config.server.domain;
-    let row = fetch_account_row(&state.pool, id).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, id).await;
+    let row = fetch_account_row(&state.pool, &id).await?;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, &id).await;
     Ok(Json(account_to_json_with_counts(
         &row, domain, followers, following, statuses,
     )))
@@ -1028,7 +1025,7 @@ async fn account_lookup(
 
     let domain = &state.config.server.domain;
     let row = fetch_account_row_by_username(&state.pool, username).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, row.id).await;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, &row.id).await;
     Ok(Json(account_to_json_with_counts(
         &row, domain, followers, following, statuses,
     )))
@@ -1040,12 +1037,10 @@ async fn account_statuses(
     Path(id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, AppError> {
-    let account_id: i64 = id
-        .parse()
-        .map_err(|_| AppError::not_found("Account not found"))?;
+    let account_id = id;
 
     // Verify account exists
-    let _row = fetch_account_row(&state.pool, account_id).await?;
+    let _row = fetch_account_row(&state.pool, &account_id).await?;
 
     let limit: i64 = params
         .get("limit")
@@ -1062,7 +1057,7 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
-            .bind(account_id)
+            .bind(&account_id)
             .bind(max_id)
             .bind(limit)
             .fetch_all(&state.pool)
@@ -1071,7 +1066,7 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
             )
-            .bind(account_id)
+            .bind(&account_id)
             .bind(min_id)
             .bind(limit)
             .fetch_all(&state.pool)
@@ -1080,13 +1075,13 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
-            .bind(account_id)
+            .bind(&account_id)
             .bind(limit)
             .fetch_all(&state.pool)
             .await?
     };
 
-    let account_row = fetch_account_row(&state.pool, account_id).await?;
+    let account_row = fetch_account_row(&state.pool, &account_id).await?;
     let account_json = account_to_json(&account_row, domain);
 
     let items: Vec<Value> = statuses
@@ -1239,7 +1234,7 @@ async fn verify_app_credentials(
     let app_row: Option<(String, Option<String>)> = sqlx::query_as(
         "SELECT oa.name, oa.website FROM oauth_tokens ot JOIN oauth_apps oa ON ot.app_id = oa.id WHERE ot.persona_id = ? AND ot.revoked_at IS NULL ORDER BY ot.last_used_at DESC LIMIT 1",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1280,7 +1275,7 @@ async fn get_lists(
     let rows: Vec<(i64, String, String)> = sqlx::query_as(
         "SELECT id, title, replies_policy FROM lists WHERE user_id = ? ORDER BY id",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -1321,7 +1316,7 @@ async fn create_list(
         "INSERT INTO lists (id, user_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(&body.title)
     .bind(&body.replies_policy)
     .bind(now)
@@ -1348,7 +1343,7 @@ async fn get_list(
         "SELECT id, title, replies_policy FROM lists WHERE id = ? AND user_id = ?",
     )
     .bind(list_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1379,7 +1374,7 @@ async fn update_list(
         "SELECT id, title, replies_policy FROM lists WHERE id = ? AND user_id = ?",
     )
     .bind(list_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1418,7 +1413,7 @@ async fn delete_list(
 
     let result = sqlx::query("DELETE FROM lists WHERE id = ? AND user_id = ?")
         .bind(list_id)
-        .bind(auth.account_id)
+        .bind(&auth.account_id)
         .execute(&state.pool)
         .await?;
 
@@ -1442,7 +1437,7 @@ async fn get_list_accounts(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
             .bind(list_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
 
@@ -1488,7 +1483,7 @@ async fn add_list_accounts(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
             .bind(list_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
 
@@ -1524,7 +1519,7 @@ async fn remove_list_accounts(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
             .bind(list_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
 
@@ -1647,7 +1642,7 @@ async fn list_filters_v2(
 ) -> Result<Json<Value>, AppError> {
     let filter_ids: Vec<(i64,)> =
         sqlx::query_as("SELECT id FROM filters WHERE user_id = ? ORDER BY id")
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_all(&state.pool)
             .await?;
 
@@ -1676,7 +1671,7 @@ async fn create_filter_v2(
          VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(&body.title)
     .bind(&context_json)
     .bind(&body.filter_action)
@@ -1716,7 +1711,7 @@ async fn get_filter_v2(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
             .bind(filter_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
     if exists.is_none() {
@@ -1742,7 +1737,7 @@ async fn update_filter_v2(
          FROM filters WHERE id = ? AND user_id = ?",
     )
     .bind(filter_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
     let (_fid, cur_title, cur_context, cur_action, cur_expires) =
@@ -1807,7 +1802,7 @@ async fn delete_filter_v2(
 
     let result = sqlx::query("DELETE FROM filters WHERE id = ? AND user_id = ?")
         .bind(filter_id)
-        .bind(auth.account_id)
+        .bind(&auth.account_id)
         .execute(&state.pool)
         .await?;
 
@@ -1830,7 +1825,7 @@ async fn list_filter_keywords(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
             .bind(filter_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
     if exists.is_none() {
@@ -1872,7 +1867,7 @@ async fn add_filter_keyword(
     let exists: Option<(i64,)> =
         sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
             .bind(filter_id)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .fetch_optional(&state.pool)
             .await?;
     if exists.is_none() {
@@ -1913,7 +1908,7 @@ async fn delete_filter_keyword(
          (SELECT id FROM filters WHERE user_id = ?)",
     )
     .bind(keyword_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .execute(&state.pool)
     .await?;
 
@@ -1935,7 +1930,7 @@ async fn list_filters_v1(
          WHERE f.user_id = ? \
          ORDER BY fk.id",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -1972,7 +1967,7 @@ async fn list_sessions(
          WHERE t.persona_id = ? AND t.revoked_at IS NULL \
          ORDER BY t.created_at",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -2008,7 +2003,7 @@ async fn revoke_session(
     )
     .bind(now)
     .bind(token_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .execute(&state.pool)
     .await?;
 
@@ -2029,7 +2024,7 @@ async fn revoke_all_sessions(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND token_hash != ? AND revoked_at IS NULL",
     )
     .bind(now)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(&auth.token_hash)
     .execute(&state.pool)
     .await?;

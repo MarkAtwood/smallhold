@@ -15,7 +15,7 @@ use crate::server::fw_pool;
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
-    sender_persona_id: i64,
+    sender_persona_id: String,
     activity_json: String,
     attempts: i32,
     private_key_pem: String,
@@ -48,7 +48,7 @@ fn now_secs() -> i64 {
 pub async fn enqueue_delivery(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_persona_id: i64,
+    sender_persona_id: &str,
     activity_json: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let json = serde_json::to_string(activity_json)?;
@@ -56,7 +56,7 @@ pub async fn enqueue_delivery(
     fieldwork::delivery_db::enqueue(
         &fw_pool(pool),
         target_inbox,
-        &sender_persona_id.to_string(),
+        sender_persona_id,
         &json,
         now,
     )
@@ -67,7 +67,7 @@ pub async fn enqueue_delivery(
 /// Fan-out an activity to every subscribed relay's inbox.
 pub async fn enqueue_to_relays(
     pool: &SqlitePool,
-    sender_persona_id: i64,
+    sender_persona_id: &str,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let relays = fieldwork::relay::get_accepted(&fw_pool(pool)).await?;
@@ -82,7 +82,7 @@ pub async fn enqueue_to_relays(
 /// Fan-out an activity to every follower's inbox (deduped by shared inbox).
 pub async fn enqueue_to_followers(
     pool: &SqlitePool,
-    sender_persona_id: i64,
+    sender_persona_id: &str,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let inboxes: Vec<(String,)> = sqlx::query_as(
@@ -212,7 +212,7 @@ async fn deliver_one(
     // FEP-8fcf: Include Collection-Synchronization header with follower digest
     // for the target domain so the remote server can detect follower drift.
     if let Some(digest) =
-        crate::federation::compute_follower_sync_digest(pool, row.sender_persona_id, &target_domain)
+        crate::federation::compute_follower_sync_digest(pool, &row.sender_persona_id, &target_domain)
             .await
     {
         let sync_val =
@@ -294,7 +294,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
     let now_ms = chrono::Utc::now().timestamp_millis();
     let domain = &config.server.domain;
 
-    let due_posts: Vec<(i64, i64, String)> = sqlx::query_as(
+    let due_posts: Vec<(i64, String, String)> = sqlx::query_as(
         "SELECT id, persona_id, params_json FROM scheduled_statuses \
          WHERE scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
     )
@@ -303,7 +303,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
     .await?;
 
     for (sched_id, account_id, params_json) in due_posts {
-        if let Err(e) = create_scheduled_post(pool, domain, account_id, &params_json, now_ms).await
+        if let Err(e) = create_scheduled_post(pool, domain, &account_id, &params_json, now_ms).await
         {
             tracing::error!("Failed to create scheduled post {sched_id}: {e}");
             // Delete the row anyway to avoid infinite retry of a broken scheduled post
@@ -324,7 +324,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
 async fn create_scheduled_post(
     pool: &SqlitePool,
     domain: &str,
-    account_id: i64,
+    account_id: &str,
     params_json: &str,
     now_ms: i64,
 ) -> anyhow::Result<()> {

@@ -46,7 +46,7 @@ impl SearchIndex {
         })
     }
 
-    pub async fn index_post(&self, post_id: i64, content: &str, account_id: i64) -> Result<()> {
+    pub async fn index_post(&self, post_id: i64, content: &str, account_id: &str) -> Result<()> {
         let mut writer = self.writer.lock().await;
         let id_term = Term::from_field_text(self.id_field, &post_id.to_string());
         writer.delete_term(id_term);
@@ -97,7 +97,7 @@ impl SearchIndex {
 
     /// Reindex all posts from the database
     pub async fn reindex_all(&self, pool: &sqlx::SqlitePool) -> Result<usize> {
-        let posts: Vec<(i64, String, i64)> =
+        let posts: Vec<(i64, String, String)> =
             sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
                 .fetch_all(pool)
                 .await?;
@@ -110,7 +110,7 @@ impl SearchIndex {
             writer.add_document(doc!(
                 self.id_field => id.to_string(),
                 self.content_field => content,
-                self.account_id_field => account_id.to_string(),
+                self.account_id_field => account_id,
             ))?;
         }
         writer.commit()?;

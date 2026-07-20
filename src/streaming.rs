@@ -58,7 +58,7 @@ async fn authenticate(
 
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
 
-    let row: Option<(i64, String, String)> = sqlx::query_as(
+    let row: Option<(String, String, String)> = sqlx::query_as(
         "SELECT t.persona_id, a.username, t.scopes \
          FROM oauth_tokens t JOIN personas a ON t.persona_id = a.id \
          WHERE t.token_hash = ? AND t.revoked_at IS NULL",

@@ -222,7 +222,7 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
     };
 
     // Look up local account.
-    let account_row: Option<(i64,)> =
+    let account_row: Option<(String,)> =
         match sqlx::query_as("SELECT id FROM personas WHERE username = ?")
             .bind(username)
             .fetch_optional(&state.pool)
@@ -248,7 +248,7 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
     // Compute our local digest for followers from the remote actor's domain.
     let local_digest = match crate::federation::compute_follower_sync_digest(
         &state.pool,
-        account_id,
+        &account_id,
         &actor_domain,
     )
     .await
@@ -651,14 +651,14 @@ async fn resolve_local_account(
     pool: &SqlitePool,
     domain: &str,
     uri: &str,
-) -> Result<Option<(i64, String, bool)>, AppError> {
+) -> Result<Option<(String, String, bool)>, AppError> {
     let prefix = format!("https://{domain}/users/");
     let username = match uri.strip_prefix(&prefix) {
         Some(u) => u,
         None => return Ok(None),
     };
 
-    let row: Option<(i64, String, bool)> =
+    let row: Option<(String, String, bool)> =
         sqlx::query_as("SELECT id, username, is_locked FROM personas WHERE username = ? LIMIT 1")
             .bind(username)
             .fetch_optional(pool)
@@ -671,7 +671,7 @@ async fn resolve_local_account(
 async fn enqueue_activity(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_persona_id: i64,
+    sender_persona_id: &str,
     activity: &Value,
 ) -> Result<(), AppError> {
     delivery::enqueue_delivery(pool, target_inbox, sender_persona_id, activity)
@@ -682,16 +682,16 @@ async fn enqueue_activity(
 /// Check if a remote account is blocked or muted by a local account.
 async fn is_blocked_or_muted(
     pool: &SqlitePool,
-    persona_id: i64,
+    persona_id: &str,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
     let row: Option<(i64,)> = sqlx::query_as(
         "SELECT 1 FROM blocks WHERE persona_id = ? AND target_remote_id = ?
          UNION SELECT 1 FROM mutes WHERE persona_id = ? AND target_remote_id = ?",
     )
-    .bind(persona_id)
+    .bind(&persona_id)
     .bind(remote_account_id)
-    .bind(persona_id)
+    .bind(&persona_id)
     .bind(remote_account_id)
     .fetch_optional(pool)
     .await?;
@@ -739,7 +739,7 @@ async fn handle_follow(
         )
         .bind(req_id)
         .bind(remote.id)
-        .bind(account_id)
+        .bind(&account_id)
         .bind(&ap_id)
         .bind(now)
         .execute(&state.pool)
@@ -756,7 +756,7 @@ async fn handle_follow(
             "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at)
              VALUES (?, ?, ?, ?)",
         )
-        .bind(account_id)
+        .bind(&account_id)
         .bind(crate::db::DEFAULT_USER_ID)
         .bind(remote.id)
         .bind(now)
@@ -764,7 +764,7 @@ async fn handle_follow(
         .await?;
 
         // Create a notification (unless blocked/muted).
-        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
             let notif_id = generate_id();
             sqlx::query(
                 "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, created_at)
@@ -772,7 +772,7 @@ async fn handle_follow(
             )
             .bind(notif_id)
             .bind(crate::db::DEFAULT_USER_ID)
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .bind(now)
             .execute(&state.pool)
@@ -782,10 +782,11 @@ async fn handle_follow(
             let pool = state.pool.clone();
             let actor = remote.actor_uri.clone();
             let push_domain = domain.clone();
+            let push_account_id = account_id.clone();
             tokio::spawn(async move {
                 crate::push::send_push_notification(
                     &pool,
-                    account_id,
+                    &push_account_id,
                     "follow",
                     "New follower",
                     &actor,
@@ -811,7 +812,7 @@ async fn handle_follow(
             .as_deref()
             .unwrap_or(&remote.inbox_url);
 
-        enqueue_activity(&state.pool, target_inbox, account_id, &accept_activity).await?;
+        enqueue_activity(&state.pool, target_inbox, &account_id, &accept_activity).await?;
 
         tracing::info!(
             follower = %remote.actor_uri,
@@ -856,7 +857,7 @@ async fn handle_undo_follow(
     if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
         sqlx::query("DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?")
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
@@ -866,7 +867,7 @@ async fn handle_undo_follow(
             "DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?",
         )
         .bind(remote.id)
-        .bind(account_id)
+        .bind(&account_id)
         .execute(&state.pool)
         .await?;
 
@@ -901,7 +902,7 @@ async fn handle_undo_like(
                 "DELETE FROM notifications
                  WHERE persona_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
             )
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .bind(post_id)
             .execute(&state.pool)
@@ -931,7 +932,7 @@ async fn handle_undo_announce(
                 "DELETE FROM notifications
                  WHERE persona_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
             )
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .bind(post_id)
             .execute(&state.pool)
@@ -1078,19 +1079,19 @@ async fn handle_create(
                      VALUES (?, ?)",
                 )
                 .bind(post_id)
-                .bind(persona_id)
+                .bind(&persona_id)
                 .execute(&state.pool)
                 .await?;
 
                 // Create a mention notification (unless blocked/muted).
-                if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
+                if !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await? {
                     let notif_id = generate_id();
                     sqlx::query(
                         "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, remote_post_id, created_at)
                          VALUES (?, ?, ?, 'mention', ?, ?, ?)",
                     )
                     .bind(notif_id)
-                    .bind(persona_id)
+                    .bind(&persona_id)
                     .bind(remote.id)
                     .bind(post_id)
                     .bind(now)
@@ -1107,10 +1108,11 @@ async fn handle_create(
                     let pool = state.pool.clone();
                     let actor = remote.actor_uri.clone();
                     let push_domain = domain.clone();
+                    let push_persona_id = persona_id.clone();
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            persona_id,
+                            &push_persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1155,7 +1157,7 @@ async fn handle_create(
                      VALUES (?, ?)",
                 )
                 .bind(post_id)
-                .bind(persona_id)
+                .bind(&persona_id)
                 .execute(&state.pool)
                 .await?;
 
@@ -1164,13 +1166,13 @@ async fn handle_create(
                     "SELECT COUNT(*) FROM notifications
                      WHERE persona_id = ? AND kind = 'mention' AND remote_post_id = ?",
                 )
-                .bind(persona_id)
+                .bind(&persona_id)
                 .bind(post_id)
                 .fetch_one(&state.pool)
                 .await?;
 
                 if exists.0 == 0
-                    && !is_blocked_or_muted(&state.pool, persona_id, remote.id).await?
+                    && !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await?
                 {
                     let notif_id = generate_id();
                     sqlx::query(
@@ -1178,7 +1180,7 @@ async fn handle_create(
                          VALUES (?, ?, ?, 'mention', ?, ?, ?)",
                     )
                     .bind(notif_id)
-                    .bind(persona_id)
+                    .bind(&persona_id)
                     .bind(remote.id)
                     .bind(post_id)
                     .bind(now)
@@ -1195,10 +1197,11 @@ async fn handle_create(
                     let pool = state.pool.clone();
                     let actor = remote.actor_uri.clone();
                     let push_domain = domain.clone();
+                    let push_persona_id = persona_id.clone();
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            persona_id,
+                            &push_persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1458,14 +1461,14 @@ async fn handle_like(
     }
 
     // Look up the local post.
-    let post_row: Option<(i64, i64)> =
+    let post_row: Option<(i64, String)> =
         sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(liked_uri)
             .fetch_optional(&state.pool)
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
@@ -1475,7 +1478,7 @@ async fn handle_like(
             )
             .bind(notif_id)
             .bind(crate::db::DEFAULT_USER_ID)
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .bind(post_id)
             .bind(now)
@@ -1487,10 +1490,11 @@ async fn handle_like(
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
                 let push_domain = state.config.server.domain.clone();
+                let push_account_id = account_id.clone();
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
                         &pool,
-                        account_id,
+                        &push_account_id,
                         "favourite",
                         "New favourite",
                         &actor,
@@ -1524,14 +1528,14 @@ async fn handle_announce(
     }
 
     // Look up the local post being boosted.
-    let post_row: Option<(i64, i64)> =
+    let post_row: Option<(i64, String)> =
         sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(boosted_uri)
             .fetch_optional(&state.pool)
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
@@ -1541,7 +1545,7 @@ async fn handle_announce(
             )
             .bind(notif_id)
             .bind(crate::db::DEFAULT_USER_ID)
-            .bind(account_id)
+            .bind(&account_id)
             .bind(remote.id)
             .bind(post_id)
             .bind(now)
@@ -1553,10 +1557,11 @@ async fn handle_announce(
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
                 let push_domain = state.config.server.domain.clone();
+                let push_account_id = account_id.clone();
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
                         &pool,
-                        account_id,
+                        &push_account_id,
                         "reblog",
                         "New boost",
                         &actor,
@@ -1706,7 +1711,7 @@ async fn handle_move(
 
     // Migrate follows: for each local account following the old remote account,
     // create a follow on the new account and enqueue a Follow activity.
-    let local_followers: Vec<(i64, String, String)> = sqlx::query_as(
+    let local_followers: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT a.id, a.username, a.private_key_pem
          FROM follows f
          JOIN personas a ON a.id = f.persona_id
@@ -1747,7 +1752,7 @@ async fn handle_move(
             .as_deref()
             .unwrap_or(&new_account.inbox_url);
 
-        enqueue_activity(&state.pool, target_inbox, *local_id, &follow_activity).await?;
+        enqueue_activity(&state.pool, target_inbox, local_id, &follow_activity).await?;
     }
 
     // Remove old follows.
@@ -1814,7 +1819,7 @@ async fn handle_accept(
         "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at)
              VALUES (?, ?, ?, ?)",
     )
-    .bind(local_id)
+    .bind(&local_id)
     .bind(crate::db::DEFAULT_USER_ID)
     .bind(remote.id)
     .bind(now)
@@ -1831,7 +1836,7 @@ async fn handle_accept(
     }
 
     tracing::info!(
-        persona_id = local_id,
+        persona_id = %local_id,
         remote_actor = %remote.actor_uri,
         "follow accepted by remote"
     );
@@ -1870,7 +1875,7 @@ async fn handle_reject(
 
     // Remove the pending follow.
     sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-        .bind(local_id)
+        .bind(&local_id)
         .bind(remote.id)
         .execute(&state.pool)
         .await?;
@@ -1885,7 +1890,7 @@ async fn handle_reject(
     }
 
     tracing::info!(
-        persona_id = local_id,
+        persona_id = %local_id,
         remote_actor = %remote.actor_uri,
         "follow rejected by remote"
     );

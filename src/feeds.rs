@@ -16,8 +16,8 @@ struct FeedPost {
 }
 
 /// Look up.persona_id by username, returning 404 if not found.
-async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
-    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
+async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<String, AppError> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
         .bind(username)
         .fetch_optional(pool)
         .await?;
@@ -28,7 +28,7 @@ async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i
 /// Fetch last 20 public posts for an account.
 async fn fetch_public_posts(
     pool: &sqlx::SqlitePool,
-    account_id: i64,
+    account_id: &str,
 ) -> Result<Vec<FeedPost>, AppError> {
     let posts: Vec<FeedPost> = sqlx::query_as(
         "SELECT id, content_html, created_at \
@@ -71,7 +71,7 @@ async fn rss_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, account_id).await?;
+    let posts = fetch_public_posts(&state.pool, &account_id).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);
@@ -120,7 +120,7 @@ async fn atom_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, account_id).await?;
+    let posts = fetch_public_posts(&state.pool, &account_id).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);

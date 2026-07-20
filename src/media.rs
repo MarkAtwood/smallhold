@@ -279,7 +279,7 @@ async fn process_upload(
         &fieldwork::media_db::MediaRow {
             id,
             user_id: crate::db::DEFAULT_USER_ID.to_string(),
-            persona_id: auth.account_id.to_string(),
+            persona_id: auth.account_id.clone(),
             post_id: None,
             file_path: rel_path.clone(),
             mime_type: mime.clone(),
@@ -348,7 +348,7 @@ async fn update_media(
         "SELECT id, file_path, mime_type, width, height, blurhash, description, created_at FROM media WHERE id = ? AND user_id = ?",
     )
     .bind(media_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 

@@ -26,8 +26,8 @@ use std::sync::Arc;
 
 async fn build_relationship(
     pool: &sqlx::SqlitePool,
-    source_account_id: i64,
-    target_persona_id: i64,
+    source_account_id: &str,
+    target_persona_id: &str,
 ) -> Result<Value, AppError> {
     // Following (local -> local)
     let (following_count,): (i64,) =
@@ -116,7 +116,7 @@ async fn build_relationship(
 /// remote_accounts.id, but we present the string ID the same way.
 async fn build_relationship_remote(
     pool: &sqlx::SqlitePool,
-    source_account_id: i64,
+    source_account_id: &str,
     target_remote_id: i64,
 ) -> Result<Value, AppError> {
     // Following (local -> remote)
@@ -186,7 +186,7 @@ async fn build_relationship_remote(
 // ---------------------------------------------------------------------------
 
 enum TargetAccount {
-    Local(i64),
+    Local(String),
     Remote {
         id: i64,
         actor_uri: String,
@@ -196,20 +196,19 @@ enum TargetAccount {
 }
 
 async fn resolve_target(pool: &sqlx::SqlitePool, id_str: &str) -> Result<TargetAccount, AppError> {
+    // Check local first (persona IDs are TEXT)
+    let local: Option<(String,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
+        .bind(id_str)
+        .fetch_optional(pool)
+        .await?;
+    if let Some((local_id,)) = local {
+        return Ok(TargetAccount::Local(local_id));
+    }
+
+    // Check remote (remote_accounts.id is INTEGER)
     let id: i64 = id_str
         .parse()
         .map_err(|_| AppError::not_found("Account not found"))?;
-
-    // Check local first
-    let local: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
-    if local.is_some() {
-        return Ok(TargetAccount::Local(id));
-    }
-
-    // Check remote
     let remote: Option<(i64, String, String, Option<String>)> = sqlx::query_as(
         "SELECT id, actor_uri, inbox_url, shared_inbox_url FROM remote_accounts WHERE id = ?",
     )
@@ -252,14 +251,14 @@ async fn follow(
                 "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_persona_id, created_at) \
                  VALUES (?, ?, ?, ?)",
             )
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .bind(crate::db::DEFAULT_USER_ID)
-            .bind(target_id)
+            .bind(&target_id)
             .bind(now)
             .execute(&state.pool)
             .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
@@ -274,7 +273,7 @@ async fn follow(
                 "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at) \
                  VALUES (?, ?, ?, ?)",
             )
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .bind(crate::db::DEFAULT_USER_ID)
             .bind(remote_id)
             .bind(now)
@@ -299,9 +298,9 @@ async fn follow(
             });
 
             let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
-            let _ = enqueue_delivery(&state.pool, target_inbox, auth.account_id, &activity).await;
+            let _ = enqueue_delivery(&state.pool, target_inbox, &auth.account_id, &activity).await;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -324,12 +323,12 @@ async fn unfollow(
     match target {
         TargetAccount::Local(target_id) => {
             sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(auth.account_id)
-                .bind(target_id)
+                .bind(&auth.account_id)
+                .bind(&target_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
@@ -340,7 +339,7 @@ async fn unfollow(
             shared_inbox_url,
         } => {
             sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-                .bind(auth.account_id)
+                .bind(&auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
                 .await?;
@@ -369,9 +368,9 @@ async fn unfollow(
             });
 
             let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
-            let _ = enqueue_delivery(&state.pool, target_inbox, auth.account_id, &activity).await;
+            let _ = enqueue_delivery(&state.pool, target_inbox, &auth.account_id, &activity).await;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -387,9 +386,7 @@ async fn followers_list(
     Path(id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let account_id: i64 = id
-        .parse()
-        .map_err(|_| AppError::not_found("Account not found"))?;
+    let account_id = &id;
     let _account = fetch_account_row(&state.pool, account_id).await?;
     let domain = &state.config.server.domain;
     let limit: i64 = params
@@ -464,9 +461,7 @@ async fn following_list(
     Path(id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let account_id: i64 = id
-        .parse()
-        .map_err(|_| AppError::not_found("Account not found"))?;
+    let account_id = &id;
     let _account = fetch_account_row(&state.pool, account_id).await?;
     let domain = &state.config.server.domain;
     let limit: i64 = params
@@ -559,25 +554,25 @@ async fn block(
                 "INSERT OR IGNORE INTO blocks (persona_id, target_persona_id, created_at) \
                  VALUES (?, ?, ?)",
             )
-            .bind(auth.account_id)
-            .bind(target_id)
+            .bind(&auth.account_id)
+            .bind(&target_id)
             .bind(now)
             .execute(&state.pool)
             .await?;
 
             // Remove mutual follows
             sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(auth.account_id)
-                .bind(target_id)
+                .bind(&auth.account_id)
+                .bind(&target_id)
                 .execute(&state.pool)
                 .await?;
             sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
-                .bind(target_id)
-                .bind(auth.account_id)
+                .bind(&target_id)
+                .bind(&auth.account_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
@@ -591,7 +586,7 @@ async fn block(
                 "INSERT OR IGNORE INTO blocks (persona_id, target_remote_id, created_at) \
                  VALUES (?, ?, ?)",
             )
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .bind(remote_id)
             .bind(now)
             .execute(&state.pool)
@@ -599,14 +594,14 @@ async fn block(
 
             // Remove follow + follower relationships
             sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
-                .bind(auth.account_id)
+                .bind(&auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
                 .await?;
             sqlx::query(
                 "DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?",
             )
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .bind(remote_id)
             .execute(&state.pool)
             .await?;
@@ -622,9 +617,9 @@ async fn block(
             });
             let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
             let _ =
-                enqueue_delivery(&state.pool, target_inbox, auth.account_id, &block_activity).await;
+                enqueue_delivery(&state.pool, target_inbox, &auth.account_id, &block_activity).await;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -646,23 +641,23 @@ async fn unblock(
     match target {
         TargetAccount::Local(target_id) => {
             sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_persona_id = ?")
-                .bind(auth.account_id)
-                .bind(target_id)
+                .bind(&auth.account_id)
+                .bind(&target_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_remote_id = ?")
-                .bind(auth.account_id)
+                .bind(&auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -693,13 +688,13 @@ async fn mute(
                 "INSERT OR IGNORE INTO mutes (persona_id, target_persona_id, created_at) \
                  VALUES (?, ?, ?)",
             )
-            .bind(auth.account_id)
-            .bind(target_id)
+            .bind(&auth.account_id)
+            .bind(&target_id)
             .bind(now)
             .execute(&state.pool)
             .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
@@ -708,13 +703,13 @@ async fn mute(
                 "INSERT OR IGNORE INTO mutes (persona_id, target_remote_id, created_at) \
                  VALUES (?, ?, ?)",
             )
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .bind(remote_id)
             .bind(now)
             .execute(&state.pool)
             .await?;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -736,23 +731,23 @@ async fn unmute(
     match target {
         TargetAccount::Local(target_id) => {
             sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_persona_id = ?")
-                .bind(auth.account_id)
-                .bind(target_id)
+                .bind(&auth.account_id)
+                .bind(&target_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship(&state.pool, auth.account_id, target_id)
+            build_relationship(&state.pool, &auth.account_id, &target_id)
                 .await
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_remote_id = ?")
-                .bind(auth.account_id)
+                .bind(&auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
                 .await?;
 
-            build_relationship_remote(&state.pool, auth.account_id, remote_id)
+            build_relationship_remote(&state.pool, &auth.account_id, remote_id)
                 .await
                 .map(Json)
         }
@@ -798,7 +793,7 @@ async fn update_credentials(
     if let Some(ref display_name) = body.display_name {
         sqlx::query("UPDATE personas SET display_name = ? WHERE id = ?")
             .bind(display_name)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -809,7 +804,7 @@ async fn update_credentials(
         sqlx::query("UPDATE personas SET bio = ?, bio_html = ? WHERE id = ?")
             .bind(note)
             .bind(&rendered.html)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -818,7 +813,7 @@ async fn update_credentials(
     if let Some(locked) = body.locked {
         sqlx::query("UPDATE personas SET is_locked = ? WHERE id = ?")
             .bind(locked)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -827,7 +822,7 @@ async fn update_credentials(
     if let Some(bot) = body.bot {
         sqlx::query("UPDATE personas SET bot = ? WHERE id = ?")
             .bind(bot)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -836,7 +831,7 @@ async fn update_credentials(
     if let Some(discoverable) = body.discoverable {
         sqlx::query("UPDATE personas SET discoverable = ? WHERE id = ?")
             .bind(discoverable)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -852,7 +847,7 @@ async fn update_credentials(
             serde_json::to_string(&fields_json).map_err(|e| AppError::internal(e.to_string()))?;
         sqlx::query("UPDATE personas SET fields_json = ? WHERE id = ?")
             .bind(&fields_str)
-            .bind(auth.account_id)
+            .bind(&auth.account_id)
             .execute(&state.pool)
             .await?;
         changed = true;
@@ -860,7 +855,7 @@ async fn update_credentials(
 
     // Enqueue Update{Actor} to all followers if anything changed
     if changed {
-        let account_row = fetch_account_row(&state.pool, auth.account_id).await?;
+        let account_row = fetch_account_row(&state.pool, &auth.account_id).await?;
         let actor_uri = format!("https://{domain}/users/{}", auth.username);
 
         let fields: Vec<Value> = serde_json::from_str(&account_row.fields_json).unwrap_or_default();
@@ -910,11 +905,11 @@ async fn update_credentials(
             "published": millis_to_iso(now)
         });
 
-        let _ = enqueue_to_followers(&state.pool, auth.account_id, &update_activity).await;
+        let _ = enqueue_to_followers(&state.pool, &auth.account_id, &update_activity).await;
     }
 
     // Return updated account with source
-    let row = fetch_account_row(&state.pool, auth.account_id).await?;
+    let row = fetch_account_row(&state.pool, &auth.account_id).await?;
     let mut v = account_to_json(&row, domain);
     let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
     v["source"] = json!({
@@ -941,7 +936,7 @@ async fn follow_requests(
          FROM follow_requests fr WHERE fr.target_persona_id = ? \
          ORDER BY fr.created_at DESC",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -1002,7 +997,7 @@ async fn authorize_follow(
          WHERE requester_remote_id = ? AND target_persona_id = ?",
     )
     .bind(remote_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1016,7 +1011,7 @@ async fn authorize_follow(
         "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at) \
          VALUES (?, ?, ?, ?)",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(crate::db::DEFAULT_USER_ID)
     .bind(remote_id)
     .bind(now)
@@ -1054,10 +1049,10 @@ async fn authorize_follow(
 
         let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
         let _ =
-            enqueue_delivery(&state.pool, target_inbox, auth.account_id, &accept_activity).await;
+            enqueue_delivery(&state.pool, target_inbox, &auth.account_id, &accept_activity).await;
     }
 
-    build_relationship_remote(&state.pool, auth.account_id, remote_id)
+    build_relationship_remote(&state.pool, &auth.account_id, remote_id)
         .await
         .map(Json)
 }
@@ -1079,7 +1074,7 @@ async fn reject_follow(
          WHERE requester_remote_id = ? AND target_persona_id = ?",
     )
     .bind(remote_id)
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1117,10 +1112,10 @@ async fn reject_follow(
 
         let target_inbox = shared_inbox_url.as_deref().unwrap_or(&inbox_url);
         let _ =
-            enqueue_delivery(&state.pool, target_inbox, auth.account_id, &reject_activity).await;
+            enqueue_delivery(&state.pool, target_inbox, &auth.account_id, &reject_activity).await;
     }
 
-    build_relationship_remote(&state.pool, auth.account_id, remote_id)
+    build_relationship_remote(&state.pool, &auth.account_id, remote_id)
         .await
         .map(Json)
 }
@@ -1173,7 +1168,7 @@ async fn search(
                         let signing: Option<(String, String)> = sqlx::query_as(
                             "SELECT username, private_key_pem FROM personas WHERE id = ?",
                         )
-                        .bind(auth.account_id)
+                        .bind(&auth.account_id)
                         .fetch_optional(&state.pool)
                         .await?;
 
@@ -1347,7 +1342,7 @@ async fn search(
                             &state.pool,
                             &post,
                             domain,
-                            Some(auth.account_id),
+                            Some(auth.account_id.as_str()),
                         )
                         .await?;
                         result_statuses.push(status);
@@ -1393,7 +1388,7 @@ async fn followed_tags_list(
     let tags: Vec<(String,)> = sqlx::query_as(
         "SELECT tag FROM followed_tags WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(limit)
     .fetch_all(&state.pool)
     .await?;
@@ -1419,7 +1414,7 @@ async fn follow_tag(
     sqlx::query(
         "INSERT OR IGNORE INTO followed_tags (user_id, tag, created_at) VALUES (?, ?, ?)",
     )
-    .bind(auth.account_id)
+    .bind(&auth.account_id)
     .bind(&tag)
     .bind(now)
     .execute(&state.pool)
@@ -1438,7 +1433,7 @@ async fn unfollow_tag(
     let tag = id.to_lowercase();
 
     sqlx::query("DELETE FROM followed_tags WHERE user_id = ? AND tag = ?")
-        .bind(auth.account_id)
+        .bind(&auth.account_id)
         .bind(&tag)
         .execute(&state.pool)
         .await?;
@@ -1462,7 +1457,7 @@ async fn get_tag(
         .and_then(|v| v.strip_prefix("Bearer "))
     {
         let token_hash = crate::api::hex_encode(&Sha256::digest(auth_header.as_bytes()));
-        let account_id: Option<(i64,)> = sqlx::query_as(
+        let account_id: Option<(String,)> = sqlx::query_as(
             "SELECT persona_id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
         )
         .bind(&token_hash)
