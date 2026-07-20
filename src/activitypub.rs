@@ -637,6 +637,129 @@ async fn featured_tags(
     })))
 }
 
+/// GET /users/{username}/statuses/{id} — Serve a single post as an ActivityPub Note.
+///
+/// Required for federation: other servers fetch individual posts by AP ID during
+/// inbox processing, conversation backfill, and signature verification.
+async fn ap_status(
+    State(state): State<Arc<AppState>>,
+    Path((username, id_str)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
+) -> Result<Response, AppError> {
+    let post_id: i64 = id_str.parse().map_err(|_| AppError::not_found("Invalid post ID"))?;
+    let domain = &state.config.server.domain;
+
+    // If the client doesn't want AP JSON, redirect to the HTML page
+    let accept = headers.get("accept").and_then(|v| v.to_str().ok()).unwrap_or("");
+    if !accept.contains("application/activity+json") && !accept.contains("application/ld+json") {
+        return Ok(axum::response::Redirect::to(&format!("/@{username}/{post_id}")).into_response());
+    }
+
+    // Verify the persona exists and matches
+    let persona = fieldwork_db::persona_db::get_persona_by_username(&state.pool, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+
+    // Get the post
+    let post = fieldwork_db::posts_db::get_post(&state.pool, post_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Post not found"))?;
+
+    // Verify the post belongs to this persona
+    if post.persona_id != persona.id {
+        return Err(AppError::not_found("Post not found"));
+    }
+
+    // Reject deleted posts
+    if post.deleted_at.is_some() {
+        return Ok(ap_response(json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": format!("https://{domain}/users/{username}/statuses/{post_id}"),
+            "type": "Tombstone",
+            "formerType": "Note"
+        })));
+    }
+
+    let actor_uri = format!("https://{domain}/users/{username}");
+    let status_uri = format!("{actor_uri}/statuses/{post_id}");
+    let published = crate::api::millis_to_iso(post.created_at);
+
+    // Build media attachments with alt text
+    let media = fieldwork_db::media_db::attachments_for_post(&state.pool, post_id).await?;
+    let attachments: Vec<Value> = media
+        .iter()
+        .map(|m| {
+            let media_url = format!("https://{domain}/media/{}/{}.{}",
+                persona.id, m.id,
+                m.mime_type.split('/').nth(1).unwrap_or("bin"));
+            json!({
+                "type": "Document",
+                "mediaType": m.mime_type,
+                "url": media_url,
+                "name": if m.description.is_empty() { Value::Null } else { Value::String(m.description.clone()) },
+                "blurhash": m.blurhash,
+                "width": m.width,
+                "height": m.height
+            })
+        })
+        .collect();
+
+    // Build tags (hashtags + mentions)
+    let tags_list = fieldwork_db::post_tags_db::get_tags(&state.pool, post_id).await?;
+    let tag_values: Vec<Value> = tags_list
+        .iter()
+        .map(|tag| json!({
+            "type": "Hashtag",
+            "href": format!("https://{domain}/tags/{tag}"),
+            "name": format!("#{tag}")
+        }))
+        .collect();
+
+    let mut to = vec![json!("https://www.w3.org/ns/activitystreams#Public")];
+    let mut cc = vec![json!(format!("{actor_uri}/followers"))];
+
+    if post.visibility == "direct" {
+        to = vec![];
+        cc = vec![];
+    } else if post.visibility == "followers" {
+        to = vec![json!(format!("{actor_uri}/followers"))];
+        cc = vec![];
+    } else if post.visibility == "unlisted" {
+        to = vec![json!(format!("{actor_uri}/followers"))];
+        cc = vec![json!("https://www.w3.org/ns/activitystreams#Public")];
+    }
+
+    let mut note = json!({
+        "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1"
+        ],
+        "id": &status_uri,
+        "type": "Note",
+        "content": post.content_html,
+        "attributedTo": &actor_uri,
+        "to": to,
+        "cc": cc,
+        "published": &published,
+        "url": format!("https://{domain}/@{username}/{post_id}"),
+        "sensitive": post.sensitive,
+        "attachment": attachments,
+        "tag": tag_values
+    });
+
+    if !post.spoiler_text.is_empty() {
+        note["summary"] = json!(post.spoiler_text);
+    }
+    if let Some(ref reply_uri) = post.in_reply_to_uri {
+        note["inReplyTo"] = json!(reply_uri);
+    }
+    if let Some(ref ctx) = post.context_url {
+        note["context"] = json!(ctx);
+    }
+
+    Ok(ap_response(note))
+}
+
 /// GET /users/{username}/statuses/{id}/context — FEP-f228 conversation context collection.
 ///
 /// Returns an OrderedCollection of all posts in the same conversation, ordered
@@ -777,6 +900,10 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/users/{username}/collections/featured", get(featured))
         .route("/users/{username}/collections/tags", get(featured_tags))
         .route("/users/{username}/did.json", get(did_document))
+        .route(
+            "/users/{username}/statuses/{id}",
+            get(ap_status),
+        )
         .route(
             "/users/{username}/statuses/{id}/context",
             get(ap_context_collection),
