@@ -1,1 +1,2 @@
 {"id":"019f7833-6454-7308-8390-5e3e3e533de6","issue_id":"smallhold-yfhy.2","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T02:27:41.780199258Z"}
+{"id":"019f7ccd-a1cb-70a8-9865-7d30a3056129","issue_id":"smallhold-yfhy.2","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already implemented: /inbox route exists (inbox.rs:74), actor JSON advertises sharedInbox (activitypub.rs:154), delivery coalesces by shared_inbox_url (delivery.rs:163)","created_at":"2026-07-19T23:54:38.923043828Z"}

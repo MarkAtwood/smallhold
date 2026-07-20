@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-haf0.4",
+  "title": "Test gap: no tests for activitypub.rs endpoints (profile_page, post_page, ap_context_collection, outbox)",
+  "description": "activitypub.rs has zero #[test] functions. The following endpoints have no test coverage:\n\n- profile_page: would immediately reveal the PostRow/context_url runtime error (smallhold-haf0.2)\n- post_page: same FromRow error, returns 500\n- ap_context_collection: the FEP-f228 context collection endpoint has no tests verifying correct output shape, multi-post conversations, or the visibility filter\n- outbox: no test verifying context_url is included in the Note objects\n\nAdditionally, parse_collection_sync_header has no test for digest values with base64 padding (trailing '=' or '=='), which is the most common real-world case.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:07:00.547209691Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:08:40.810390627Z",
+  "closed_at": "2026-07-20T00:08:40.810390627Z",
+  "close_reason": "Deferred: requires integration test infrastructure",
+  "labels": [
+    "testing",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-haf0.4",
+      "depends_on_id": "smallhold-haf0",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:07:00.578704534Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

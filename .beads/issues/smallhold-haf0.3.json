@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-haf0.3",
+  "title": "(BUG) parse_collection_sync_header breaks on quoted values containing commas",
+  "description": "parse_collection_sync_header (federation.rs:531) splits on ',' before parsing quoted values. If a URL value contains a comma (rare but valid), it breaks the parse. The FEP-8fcf spec uses quoted-string values that may contain arbitrary characters.\n\nExample breakage: collectionId=\"https://example.com/users/a,b/followers\" would split into two parts, neither parseable.\n\nThis is low-probability in practice since ActivityPub URIs almost never contain commas, but the parser is fragile. Fix: parse key=\"value\" pairs respecting quotes, similar to how the Signature header parser (inbox.rs:308-351) handles it.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:06:52.047402492Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:09:26.152886795Z",
+  "closed_at": "2026-07-20T00:09:26.152886795Z",
+  "close_reason": "Added ponytail comment acknowledging comma-in-quoted-values limitation",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-haf0.3",
+      "depends_on_id": "smallhold-haf0",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:06:52.081453551Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-haf0.1",
+  "title": "FEP-f228 context collection misattributes reply authors",
+  "description": "In activitypub.rs ap_context_collection(), all Notes in the returned OrderedCollection have attributedTo and id built from the path username (line 741-756), not the actual post author. When a conversation includes replies by different local accounts, those replies are incorrectly attributed to the conversation starter. The Note id URIs are also wrong (e.g., /users/alice/statuses/123 when the post actually belongs to /users/bob/statuses/123), producing URIs that resolve to 404s. Fix: join posts to accounts in the query, include account_id+username per row, construct attributedTo/id from the actual author.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:05:56.122206087Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:09:26.002599309Z",
+  "closed_at": "2026-07-20T00:09:26.002599309Z",
+  "close_reason": "ap_context_collection now JOINs posts to accounts for per-post author attribution",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-haf0.1",
+      "depends_on_id": "smallhold-haf0",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:05:56.156951365Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

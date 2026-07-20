@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-haf0.5",
+  "title": "FEP-8fcf: compute_follower_sync_digest silently swallows DB errors",
+  "description": "compute_follower_sync_digest (federation.rs:497) uses .ok()? to convert sqlx errors into None. This means DB failures (connection issues, schema problems) are indistinguishable from 'no followers on this domain'. The function is called from two hot paths:\n\n1. delivery.rs:287 — during outbound delivery, a DB error means the Collection-Synchronization header is silently omitted\n2. inbox.rs:249 — during inbound follower sync check, a DB error is treated as 'no followers', potentially triggering a false mismatch warning\n\nFor a single-operator server this is acceptable behavior (noted in the function's return type), but the DB error should at least be logged at debug/warn level before being discarded.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:07:11.305403052Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:09:26.080465187Z",
+  "closed_at": "2026-07-20T00:09:26.080465187Z",
+  "close_reason": "compute_follower_sync_digest now logs warning before returning None on DB error",
+  "labels": [
+    "observability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-haf0.5",
+      "depends_on_id": "smallhold-haf0",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:07:11.337387481Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

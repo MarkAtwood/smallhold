@@ -2,13 +2,15 @@
   "id": "smallhold-yfhy.2",
   "title": "SharedInbox endpoint",
   "description": "Implement SharedInbox per ActivityPub spec.\n\n**Spec:** https://www.w3.org/TR/activitypub/#shared-inbox-delivery\n\n**Requirements:**\n- Add /inbox endpoint at instance level (not per-actor)\n- Advertise sharedInbox in actor endpoints object\n- Route incoming activities to correct local actors\n- When delivering outbound, use remote sharedInbox when multiple recipients share a server\n\n**Why:** Reduces HTTP requests when delivering to multiple actors on same instance. Standard optimization all major implementations use.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T02:27:41.776871554Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T02:27:41.776871554Z",
+  "updated_at": "2026-07-19T23:54:38.917520776Z",
+  "closed_at": "2026-07-19T23:54:38.917520776Z",
+  "close_reason": "Already implemented: /inbox route exists (inbox.rs:74), actor JSON advertises sharedInbox (activitypub.rs:154), delivery coalesces by shared_inbox_url (delivery.rs:163)",
   "dependencies": [
     {
       "issue_id": "smallhold-yfhy.2",
