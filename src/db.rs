@@ -64,6 +64,35 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
             .context("migration: add remote_posts.context_url")?;
     }
 
+    // DID support: add did_key and recovery_pubkey to accounts.
+    let has_did_key: bool = sqlx::query_scalar::<_, String>(
+        "SELECT name FROM pragma_table_info('accounts') WHERE name = 'did_key'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+
+    if !has_did_key {
+        sqlx::raw_sql("ALTER TABLE accounts ADD COLUMN did_key TEXT")
+            .execute(pool)
+            .await
+            .context("migration: add accounts.did_key")?;
+    }
+
+    let has_recovery_pubkey: bool = sqlx::query_scalar::<_, String>(
+        "SELECT name FROM pragma_table_info('accounts') WHERE name = 'recovery_pubkey'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+
+    if !has_recovery_pubkey {
+        sqlx::raw_sql("ALTER TABLE accounts ADD COLUMN recovery_pubkey TEXT")
+            .execute(pool)
+            .await
+            .context("migration: add accounts.recovery_pubkey")?;
+    }
+
     Ok(())
 }
 
@@ -90,7 +119,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     bot             INTEGER NOT NULL DEFAULT 0,
     fields_json     TEXT NOT NULL DEFAULT '[]',
     created_at      INTEGER NOT NULL,
-    last_status_at  INTEGER
+    last_status_at  INTEGER,
+    did_key         TEXT,
+    recovery_pubkey TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username);
 

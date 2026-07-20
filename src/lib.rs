@@ -5,6 +5,7 @@ pub mod cli;
 pub mod config;
 pub mod db;
 pub mod delivery;
+pub mod did;
 pub mod discovery;
 pub mod error;
 pub mod federation;
