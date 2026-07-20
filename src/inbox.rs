@@ -564,6 +564,10 @@ async fn verify_and_fetch_actor(
         return Err(AppError::unauthorized("Signature must include date header"));
     }
 
+    if !sig_params.headers_list.iter().any(|h| h == "host") {
+        return Err(AppError::unauthorized("Signature must include host header"));
+    }
+
     // The keyId typically looks like "https://remote.example/users/alice#main-key".
     // The actor URI should be the keyId minus the fragment.
     let key_actor_uri = sig_params

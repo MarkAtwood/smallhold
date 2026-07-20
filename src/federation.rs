@@ -43,6 +43,12 @@ fn is_private_host(host: &str) -> bool {
                 ip.is_loopback() || ip.is_unspecified()
                 || (ip.segments()[0] & 0xFE00) == 0xFC00  // ULA fc00::/7
                 || (ip.segments()[0] == 0xFE80) // link-local
+                || ip.to_ipv4_mapped().map_or(false, |v4| {
+                    v4.is_loopback() || v4.is_private() || v4.is_link_local()
+                    || v4.is_broadcast() || v4.is_unspecified()
+                    || v4.octets()[0] == 0
+                    || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64)
+                })
             }
         };
     }

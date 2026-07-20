@@ -245,7 +245,7 @@ impl AuthenticatedAccount {
     /// Check that the token's scopes include the required scope.
     /// A token with "read write" (full access) passes any check.
     pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
-        if self.scopes.contains(scope) || self.scopes == "read write" {
+        if self.scopes.split_whitespace().any(|s| s == scope) || self.scopes == "read write" {
             Ok(())
         } else {
             Err(AppError::forbidden(format!(

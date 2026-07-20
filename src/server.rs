@@ -74,6 +74,15 @@ async fn security_headers(
         // Profile and post pages: short cache
         headers.insert("Cache-Control", "public, max-age=60".parse().unwrap());
     }
+    // CSP for HTML pages
+    if path.starts_with("/@") || path == "/oauth/authorize" {
+        response.headers_mut().insert(
+            "Content-Security-Policy",
+            "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors 'none'"
+                .parse().unwrap(),
+        );
+    }
+
     // Media files are served by the reverse proxy, not this handler.
     // The Caddyfile/nginx config sets immutable headers for /media/*.
 

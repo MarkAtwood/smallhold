@@ -304,6 +304,7 @@ async fn profile_page(
     Path(username): Path<String>,
 ) -> Result<Html<String>, AppError> {
     let account = fetch_account(&state.pool, &username).await?;
+    let username = html_attr_escape(&username);
     let domain = &state.config.server.domain;
     let display_name = ammonia::clean(&account.display_name);
     let dn_escaped = html_attr_escape(&display_name);
@@ -439,6 +440,7 @@ async fn post_page(
     .ok_or_else(|| AppError::not_found("Post not found"))?;
 
     let account = fetch_account(&state.pool, &username).await?;
+    let username = html_attr_escape(&username);
     let display_name = ammonia::clean(&account.display_name);
     let dn_escaped = html_attr_escape(&display_name);
     let custom_css = load_extra_css(&state.config);

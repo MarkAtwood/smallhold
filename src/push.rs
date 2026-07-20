@@ -325,6 +325,7 @@ async fn send_push_inner(
     static PUSH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("failed to build push HTTP client")
     });
@@ -348,7 +349,8 @@ async fn send_push_inner(
             .execute(pool)
             .await?;
     } else if status >= 400 {
-        let body_text = response.text().await.unwrap_or_default();
+        let body_bytes = response.bytes().await.unwrap_or_default();
+        let body_text = String::from_utf8_lossy(&body_bytes[..body_bytes.len().min(1024)]);
         tracing::debug!(account_id, status, body = %body_text, "push endpoint returned error");
     }
 
