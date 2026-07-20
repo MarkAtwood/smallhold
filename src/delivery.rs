@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
 use std::time::Duration;
 
+use fieldwork::circuit_breaker::CircuitBreaker;
 use sqlx::SqlitePool;
 
 use crate::api::millis_to_iso;
@@ -35,74 +35,7 @@ impl std::fmt::Debug for DeliveryRow {
     }
 }
 
-const MAX_ATTEMPTS: i32 = 6;
-
-/// Exponential backoff schedule in milliseconds.
-fn retry_delay_ms(attempt: i32) -> i64 {
-    match attempt {
-        0 => 60_000,     // 1 minute
-        1 => 300_000,    // 5 minutes
-        2 => 1_800_000,  // 30 minutes
-        3 => 7_200_000,  // 2 hours
-        4 => 28_800_000, // 8 hours
-        _ => 86_400_000, // 24 hours
-    }
-}
-
-// -- Circuit breaker (per-domain) --
-
-#[derive(Debug)]
-struct CircuitState {
-    consecutive_failures: u32,
-    /// Unix timestamp (ms) until which the circuit is open; `None` = closed.
-    open_until: Option<i64>,
-}
-
-const CIRCUIT_THRESHOLD: u32 = 10;
-const CIRCUIT_OPEN_MS: i64 = 3_600_000; // 1 hour
-
-static CIRCUIT_BREAKER: LazyLock<Mutex<HashMap<String, CircuitState>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Returns `true` if deliveries to `domain` are currently paused.
-fn circuit_is_open(domain: &str, now_ms: i64) -> bool {
-    let map = CIRCUIT_BREAKER.lock().unwrap();
-    match map.get(domain) {
-        Some(state) => matches!(state.open_until, Some(until) if now_ms < until),
-        None => false,
-    }
-}
-
-fn circuit_record_success(domain: &str) {
-    let mut map = CIRCUIT_BREAKER.lock().unwrap();
-    map.remove(domain);
-}
-
-fn circuit_record_failure(domain: &str, now_ms: i64) {
-    let mut map = CIRCUIT_BREAKER.lock().unwrap();
-    let state = map.entry(domain.to_owned()).or_insert(CircuitState {
-        consecutive_failures: 0,
-        open_until: None,
-    });
-    state.consecutive_failures += 1;
-    if state.consecutive_failures >= CIRCUIT_THRESHOLD {
-        state.open_until = Some(now_ms + CIRCUIT_OPEN_MS);
-    }
-
-    // Evict stale entries to prevent unbounded memory growth.
-    // First pass: keep only entries with an actively-open circuit or recent failures
-    // (threshold/2 filters out domains with just 1-2 transient errors).
-    // Second pass: if still over limit, keep only actively-open circuits.
-    if map.len() > 10_000 {
-        map.retain(|_, s| {
-            matches!(s.open_until, Some(until) if now_ms < until)
-                || s.consecutive_failures >= CIRCUIT_THRESHOLD / 2
-        });
-        if map.len() > 10_000 {
-            map.retain(|_, s| matches!(s.open_until, Some(until) if now_ms < until));
-        }
-    }
-}
+static CIRCUIT_BREAKER: LazyLock<CircuitBreaker> = LazyLock::new(CircuitBreaker::new);
 
 // -- Public API --
 
@@ -226,7 +159,7 @@ async fn process_batch(
         // Skip rows whose target domain has an open circuit breaker.
         if let Ok(url) = row.target_inbox.parse::<url::Url>() {
             if let Some(domain) = url.host_str() {
-                if circuit_is_open(domain, now) {
+                if CIRCUIT_BREAKER.is_open(domain, now) {
                     continue;
                 }
             }
@@ -310,7 +243,7 @@ async fn deliver_one(
             let status = resp.status();
             if status.is_success() {
                 mark_delivered(pool, row.id).await?;
-                circuit_record_success(&target_domain);
+                CIRCUIT_BREAKER.record_success(&target_domain);
             } else if status == 410 {
                 // Gone — this specific remote actor is deleted; no point retrying.
                 // Don't trigger circuit breaker: 410 is resource-specific, not domain-wide.
@@ -324,16 +257,16 @@ async fn deliver_one(
                 } else {
                     schedule_retry(pool, row.id, row.attempts, &format!("HTTP {status}")).await?;
                 }
-                circuit_record_failure(&target_domain, now_ms);
+                CIRCUIT_BREAKER.record_failure(&target_domain, now_ms);
             } else {
                 // 5xx / other — retry with backoff.
                 schedule_retry(pool, row.id, row.attempts, &format!("HTTP {status}")).await?;
-                circuit_record_failure(&target_domain, now_ms);
+                CIRCUIT_BREAKER.record_failure(&target_domain, now_ms);
             }
         }
         Err(e) => {
             schedule_retry(pool, row.id, row.attempts, &e.to_string()).await?;
-            circuit_record_failure(&target_domain, now_ms);
+            CIRCUIT_BREAKER.record_failure(&target_domain, now_ms);
         }
     }
 
@@ -368,12 +301,12 @@ async fn schedule_retry(
     error: &str,
 ) -> anyhow::Result<()> {
     let next_attempt = attempts + 1;
-    if next_attempt >= MAX_ATTEMPTS {
+    if fieldwork::retry::exhausted(next_attempt) {
         return mark_dead(pool, id, error).await;
     }
 
     let now = chrono::Utc::now().timestamp_millis();
-    let next_at = now + retry_delay_ms(attempts);
+    let next_at = now + fieldwork::retry::delay_ms(attempts);
 
     sqlx::query(
         "UPDATE delivery_queue \

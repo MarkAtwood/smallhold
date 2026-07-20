@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-8vsj",
+  "title": "Refactor media.rs and cards.rs for fieldwork extraction",
+  "description": "Split media.rs and cards.rs into pure-logic and persistence layers so the pure logic can be extracted into the fieldwork crate. This is a prerequisite for migrating smallhold to use fieldwork for media processing and link preview cards. Also adds missing GIF frame bomb protection (currently only in gaja).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T02:10:14.233014365Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T02:10:14.233014365Z"
+}

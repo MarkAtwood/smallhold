@@ -6,6 +6,13 @@ rust-version = "1.80"
 license = "AGPL-3.0-only"
 
 [dependencies]
+# Shared fediverse building blocks
+fieldwork = { path = "../fedistract/fieldwork", features = ["db-sqlite", "full"] }
+cavage-httpsig = { path = "../fedistract/cavage-httpsig" }
+ssrf-guard = { path = "../fedistract/ssrf-guard", features = ["reqwest"] }
+fedi-did = { path = "../fedistract/fedi-did" }
+fedi-integrity = { path = "../fedistract/fedi-integrity" }
+
 anyhow = "1"
 ammonia = "4"
 argon2 = "0.5"

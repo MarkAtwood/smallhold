@@ -223,30 +223,16 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 }
 "#;
 
-/// Strip any `</style>` sequences (case-insensitive) to prevent style tag breakout
-/// when CSS is injected into a `<style>` block.
-fn sanitize_css_for_style_tag(css: &mut String) {
-    static STYLE_TAG_RE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(?i)</\s*style").unwrap());
-    *css = STYLE_TAG_RE.replace_all(css, "").to_string();
-}
-
 /// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
 /// Cached in an OnceLock so disk I/O and regex work happen only on first call.
 fn load_extra_css(config: &crate::config::Config) -> String {
     static EXTRA_CSS: OnceLock<String> = OnceLock::new();
     EXTRA_CSS
         .get_or_init(|| {
-            let mut css = crate::theme::load_theme_css(config);
-            let custom_path = &config.branding.custom_css_path;
-            if !custom_path.is_empty() {
-                match std::fs::read_to_string(custom_path) {
-                    Ok(custom) => css.push_str(&custom),
-                    Err(e) => tracing::warn!(path = custom_path, "failed to load custom CSS: {e}"),
-                }
-            }
-            sanitize_css_for_style_tag(&mut css);
-            css
+            fieldwork::theme::load_extra_css(
+                &config.branding.theme_tokens_path,
+                &config.branding.custom_css_path,
+            )
         })
         .clone()
 }

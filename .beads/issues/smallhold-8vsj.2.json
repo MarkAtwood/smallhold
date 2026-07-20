@@ -1,0 +1,22 @@
+{
+  "id": "smallhold-8vsj.2",
+  "title": "Split cards.rs into pure logic and persistence",
+  "description": "Refactor cards.rs to separate pure logic (HTTP fetch with SSRF validation, OpenGraph tag parsing, HTML entity decoding, card type detection) from persistence (SQLite cache queries, upsert, junction table). The pure logic becomes a thin wrapper around fieldwork::cards once that module exists.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T02:10:23.311638379Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T02:10:23.311638379Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-8vsj.2",
+      "depends_on_id": "smallhold-8vsj",
+      "type": "parent-child",
+      "created_at": "2026-07-20T02:10:23.334391923Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

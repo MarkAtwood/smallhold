@@ -1,0 +1,22 @@
+{
+  "id": "smallhold-8vsj.1",
+  "title": "Split media.rs into pure logic and persistence",
+  "description": "Refactor media.rs to separate pure logic (MIME sniffing, image resizing, blurhash generation, EXIF stripping) from persistence (sqlx queries, file storage). Add missing GIF frame bomb protection (500-frame limit from gaja). The pure logic becomes a thin wrapper around fieldwork::media once that module exists.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T02:10:21.927358322Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T02:10:21.927358322Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-8vsj.1",
+      "depends_on_id": "smallhold-8vsj",
+      "type": "parent-child",
+      "created_at": "2026-07-20T02:10:21.948467797Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
