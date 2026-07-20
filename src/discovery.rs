@@ -9,6 +9,14 @@ use std::sync::Arc;
 use crate::error::AppError;
 use crate::server::AppState;
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/.well-known/webfinger", get(webfinger))
@@ -162,7 +170,7 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
 // --- host-meta (RFC 6415) ---
 
 async fn host_meta(State(state): State<Arc<AppState>>) -> Response {
-    let domain = &state.config.server.domain;
+    let domain = xml_escape(&state.config.server.domain);
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <XRD xmlns=\"http://docs.oasis-open.org/ns/xri/xrd-1.0\">\n  \

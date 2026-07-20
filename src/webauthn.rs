@@ -210,13 +210,8 @@ struct RegisterCompleteRequest {
 // GET /admin/webauthn/register — Registration page
 // ---------------------------------------------------------------------------
 
-async fn register_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
-    let has_keys = has_passkeys(&state.pool).await?;
-    let note = if has_keys {
-        "You already have passkeys registered. Enter your admin password to register another."
-    } else {
-        "No passkeys registered yet. Enter your admin password to register your first passkey."
-    };
+async fn register_page(State(_state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
+    let note = "Enter your admin password to register a passkey.";
 
     let html = format!(
         r##"<!DOCTYPE html>

@@ -298,6 +298,7 @@ pub fn html_sanitizer() -> ammonia::Builder<'static> {
     builder.tags(SANITIZER_TAGS.clone());
     builder.tag_attributes(SANITIZER_TAG_ATTRS.clone());
     builder.link_rel(Some("nofollow noopener noreferrer"));
+    builder.url_schemes(["http", "https", "mailto"].into_iter().collect());
     builder
 }
 
