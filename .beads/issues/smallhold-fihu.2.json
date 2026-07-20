@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.2",
+  "title": "MEDIUM: no CSRF token on OAuth authorize form",
+  "description": "POST /oauth/authorize (src/api.rs line 553-573 and 595-690) is a standard HTML form submit with no CSRF protection. An attacker who knows (or guesses) the admin password can host a page that auto-submits the authorize form to grant an OAuth token to the attacker's app. The attacker needs: (1) the admin password, and (2) a registered client_id. Mitigation: embed a random CSRF token in a hidden field and validate it server-side on POST. This is the standard defense for login forms. Risk is partially mitigated by the password requirement, but CSRF protection is defense-in-depth.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:12:21.050741708Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:18.924764809Z",
+  "closed_at": "2026-07-20T01:18:18.924764809Z",
+  "close_reason": "Wontfix: password-based auth on the form is CSRF-proof — attacker cannot pre-fill the password field",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.2",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:12:21.080651691Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

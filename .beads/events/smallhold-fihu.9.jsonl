@@ -1,0 +1,3 @@
+{"id":"019f7d15-6e04-75fd-a4cd-4fde59f7a8fa","issue_id":"smallhold-fihu.9","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T01:13:04.260393584Z"}
+{"id":"019f7d15-6e09-7118-8451-38543009c444","issue_id":"smallhold-fihu.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-07-20T01:13:04.265072943Z"}
+{"id":"019f7d1a-77ec-78b5-a4ff-1db8b9ceeecf","issue_id":"smallhold-fihu.9","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: register_page no longer reveals whether passkeys are registered. Message is now generic.","created_at":"2026-07-20T01:18:34.476572209Z"}

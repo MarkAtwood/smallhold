@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.19",
+  "title": "MEDIUM: Push notification client follows redirects, enabling SSRF bypass",
+  "description": "The PUSH_CLIENT in push.rs (line 325-330) is built without .redirect(reqwest::redirect::Policy::none()), unlike all other HTTP clients in the codebase (federation, delivery, cards).\n\nThis means a push endpoint URL like https://legit-push-service.example/push could return a 302 redirect to http://169.254.169.254/latest/meta-data/ and the client would follow it, bypassing the validate_outbound_url() check at line 297 which only validates the initial URL.\n\nThe SSRF check on the endpoint URL happens before the request, but if the push service responds with a redirect to an internal IP, the redirect will be followed. reqwest's default is to follow up to 10 redirects.\n\nFix: add .redirect(reqwest::redirect::Policy::none()) to the PUSH_CLIENT builder:\n```rust\nstatic PUSH_CLIENT: LazyLock\u003creqwest::Client\u003e = LazyLock::new(|| {\n    reqwest::Client::builder()\n        .timeout(Duration::from_secs(30))\n        .redirect(reqwest::redirect::Policy::none())\n        .build()\n        .expect(\"failed to build push HTTP client\")\n});\n```\n\nFile: src/push.rs lines 325-330",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:14:12.768663218Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:42.157193456Z",
+  "closed_at": "2026-07-20T01:18:42.157193456Z",
+  "close_reason": "Fixed: PUSH_CLIENT now uses redirect Policy::none()",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.19",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:14:12.795223105Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

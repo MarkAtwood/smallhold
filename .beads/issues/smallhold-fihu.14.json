@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.14",
+  "title": "LOW: Ammonia sanitizer does not restrict URL schemes in href",
+  "description": "In src/posting.rs lines 296-302, the html_sanitizer() configures ammonia with allowed tags and attributes but does not explicitly call .url_schemes() to restrict which URL schemes are allowed in href attributes. Ammonia's default does block javascript: URLs, so this is not directly exploitable. However, explicitly configuring allowed schemes (e.g., http, https, mailto) would be defense-in-depth against any future ammonia default change or unusual scheme-based attacks (data:, blob:, etc.). File: /home/mark/PROJECT/smallhold/src/posting.rs lines 296-302.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:30.146355536Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:35.57383371Z",
+  "closed_at": "2026-07-20T01:18:35.57383371Z",
+  "close_reason": "Fixed: html_sanitizer() now explicitly restricts URL schemes to http, https, mailto.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.14",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:30.173912631Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

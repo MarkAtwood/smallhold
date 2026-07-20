@@ -1,0 +1,3 @@
+{"id":"019f7d15-d327-76c4-9c71-600f1b9e0262","issue_id":"smallhold-fihu.14","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T01:13:30.151444498Z"}
+{"id":"019f7d15-d32c-763d-a986-116eb6a284fa","issue_id":"smallhold-fihu.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-07-20T01:13:30.156409775Z"}
+{"id":"019f7d1a-7c3c-7037-9434-8cc9e15174a7","issue_id":"smallhold-fihu.14","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: html_sanitizer() now explicitly restricts URL schemes to http, https, mailto.","created_at":"2026-07-20T01:18:35.580016642Z"}

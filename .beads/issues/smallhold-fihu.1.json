@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.1",
+  "title": "MEDIUM: scope check uses substring matching (scope bypass)",
+  "description": "In src/api.rs line 248, require_scope() uses self.scopes.contains(scope). This is a substring match, not a word-boundary match. A token with scope 'readonly' would pass require_scope('read'). A token with scope 'readwrite' would pass require_scope('read') and require_scope('write'). While current code only issues standard scopes ('read', 'write', 'read write'), any future custom scope containing a shorter scope name as a substring would be silently allowed. Fix: split scopes on whitespace and check membership, e.g. self.scopes.split_whitespace().any(|s| s == scope).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:12:12.68439075Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:38.697823068Z",
+  "closed_at": "2026-07-20T01:18:38.697823068Z",
+  "close_reason": "Fixed: require_scope() now uses split_whitespace + exact match instead of substring contains",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.1",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:12:12.712344972Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

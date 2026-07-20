@@ -1,0 +1,3 @@
+{"id":"019f7d15-f08c-75c7-9166-b24611bf863a","issue_id":"smallhold-fihu.15","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T01:13:37.676379451Z"}
+{"id":"019f7d15-f091-74e9-b52f-28b10e3ae2be","issue_id":"smallhold-fihu.15","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-07-20T01:13:37.681322755Z"}
+{"id":"019f7d1a-9080-7e91-a0f4-1d21bca5173a","issue_id":"smallhold-fihu.15","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: signature verification now requires host header in signed headers list","created_at":"2026-07-20T01:18:40.768956567Z"}

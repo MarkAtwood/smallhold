@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.5",
+  "title": "LOW: SSE streaming has no subscription limit",
+  "description": "In src/streaming.rs, the WebSocket handler caps subscriptions at 10 per connection (line 214), but the SSE handler (streaming_sse_handler, lines 126-149) has no such limit. A client can open unbounded SSE connections, each subscribing to a different channel. While connection-level rate limiting is delegated to the reverse proxy per docs/deployment.md, within that limit a single client could open many SSE connections. Consider documenting the expected reverse proxy config for SSE connection limits, or adding a per-account subscription cap at the application layer.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:12:36.277930231Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:17:18.573199433Z",
+  "closed_at": "2026-07-20T01:17:18.573199433Z",
+  "close_reason": "Non-issue: SSE endpoint uses single channel from URL path, not multiple subscriptions. Only WebSocket supports subscribe/unsubscribe commands.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.5",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:12:36.309296463Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

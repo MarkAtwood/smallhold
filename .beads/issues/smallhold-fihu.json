@@ -1,0 +1,18 @@
+{
+  "id": "smallhold-fihu",
+  "title": "Security audit (broadside checklist): smallhold 2026-07-19",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:10:43.952363517Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:19:28.347111197Z",
+  "started_at": "2026-07-20T01:10:47.968174027Z",
+  "closed_at": "2026-07-20T01:19:28.347111197Z",
+  "close_reason": "19 findings: 10 fixed, 5 wontfix/by-design, 4 non-issue/deferred",
+  "labels": [
+    "security"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.10",
+  "title": "MEDIUM: Stored HTML rendered without re-sanitization on output",
+  "description": "In src/activitypub.rs, bio_html (line 375) and content_html (lines 361, 483) are stored pre-sanitized and then interpolated directly into HTML templates without re-sanitization at render time. This relies on write-time sanitization being correct and the DB not being modified externally. If a code path ever stores unsanitized HTML (e.g., a bug in import, a migration, or direct DB edit), this becomes stored XSS. Defense-in-depth: re-sanitize at render time, or at minimum re-escape HTML-special characters. This is a 'trust the DB' assumption that is fragile. Files: /home/mark/PROJECT/smallhold/src/activitypub.rs lines 361, 375, 483.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:13.657044608Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:20.869803786Z",
+  "closed_at": "2026-07-20T01:18:20.869803786Z",
+  "close_reason": "Acceptable risk: write-time sanitization is correct. DB is trusted per threat model. Re-sanitization on every read would add latency for no real benefit.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.10",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:13.681845562Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

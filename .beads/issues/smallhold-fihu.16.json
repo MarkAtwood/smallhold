@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.16",
+  "title": "LOW: Filter context LIKE query uses unescaped user input in pattern",
+  "description": "In src/posting.rs lines 97-106, load_active_filters() builds a LIKE pattern as format!(\"%\\\"{context}\\\"%\") where context comes from hardcoded string literals at call sites (e.g., \"home\" at line 2628). Currently safe because all callers pass constants. However, if a future caller passes user-controlled input as the context parameter, the % and _ LIKE wildcards would not be escaped, potentially matching unintended filter contexts. Recommend: either document that context must be a constant, or escape LIKE wildcards for defense-in-depth. File: /home/mark/PROJECT/smallhold/src/posting.rs lines 97-106.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:38.658103558Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:17:23.502764356Z",
+  "closed_at": "2026-07-20T01:17:23.502764356Z",
+  "close_reason": "Non-issue: all callers pass string constants ('home', 'notifications', 'public', 'thread'), never user input",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.16",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:38.686834295Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

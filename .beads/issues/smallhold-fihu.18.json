@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.18",
+  "title": "LOW: No replay protection beyond Date freshness window",
+  "description": "HTTP Signature verification in inbox.rs has no replay protection mechanism beyond the 12-hour Date header freshness check. The exact same signed request can be replayed an unlimited number of times within the 12-hour window.\n\nMost ActivityPub implementations (Mastodon included) also lack per-request replay protection, so this is consistent with the ecosystem. However, it means a network-level attacker who captures a signed Follow or Create activity can replay it repeatedly within the window.\n\nThe impact is limited because:\n1. INSERT OR IGNORE is used for most state-changing operations (followers, posts), so replays are idempotent\n2. The 12-hour window is relatively short\n3. Requires network-level interception\n\nThis is noted as LOW because it matches the ecosystem norm and the idempotent writes make replay mostly harmless. A future improvement would be to maintain a short-lived seen-signatures cache (keyed on SHA-256 of the signature bytes, TTL = 12 hours).\n\nFile: src/inbox.rs verify_and_fetch_actor()",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:46.987075942Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:17:24.612278965Z",
+  "closed_at": "2026-07-20T01:17:24.612278965Z",
+  "close_reason": "Acceptable: inbox processing is idempotent (INSERT OR IGNORE). Replay within 12h window produces no side effects.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.18",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:47.016388463Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

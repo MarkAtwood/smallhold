@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.7",
+  "title": "LOW: client_secret stored plaintext in database",
+  "description": "In src/api.rs line 349, the client_secret is stored as-is in oauth_apps. While this is standard practice for OAuth2 (the spec allows it, and Mastodon does the same), it means a database leak exposes all client secrets. The constant-time comparison on line 777 protects against timing attacks on the wire but doesn't help if the DB is compromised. Consider hashing client_secret with SHA-256 at storage time (same approach used for access tokens). This is a defense-in-depth improvement, not a protocol violation.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:12:59.722575752Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:17:20.147892368Z",
+  "closed_at": "2026-07-20T01:17:20.147892368Z",
+  "close_reason": "Addressed by docs/design-key-storage.md — implementation deferred",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.7",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:12:59.749500715Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

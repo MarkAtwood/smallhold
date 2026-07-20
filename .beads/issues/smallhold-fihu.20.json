@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.20",
+  "title": "LOW: Push endpoint error response body read without size limit",
+  "description": "In push.rs line 351, on a non-success response from the push endpoint, the full response body is read via response.text() without any size limit:\n\n```rust\nlet body_text = response.text().await.unwrap_or_default();\ntracing::debug!(account_id, status, body = %body_text, \"push endpoint returned error\");\n```\n\nA malicious push endpoint could return a multi-GB response body, causing OOM. The 30-second timeout provides some protection (~30GB at 1Gbps), but this is still a potential DoS vector.\n\nThe delivery client (delivery.rs) avoids this by only checking the status code and dropping the response.\n\nFix: either drop the response body (don't log it), or limit the read:\n```rust\nlet body_text = response.text().await.unwrap_or_default();\nlet body_text: String = body_text.chars().take(1024).collect();\n```\n\nFile: src/push.rs line 351",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:14:21.129387053Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:37.244081322Z",
+  "closed_at": "2026-07-20T01:18:37.244081322Z",
+  "close_reason": "Fixed: push error response body limited to first 1024 bytes.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.20",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:14:21.156099377Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.15",
+  "title": "MEDIUM: HTTP Signature verification does not require host header",
+  "description": "verify_and_fetch_actor() in inbox.rs requires (request-target), digest, and date in the signed headers, but does NOT require the host header.\n\nSince (request-target) only contains the path (e.g., 'post /inbox'), a signed request to https://victim.example/inbox can be replayed to https://attacker.example/inbox within the 12-hour Date freshness window. The attacker would receive the activity body and potentially learn about private follows, DMs, or other non-public activities.\n\nPractical impact is limited because:\n1. The attacker needs to intercept the original request (network-level attacker)\n2. The path must match on both servers\n3. The 12-hour window limits replay duration\n\nBut this is the standard ActivityPub signature hardening that Mastodon, Pleroma, and other implementations enforce.\n\nFix: add host to the required signed headers:\n```rust\nif !sig_params.headers_list.iter().any(|h| h == \"host\") {\n    return Err(AppError::unauthorized(\"Signature must include host header\"));\n}\n```\n\nFile: src/inbox.rs lines 547-565",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:37.671452794Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:40.764677864Z",
+  "closed_at": "2026-07-20T01:18:40.764677864Z",
+  "close_reason": "Fixed: signature verification now requires host header in signed headers list",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.15",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:37.698835522Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

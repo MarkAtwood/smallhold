@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.8",
+  "title": "MEDIUM: Username from URL path not HTML-escaped in templates",
+  "description": "In src/activitypub.rs, the username variable (extracted from Path\u003cString\u003e) is interpolated directly into HTML format strings without HTML escaping. Examples: line 274 '/@{username}', line 384 '@{username}@{domain}', line 361 '/@{username}/{id}', line 487 '/@{username}'. Although the username is used as a DB lookup key (so a non-existent username returns 404), and usernames are admin-controlled on this single-operator server, this is still a defense-in-depth gap. If a username were ever created containing characters like \u003c, \u003e, or \", it would result in HTML injection. The display_name is correctly sanitized via ammonia::clean(), but the username itself is not escaped. Recommend: apply html_attr_escape() or equivalent to username before HTML interpolation. Files: /home/mark/PROJECT/smallhold/src/activitypub.rs lines 273-274, 360-364, 384-389, 471-487.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:03.76946336Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:43.700698833Z",
+  "closed_at": "2026-07-20T01:18:43.700698833Z",
+  "close_reason": "Fixed: username from URL path is now HTML-escaped before interpolation",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.8",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:03.7961204Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

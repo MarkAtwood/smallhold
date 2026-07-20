@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.17",
+  "title": "LOW: host-meta domain not XML-escaped in discovery.rs",
+  "description": "In src/discovery.rs lines 165-173, the host_meta() handler interpolates state.config.server.domain directly into an XML template string without calling xml_escape(). The domain comes from the config file and is admin-controlled, so this is not exploitable in practice. However, feeds.rs correctly XML-escapes all dynamic values including the domain. For consistency and defense-in-depth, the domain in host-meta should also be XML-escaped. File: /home/mark/PROJECT/smallhold/src/discovery.rs lines 165-173.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:45.666388365Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:36.280715661Z",
+  "closed_at": "2026-07-20T01:18:36.280715661Z",
+  "close_reason": "Fixed: host-meta handler now XML-escapes the domain value.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.17",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:45.69452587Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

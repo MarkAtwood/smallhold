@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.6",
+  "title": "MEDIUM: No Content-Security-Policy header on HTML pages",
+  "description": "The security_headers middleware in src/server.rs sets X-Content-Type-Options, X-Frame-Options, and Referrer-Policy, but does not set a Content-Security-Policy header. HTML pages serve user-generated content (post bodies, display names, bios). Without CSP, if a sanitization bypass is ever found, there is no defense-in-depth against script injection. A restrictive CSP (e.g., default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'none') would mitigate this. File: /home/mark/PROJECT/smallhold/src/server.rs lines 38-81.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:12:55.150927248Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:43.052139197Z",
+  "closed_at": "2026-07-20T01:18:43.052139197Z",
+  "close_reason": "Fixed: CSP header added for HTML pages (/@* and /oauth/authorize)",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.6",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:12:55.178257461Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

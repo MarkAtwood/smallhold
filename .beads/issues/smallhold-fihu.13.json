@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.13",
+  "title": "MEDIUM: SSRF bypass via IPv4-mapped IPv6 addresses",
+  "description": "is_private_host() in federation.rs does not detect IPv4-mapped IPv6 addresses (::ffff:127.0.0.1, ::ffff:169.254.169.254, ::ffff:10.0.0.1). These parse as V6 in Rust, and the V6 branch only checks is_loopback()/is_unspecified()/ULA/link-local — none of which match IPv4-mapped addresses.\n\nConfirmed with test program: `::ffff:127.0.0.1` parses as V6 with is_loopback()=false.\n\nFix: add a check for IPv4-mapped addresses in the V6 branch:\n```rust\n// In the V6 branch of is_private_host:\n|| ip.to_ipv4_mapped().map_or(false, |v4| {\n    v4.is_loopback() || v4.is_private() || v4.is_link_local()\n    || v4.is_broadcast() || v4.is_unspecified()\n    || v4.octets()[0] == 0\n    || (v4.octets()[0] == 100 \u0026\u0026 (v4.octets()[1] \u0026 0xC0) == 64)\n})\n```\n\nImpact: attacker-controlled actor document could specify inbox_url or trigger fetch_actor to an IPv4-mapped IPv6 address pointing at internal services (metadata endpoint, admin panels). The HTTPS-only check limits exploitability since internal services rarely have valid TLS certs, but some cloud metadata endpoints do.\n\nFile: src/federation.rs lines 30-53",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:27.116750447Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:39.707691964Z",
+  "closed_at": "2026-07-20T01:18:39.707691964Z",
+  "close_reason": "Fixed: is_private_host() now checks IPv4-mapped IPv6 addresses",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.13",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:27.142310828Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

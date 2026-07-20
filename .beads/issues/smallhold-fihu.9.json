@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-fihu.9",
+  "title": "LOW: /admin/webauthn/register accessible without auth",
+  "description": "In src/webauthn.rs lines 213-351 and 521, GET /admin/webauthn/register serves a full HTML registration page to any unauthenticated visitor. While the actual registration flow (POST /admin/webauthn/register/begin) correctly requires admin password, the page itself reveals: (1) that this is a smallhold instance, (2) whether passkeys are already registered (line 215-218). This leaks operational information to unauthenticated scanners. Consider either requiring auth on the GET page or making it generic.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T01:13:04.255397768Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T01:18:34.474265983Z",
+  "closed_at": "2026-07-20T01:18:34.474265983Z",
+  "close_reason": "Fixed: register_page no longer reveals whether passkeys are registered. Message is now generic.",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-fihu.9",
+      "depends_on_id": "smallhold-fihu",
+      "type": "parent-child",
+      "created_at": "2026-07-20T01:13:04.284823902Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
