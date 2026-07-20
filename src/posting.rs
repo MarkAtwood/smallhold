@@ -2074,7 +2074,7 @@ async fn reblog(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Check for existing reblog
-    let existing: Option<(i64,)> = crate::db_extras::find_boost(&state.pool, auth.account_id, post_id)
+    let existing: Option<(i64,)> = fieldwork::posts_db::find_boost(&state.pool, auth.account_id, post_id)
         .await?.map(|id| (id,));
 
     let boost_id = if let Some((eid,)) = existing {
@@ -2216,7 +2216,7 @@ async fn unreblog(
         .map_err(|_| AppError::not_found("Status not found"))?;
     let domain = &state.config.server.domain;
 
-    let boost: Option<(i64,)> = crate::db_extras::find_boost(&state.pool, auth.account_id, post_id)
+    let boost: Option<(i64,)> = fieldwork::posts_db::find_boost(&state.pool, auth.account_id, post_id)
         .await?.map(|id| (id,));
 
     if let Some((boost_id,)) = boost {
@@ -2284,7 +2284,7 @@ async fn unreblog(
 
         // Delete the orphan reblog notification
         crate::db_extras::delete_reblog_notification(&state.pool, auth.account_id, post_id).await?;
-        crate::db_extras::hard_delete_post(&state.pool, boost_id).await?;
+        fieldwork::posts_db::hard_delete_post(&state.pool, boost_id).await?;
     }
 
     let post =

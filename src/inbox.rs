@@ -855,7 +855,7 @@ async fn handle_undo_like(
         let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, liked_uri).await?;
 
         if let Some((post_id, account_id)) = post_row {
-            crate::db_extras::delete_favourite_notification(&state.pool, account_id, remote.id, post_id).await?;
+            fieldwork::notifications_db::delete_by_kind(&state.pool, account_id, "favourite", Some(remote.id), Some(post_id)).await?;
         }
     }
 
@@ -873,7 +873,7 @@ async fn handle_undo_announce(
         let post_row: Option<(i64, i64)> = crate::db_extras::find_post_by_ap_id(&state.pool, boosted_uri).await?;
 
         if let Some((post_id, account_id)) = post_row {
-            crate::db_extras::delete_remote_reblog_notification(&state.pool, account_id, remote.id, post_id).await?;
+            fieldwork::notifications_db::delete_by_kind(&state.pool, account_id, "reblog", Some(remote.id), Some(post_id)).await?;
         }
     }
 

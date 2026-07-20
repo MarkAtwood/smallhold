@@ -64,16 +64,6 @@ pub async fn remote_domain_count(pool: &fieldwork::db::Pool) -> Result<i64, sqlx
 // OAuth token helpers (smallhold-specific operations)
 // ---------------------------------------------------------------------------
 
-/// Update the last_used_at timestamp for a token by hash.
-pub async fn touch_token(pool: &fieldwork::db::Pool, token_hash: &str, now: i64) -> Result<(), sqlx::Error> {
-    let _ = sqlx::query("UPDATE oauth_tokens SET last_used_at = ? WHERE token_hash = ?")
-        .bind(now)
-        .bind(token_hash)
-        .execute(sq(pool))
-        .await;
-    Ok(())
-}
-
 /// Find a token ID by its hash (for revocation by token value).
 pub async fn find_token_id_by_hash(pool: &fieldwork::db::Pool, token_hash: &str) -> Result<Option<i64>, sqlx::Error> {
     let row: Option<(i64,)> = sqlx::query_as(
@@ -83,41 +73,6 @@ pub async fn find_token_id_by_hash(pool: &fieldwork::db::Pool, token_hash: &str)
     .fetch_optional(sq(pool))
     .await?;
     Ok(row.map(|(id,)| id))
-}
-
-// ---------------------------------------------------------------------------
-// Persona field updates (not covered by fieldwork::persona_db)
-// ---------------------------------------------------------------------------
-
-/// Update a single boolean field on a persona.
-pub async fn update_persona_bool(
-    pool: &fieldwork::db::Pool,
-    persona_id: i64,
-    field: &str,
-    value: bool,
-) -> Result<(), sqlx::Error> {
-    // ponytail: field name is not user-supplied, comes from hardcoded match arms
-    let sql = format!("UPDATE personas SET {field} = ? WHERE id = ?");
-    sqlx::query(&sql)
-        .bind(value)
-        .bind(persona_id)
-        .execute(sq(pool))
-        .await?;
-    Ok(())
-}
-
-/// Update the fields_json on a persona.
-pub async fn update_persona_fields(
-    pool: &fieldwork::db::Pool,
-    persona_id: i64,
-    fields_json: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE personas SET fields_json = ? WHERE id = ?")
-        .bind(fields_json)
-        .bind(persona_id)
-        .execute(sq(pool))
-        .await?;
-    Ok(())
 }
 
 /// Update last_status_at timestamp on a persona.
@@ -173,16 +128,6 @@ pub async fn update_media_description(
 // ---------------------------------------------------------------------------
 // Posts: queries, lookups, and mutations
 // ---------------------------------------------------------------------------
-
-/// Check if a boost already exists for a given persona and post.
-pub async fn find_boost(pool: &fieldwork::db::Pool, persona_id: i64, boost_of_id: i64) -> Result<Option<i64>, sqlx::Error> {
-    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-        .bind(persona_id)
-        .bind(boost_of_id)
-        .fetch_optional(sq(pool))
-        .await?;
-    Ok(row.map(|(id,)| id))
-}
 
 /// Check if the viewer has boosted a given post.
 pub async fn count_boosts_by_persona(pool: &fieldwork::db::Pool, persona_id: i64, post_id: i64) -> Result<i64, sqlx::Error> {
@@ -265,15 +210,6 @@ pub async fn count_posts_for_persona(pool: &fieldwork::db::Pool, persona_id: i64
         .fetch_one(sq(pool))
         .await?;
     Ok(count)
-}
-
-/// Hard delete a post by ID.
-pub async fn hard_delete_post(pool: &fieldwork::db::Pool, post_id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM posts WHERE id = ?")
-        .bind(post_id)
-        .execute(sq(pool))
-        .await?;
-    Ok(())
 }
 
 /// Save a post edit history record (INSERT ... SELECT from current post).
@@ -616,32 +552,6 @@ pub async fn mention_notification_exists(pool: &fieldwork::db::Pool, persona_id:
     Ok(count > 0)
 }
 
-/// Delete favourite notification for a specific actor and post.
-pub async fn delete_favourite_notification(pool: &fieldwork::db::Pool, persona_id: i64, remote_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "DELETE FROM notifications WHERE persona_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
-    )
-    .bind(persona_id)
-    .bind(remote_id)
-    .bind(post_id)
-    .execute(sq(pool))
-    .await?;
-    Ok(())
-}
-
-/// Delete reblog notification for a specific actor and post (inbox Undo Announce).
-pub async fn delete_remote_reblog_notification(pool: &fieldwork::db::Pool, persona_id: i64, remote_id: i64, post_id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "DELETE FROM notifications WHERE persona_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
-    )
-    .bind(persona_id)
-    .bind(remote_id)
-    .bind(post_id)
-    .execute(sq(pool))
-    .await?;
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // Follow requests
 // ---------------------------------------------------------------------------
@@ -829,43 +739,6 @@ pub async fn get_remote_following(pool: &fieldwork::db::Pool, account_id: i64, l
 // ---------------------------------------------------------------------------
 // OAuth: authz codes, apps, tokens, sessions
 // ---------------------------------------------------------------------------
-
-/// Insert an OAuth authorization code.
-pub async fn insert_authz_code(
-    pool: &fieldwork::db::Pool,
-    code_hash: &str,
-    app_id: i64,
-    user_id: i64,
-    persona_id: i64,
-    scopes: &str,
-    redirect_uri: &str,
-    expires_at: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO oauth_authz_codes (code_hash, app_id, user_id, persona_id, scopes, redirect_uri, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(code_hash)
-    .bind(app_id)
-    .bind(user_id)
-    .bind(persona_id)
-    .bind(scopes)
-    .bind(redirect_uri)
-    .bind(expires_at)
-    .execute(sq(pool))
-    .await?;
-    Ok(())
-}
-
-/// Consume (atomically fetch and delete) an OAuth authorization code.
-pub async fn consume_authz_code(pool: &fieldwork::db::Pool, code_hash: &str, now: i64) -> Result<Option<(i64, i64, String, String)>, sqlx::Error> {
-    sqlx::query_as(
-        "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, persona_id, scopes, redirect_uri",
-    )
-    .bind(code_hash)
-    .bind(now)
-    .fetch_optional(sq(pool))
-    .await
-}
 
 /// Look up an OAuth app by client_id (returning id and client_secret).
 pub async fn get_oauth_app_secret(pool: &fieldwork::db::Pool, client_id: &str) -> Result<Option<(i64, String)>, sqlx::Error> {
@@ -1259,16 +1132,6 @@ pub async fn get_persona_id_by_username(pool: &fieldwork::db::Pool, username: &s
     Ok(row.map(|(id,)| id))
 }
 
-/// Revoke all tokens for a persona (CLI).
-pub async fn revoke_tokens_for_persona(pool: &fieldwork::db::Pool, persona_id: i64, now: i64) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND revoked_at IS NULL")
-        .bind(now)
-        .bind(persona_id)
-        .execute(sq(pool))
-        .await?;
-    Ok(result.rows_affected())
-}
-
 /// Revoke all tokens globally (CLI).
 pub async fn revoke_all_tokens(pool: &fieldwork::db::Pool, now: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE revoked_at IS NULL")
@@ -1331,39 +1194,6 @@ pub async fn list_domain_blocks(pool: &fieldwork::db::Pool) -> Result<Vec<(Strin
     sqlx::query_as("SELECT domain, severity, reason FROM domain_blocks ORDER BY domain")
         .fetch_all(sq(pool))
         .await
-}
-
-/// Count pending deliveries.
-pub async fn count_pending_deliveries(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::Error> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM delivery_queue WHERE delivered_at IS NULL AND dead_at IS NULL")
-        .fetch_one(sq(pool))
-        .await?;
-    Ok(count)
-}
-
-/// Count dead deliveries.
-pub async fn count_dead_deliveries(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::Error> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM delivery_queue WHERE dead_at IS NOT NULL")
-        .fetch_one(sq(pool))
-        .await?;
-    Ok(count)
-}
-
-/// Count delivered items.
-pub async fn count_delivered(pool: &fieldwork::db::Pool) -> Result<i64, sqlx::Error> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM delivery_queue WHERE delivered_at IS NOT NULL")
-        .fetch_one(sq(pool))
-        .await?;
-    Ok(count)
-}
-
-/// Reset dead deliveries for retry.
-pub async fn retry_dead_deliveries(pool: &fieldwork::db::Pool, now: i64) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("UPDATE delivery_queue SET dead_at = NULL, attempts = 0, next_attempt_at = ? WHERE dead_at IS NOT NULL")
-        .bind(now)
-        .execute(sq(pool))
-        .await?;
-    Ok(result.rows_affected())
 }
 
 /// Look up account by DID key (CLI recover).

@@ -721,7 +721,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
                 
 
-                crate::db_extras::revoke_tokens_for_persona(&pool, account_id, now).await?
+                fieldwork::oauth_db::revoke_all_for_persona(&pool, account_id, now).await?
             } else {
                 crate::db_extras::revoke_all_tokens(&pool, now).await?
             };
@@ -844,9 +844,9 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
 
     match cmd {
         QueueCommands::Inspect => {
-            let pending = crate::db_extras::count_pending_deliveries(&pool).await?;
-            let dead = crate::db_extras::count_dead_deliveries(&pool).await?;
-            let delivered = crate::db_extras::count_delivered(&pool).await?;
+            let pending = fieldwork::delivery_db::count_pending(&pool).await?;
+            let dead = fieldwork::delivery_db::count_dead(&pool).await?;
+            let delivered = fieldwork::delivery_db::count_delivered(&pool).await?;
 
             eprintln!("Delivery queue:");
             eprintln!("  Pending: {pending}");
@@ -859,7 +859,7 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_secs() as i64;
 
-            let result = crate::db_extras::retry_dead_deliveries(&pool, now).await?;
+            let result = fieldwork::delivery_db::retry_all_dead(&pool, now).await?;
             eprintln!("Reset {result} dead deliveries.");
         }
     }

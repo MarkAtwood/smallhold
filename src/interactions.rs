@@ -642,19 +642,8 @@ async fn update_credentials(
         changed = true;
     }
 
-    // REMAINING: individual persona field updates — fieldwork::persona_db only has update_persona_profile
-    if let Some(locked) = body.locked {
-        crate::db_extras::update_persona_bool(&state.pool, auth.account_id, "is_locked", locked).await?;
-        changed = true;
-    }
-
-    if let Some(bot) = body.bot {
-        crate::db_extras::update_persona_bool(&state.pool, auth.account_id, "bot", bot).await?;
-        changed = true;
-    }
-
-    if let Some(discoverable) = body.discoverable {
-        crate::db_extras::update_persona_bool(&state.pool, auth.account_id, "discoverable", discoverable).await?;
+    if body.locked.is_some() || body.bot.is_some() || body.discoverable.is_some() {
+        fieldwork::persona_db::update_flags(&state.pool, auth.account_id, body.locked, body.bot, body.discoverable).await?;
         changed = true;
     }
 
@@ -666,7 +655,7 @@ async fn update_credentials(
             .collect();
         let fields_str =
             serde_json::to_string(&fields_json).map_err(|e| AppError::internal(e.to_string()))?;
-        crate::db_extras::update_persona_fields(&state.pool, auth.account_id, &fields_str).await?;
+        fieldwork::persona_db::update_fields(&state.pool, auth.account_id, &fields_str).await?;
         changed = true;
     }
 

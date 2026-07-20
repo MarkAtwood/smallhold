@@ -286,9 +286,8 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
         let (account_id, username, scopes) =
             row.ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
 
-        // REMAINING: update token last_used_at — no fieldwork equivalent
         let now = now_millis();
-        let _ = crate::db_extras::touch_token(&state.pool, &token_hash, now).await;
+        let _ = fieldwork::oauth_db::touch_token(&state.pool, &token_hash, now).await;
 
         Ok(AuthenticatedAccount {
             account_id,
@@ -639,9 +638,10 @@ async fn authorize_submit(
     let code = random_bytes_b64url(32);
     let code_hash = hex_encode(&Sha256::digest(code.as_bytes()));
     let scope = form.scope.as_deref().unwrap_or("read");
-    let expires_at = now_millis() + 600_000; // 10 minutes
+    let now = now_millis();
+    let expires_at = now + 600_000; // 10 minutes
 
-    crate::db_extras::insert_authz_code(&state.pool, &code_hash, app_id, crate::db::DEFAULT_USER_ID, form.account_id, scope, &form.redirect_uri, expires_at).await?;
+    fieldwork::oauth_db::insert_authz_code(&state.pool, &code_hash, app_id, crate::db::DEFAULT_USER_ID, form.account_id, scope, &form.redirect_uri, now, expires_at).await?;
 
     // For OOB redirect, show the code directly
     if form.redirect_uri == "urn:ietf:wg:oauth:2.0:oob" {
@@ -715,7 +715,7 @@ async fn token(
     let now = now_millis();
 
     // Atomically fetch and consume the authorization code (single-use)
-    let code_row: Option<(i64, i64, String, String)> = crate::db_extras::consume_authz_code(&state.pool, &code_hash, now).await?;
+    let code_row: Option<(i64, i64, String, String)> = fieldwork::oauth_db::consume_authz_code(&state.pool, &code_hash, now).await?;
 
     let (app_id, account_id, scopes, stored_redirect) =
         code_row.ok_or_else(|| AppError::bad_request("Invalid or expired authorization code"))?;
