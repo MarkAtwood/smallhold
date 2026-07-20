@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.3",
+  "title": "RSA key generation uses thread_rng instead of OsRng",
+  "description": "In `cmd_persona Create` (cli.rs:491), RSA key generation uses `rand::thread_rng()`:\n\n```rust\nlet mut rng = rand::thread_rng();\nlet private_key = RsaPrivateKey::new(\u0026mut rng, 2048)...\n```\n\nWhile `thread_rng()` in rand 0.8 is ChaCha12-seeded from OsRng (so it's cryptographically secure), the Ed25519 key generation in did.rs correctly uses `OsRng` directly. The inconsistency is a code smell — both should use `OsRng` for clarity and to follow cryptographic best practice of minimizing the distance between CSPRNG output and key material.\n\nAlso affects: cli.rs:305 (`generate_secret_key`), cli.rs:645 (`hash_password` salt), cli.rs:669 (token generation).\n\nNote: This is NOT an exploitable vulnerability with rand 0.8, but it is a defense-in-depth concern and inconsistency.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:21.70987239Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.37839475Z",
+  "closed_at": "2026-07-20T00:29:29.37839475Z",
+  "close_reason": "Closed",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.3",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:21.73292812Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

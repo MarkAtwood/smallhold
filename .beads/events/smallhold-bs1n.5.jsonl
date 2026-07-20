@@ -1,1 +1,2 @@
 {"id":"019f7884-33b2-71f6-b2f0-cf87ea794035","issue_id":"smallhold-bs1n.5","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T03:55:57.746129117Z"}
+{"id":"019f7ce6-9f32-7b70-8126-75f3869a5e90","issue_id":"smallhold-bs1n.5","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"DID fields are unknown JSON-LD properties ignored by non-DID peers — manual federation test deferred to deployment","created_at":"2026-07-20T00:21:56.65875049Z"}

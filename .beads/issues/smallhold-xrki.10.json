@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.10",
+  "title": "BUG: DID document missing authentication field",
+  "description": "The DID document built by `did_web_document()` in src/did.rs (line 84-117) has no `authentication` field. Per the W3C DID Core spec, the `authentication` property lists verification methods authorized for authentication. Without it, DID resolvers cannot determine which keys can be used to authenticate as the DID subject. Should be: `\"authentication\": [\"{did}#main-key\", \"{did}#recovery-key\"]` (or at minimum the main-key). This also means assertionMethod is missing, though that is less critical.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:42.666279187Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.197389973Z",
+  "closed_at": "2026-07-20T00:29:29.197389973Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.10",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:42.689091429Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

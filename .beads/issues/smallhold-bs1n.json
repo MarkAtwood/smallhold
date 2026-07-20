@@ -2,11 +2,15 @@
   "id": "smallhold-bs1n",
   "title": "DID identity layer (phase 1: emit, peers ignore)",
   "description": "Add decentralized identifier support to actors. Phase 1 emits DID data that non-DID-aware peers ignore. Lays groundwork for DID-keyed relay/cache benefits in phase 2.\n\n## Goals\n- Every actor gets a did:key (self-certifying, survives server death)\n- Every actor gets a did:web (resolvable, current home)\n- Every actor gets a did:plc (Bluesky-compatible, registry-backed)\n- Users get recovery phrase (24 words, identity backup)\n- Actor JSON includes DID fields (ignored by peers)\n- DID documents served at standard paths\n\n## Non-goals (phase 1)\n- DID-based signature keyId (breaks compat)\n- DID resolution on inbound (unnecessary yet)\n- Follower tracking by DID (schema change, later)\n\n## Success criteria\n- Actor JSON has did field and alsoKnownAs with all three DIDs\n- GET /users/{username}/did.json returns valid DID document\n- did:plc registered with plc.directory (server + recovery rotation keys)\n- User shown recovery phrase on signup\n- Federation with non-DID servers unchanged",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "epic",
+  "assignee": "Mark Atwood",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T03:54:46.680419062Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T04:11:25.190467292Z"
+  "updated_at": "2026-07-20T00:22:02.331669964Z",
+  "started_at": "2026-07-20T00:16:22.179845969Z",
+  "closed_at": "2026-07-20T00:22:02.331669964Z",
+  "close_reason": "All 7 subtasks complete (bs1n.6 removed from scope). DID identity layer phase 1 implemented."
 }

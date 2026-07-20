@@ -1,1 +1,2 @@
 {"id":"019f7891-584f-780d-b382-f68a422fa09e","issue_id":"smallhold-bs1n.7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T04:10:19.087528301Z"}
+{"id":"019f7ce6-9fa2-749b-8a8f-f1e86c597b19","issue_id":"smallhold-bs1n.7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Recovery keypair + 24-word BIP-39 mnemonic generated on persona create, shown once via stderr","created_at":"2026-07-20T00:21:56.770302469Z"}

@@ -1,0 +1,4 @@
+{"id":"019f7ce8-2637-7f34-ae62-373118dc8138","issue_id":"smallhold-xrki.7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T00:23:36.759997194Z"}
+{"id":"019f7ce8-263b-7780-837a-5c789ccbe441","issue_id":"smallhold-xrki.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-07-20T00:23:36.76349252Z"}
+{"id":"019f7ce8-263e-75c5-b7ce-32927aec966b","issue_id":"smallhold-xrki.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-20T00:23:36.766378855Z"}
+{"id":"019f7ce9-c622-77e6-8d3d-a80412d5317a","issue_id":"smallhold-xrki.7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of .8/.17 (zeroed recovery key)","created_at":"2026-07-20T00:25:23.234518355Z"}

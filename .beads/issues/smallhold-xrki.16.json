@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.16",
+  "title": "Duplicate hex_encode functions in did.rs and api.rs",
+  "description": "Both `src/api.rs:23` and `src/did.rs:120` define identical `pub fn hex_encode(bytes: \u0026[u8]) -\u003e String` functions. This is not a bug (they are in different modules and callers use the correct qualified path), but it is unnecessary duplication. The did.rs version exists so backfill in cli.rs can use `crate::did::hex_encode` without pulling in api.rs. Consider: either make one canonical and re-export, or remove the did.rs copy and have cli.rs use `crate::api::hex_encode` for the pubkey hex encoding. Low priority -- cosmetic only.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:24:07.303664091Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.320674265Z",
+  "closed_at": "2026-07-20T00:29:29.320674265Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.16",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:24:07.323385906Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

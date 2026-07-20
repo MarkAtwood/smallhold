@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.14",
+  "title": "DID document endpoint has no access control — exposes account existence and public keys",
+  "description": "The /users/{username}/did.json endpoint (activitypub.rs:805-852) has no authentication or rate limiting. This is technically correct behavior for a did:web endpoint (DID documents are public by design), but worth noting:\n\n1. The endpoint exposes whether a username exists (404 vs 200), same as the actor endpoint — this is expected for ActivityPub servers\n2. The RSA public key and Ed25519 recovery public key are intentionally public — these are verification keys, not secrets\n3. No rate limiting, but this applies to all routes equally (not DID-specific)\n\nVERDICT: No action needed. DID documents are public by specification. The endpoint correctly serves only public key material. This is a non-finding, filed for audit completeness.\n\nAffected: src/activitypub.rs:805-852",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:59.03087801Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:24:02.343097136Z",
+  "closed_at": "2026-07-20T00:24:02.343097136Z",
+  "close_reason": "Non-finding. DID documents are public by specification.",
+  "labels": [
+    "review",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.14",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:59.056192703Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.18",
+  "title": "DID document includes ATProto PDS service entry but this is not an ATProto server",
+  "description": "In src/did.rs lines 111-115, the DID document includes a `service` block declaring this server as an `AtprotoPersonalDataServer`. Smallhold is an ActivityPub server, not an ATProto/Bluesky PDS. This service entry is misleading: ATProto clients that resolve the DID document will attempt to connect to this domain as a PDS and fail. Either remove the ATProto service entry entirely, or replace it with an ActivityPub-relevant service entry (e.g., type `ActivityPubService` pointing to the user's actor URL). If future ATProto bridging is planned, this should be conditional on configuration, not unconditional.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:24:27.515822646Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.261797437Z",
+  "closed_at": "2026-07-20T00:29:29.261797437Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.18",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:24:27.53605624Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

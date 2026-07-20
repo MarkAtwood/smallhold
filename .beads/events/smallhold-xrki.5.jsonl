@@ -1,0 +1,4 @@
+{"id":"019f7ce8-0ee9-75dd-841c-1f70fd940c5d","issue_id":"smallhold-xrki.5","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T00:23:30.793385262Z"}
+{"id":"019f7ce8-0eeb-7796-8a77-68b6dac20546","issue_id":"smallhold-xrki.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-20T00:23:30.795497735Z"}
+{"id":"019f7ce8-0eed-7a84-a606-dc40834b27de","issue_id":"smallhold-xrki.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-07-20T00:23:30.797689892Z"}
+{"id":"019f7ce9-c6f1-7d5f-a37d-8ed3882684e5","issue_id":"smallhold-xrki.5","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"False finding: Ed25519 recovery key IS included in the DID document","created_at":"2026-07-20T00:25:23.441876882Z"}

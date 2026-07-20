@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.4",
   "title": "Serve DID document endpoint",
   "description": "Serve DID documents at standard paths for did:web resolution.\n\n## Endpoints\n\ndid:web resolution fetches:\n- did:web:example.com:users:alice → GET https://example.com/users/alice/did.json\n\nAdd route: GET /users/{username}/did.json\n\n## DID Document structure\n```json\n{\n  \"@context\": [\n    \"https://www.w3.org/ns/did/v1\",\n    \"https://w3id.org/security/suites/ed25519-2020/v1\"\n  ],\n  \"id\": \"did:web:example.com:users:alice\",\n  \"alsoKnownAs\": [\n    \"https://example.com/users/alice\",\n    \"did:key:z6MkPZ...\"\n  ],\n  \"verificationMethod\": [{\n    \"id\": \"did:web:example.com:users:alice#main-key\",\n    \"type\": \"Ed25519VerificationKey2020\",\n    \"controller\": \"did:web:example.com:users:alice\",\n    \"publicKeyMultibase\": \"z6MkPZ...\"\n  }],\n  \"authentication\": [\"#main-key\"],\n  \"assertionMethod\": [\"#main-key\"]\n}\n```\n\n## Implementation\n- Add route for /users/{username}/did.json\n- Content-Type: application/did+json (or application/json)\n- Build document from actor data\n- publicKeyMultibase is same encoding as did:key (minus prefix)\n\n## Acceptance\n- [ ] GET /users/alice/did.json returns valid DID document\n- [ ] Document validates against DID spec\n- [ ] alsoKnownAs links to actor URL and did:key\n- [ ] Key material matches actor publicKey",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T03:55:47.305733735Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T03:55:47.305733735Z",
+  "updated_at": "2026-07-20T00:21:56.543309597Z",
+  "closed_at": "2026-07-20T00:21:56.543309597Z",
+  "close_reason": "GET /users/{username}/did.json serves W3C DID document",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.4",

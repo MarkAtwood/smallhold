@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.2",
+  "title": "Recovery private key bytes not zeroized after use",
+  "description": "In `cmd_persona Create` (cli.rs:503-535) and `cmd_did Backfill` (cli.rs:1062-1081), the recovery private key `recovery_priv: [u8; 32]` and the mnemonic string `recovery_phrase: String` are left on the stack/heap until natural drop. No explicit zeroization occurs. The `zeroize` crate is not in dependencies.\n\nWhile Rust's drop semantics mean the memory is freed, it is not zeroed — the key material persists in memory (and potentially on disk via swap) until overwritten by other allocations. For a recovery key that grants full account control, this is a meaningful residual risk.\n\nThe `zeroize` crate (from RustCrypto) is the standard fix. `ed25519-dalek` already supports `Zeroize` on `SigningKey`. The stack array and String should use `Zeroizing\u003c\u003e` wrappers.\n\nAffected: src/cli.rs:503-535, src/cli.rs:1062-1081, src/did.rs:4-11 (generate_recovery_keypair returns raw bytes)",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:16.145786813Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.450110606Z",
+  "closed_at": "2026-07-20T00:29:29.450110606Z",
+  "close_reason": "Deferred: requires zeroize crate, addressed in key storage design doc",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.2",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:16.166913812Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

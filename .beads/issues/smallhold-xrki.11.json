@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.11",
+  "title": "hex_encode/hex_decode are hand-rolled; use hex crate or const-hex",
+  "description": "In `did.rs:120-136`, hex encoding/decoding is hand-rolled:\n\n```rust\npub fn hex_encode(bytes: \u0026[u8]) -\u003e String {\n    bytes.iter().map(|b| format!(\"{b:02x}\")).collect()\n}\n```\n\nThis is correct but allocates a new String per byte via `format!()`. The `hex` crate (or `const-hex` for const contexts) is 0-dep, faster, and well-audited. The project already has a separate `api::hex_encode` (grep shows cli.rs:306, cli.rs:676 use it) — so there are two independent hex implementations. These should be consolidated.\n\nAffected: src/did.rs:120-136, likely also src/api.rs (duplicate)",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:48.029160924Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.369614938Z",
+  "closed_at": "2026-07-20T00:25:23.369614938Z",
+  "close_reason": "Duplicate of .16 (hex_encode duplication)",
+  "labels": [
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.11",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:48.05817079Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

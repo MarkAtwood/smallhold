@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.1",
   "title": "Generate and store did:key for actors",
   "description": "Generate a did:key for each actor at creation time. did:key is the public key encoded as multibase, self-certifying and portable.\n\n## Implementation\n1. Add did_key column to actors table (TEXT, nullable for migration)\n2. On actor creation, generate Ed25519 keypair (already done for AP)\n3. Encode public key as did:key using multibase/multicodec:\n   - Prefix: 0xed01 (Ed25519 public key)\n   - Encode: base58btc (z prefix)\n   - Result: did:key:z6Mk...\n4. Store in did_key column\n\n## Code sketch\n```python\nimport base58\ndef pubkey_to_did_key(pubkey_bytes: bytes) -\u003e str:\n    # multicodec ed25519-pub = 0xed01\n    prefixed = bytes([0xed, 0x01]) + pubkey_bytes\n    encoded = base58.b58encode(prefixed).decode()\n    return f\"did:key:z{encoded}\"\n```\n\n## Migration\n- Backfill existing actors: generate did:key from existing public key\n- did:key is deterministic from pubkey, so idempotent\n\n## Acceptance\n- [ ] New actors get did_key on creation\n- [ ] Existing actors backfilled\n- [ ] did:key decodes back to correct public key",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T03:55:01.151895604Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T03:55:01.151895604Z",
+  "updated_at": "2026-07-20T00:21:56.225069238Z",
+  "closed_at": "2026-07-20T00:21:56.225069238Z",
+  "close_reason": "did:key generated and stored for actors via Ed25519 + multicodec/multibase",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.1",

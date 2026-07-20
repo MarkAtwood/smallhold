@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.4",
+  "title": "did:web domain encoding replaces dots with colons, but spec requires percent-encoding",
+  "description": "In `did_web()` (did.rs:30-31):\n\n```rust\nlet domain_encoded = domain.replace('.', \":\");\nformat!(\"did:web:{domain_encoded}:users:{username}\")\n```\n\nThe did:web spec (https://w3c-ccg.github.io/did-method-web/) requires dots in domain names to be replaced with colons, which is correct. However, the path separator should use colons to represent `/` in the path, and the did:web resolution algorithm maps `did:web:example:com:users:alice` to `https://example.com/users/alice/did.json`.\n\nThe test on line 173-175 expects `did:web:example:com:users:alice` which IS correct per the spec (dots→colons). This is fine.\n\nHowever, the function does NOT percent-encode special characters in the username (e.g. colons, percent signs). If a username contained a colon, the DID would be ambiguous. The username validation in cli.rs restricts to `[a-z0-9_]` which prevents this — but the function itself is `pub` and has no input validation, relying on caller discipline.\n\nSeverity: low — the caller validates, but the function's contract is implicit.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:30.688761099Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.151745644Z",
+  "closed_at": "2026-07-20T00:25:23.151745644Z",
+  "close_reason": "Duplicate of .6 (same did:web encoding bug)",
+  "labels": [
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.4",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:30.710984258Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

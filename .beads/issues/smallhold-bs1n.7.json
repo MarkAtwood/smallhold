@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.7",
   "title": "Generate recovery keypair and mnemonic on signup",
   "description": "Generate a BIP-39 recovery phrase for each user at signup. This becomes their identity backup.\n\n## Why\n\nServer holds the signing key. If server dies, key dies, user cannot prove DID ownership. Recovery key solves this — user holds a second rotation key that can update did:plc even after server death.\n\n## Implementation\n\n1. On user signup, generate recovery keypair:\n   - Generate 256-bit entropy\n   - Encode as BIP-39 mnemonic (24 words)\n   - Derive Ed25519 keypair from mnemonic seed\n\n2. Include recovery pubkey in did:plc rotationKeys (alongside server key)\n\n3. Display recovery phrase to user ONCE:\n   - Modal/interstitial they cannot skip\n   - Checkbox: \"I have saved my recovery phrase\"\n   - DO NOT store the phrase or private key server-side\n\n4. Store only: recovery_pubkey, recovery_did_key, phrase_shown_at\n\n## Code sketch\n\n```python\nfrom mnemonic import Mnemonic\nfrom nacl.signing import SigningKey\n\ndef generate_recovery_key():\n    m = Mnemonic(\"english\")\n    phrase = m.generate(strength=256)\n    seed = m.to_seed(phrase, passphrase=\"\")\n    privkey = SigningKey(seed[:32])\n    pubkey = privkey.verify_key\n    did_key = pubkey_to_did_key(pubkey.encode())\n    return phrase, did_key  # phrase shown to user, did_key stored\n```\n\n## Dependencies\n\n- python-mnemonic (or JS equivalent)\n- Runs BEFORE did:plc registration (need both keys for rotationKeys)\n\n## Acceptance\n\n- [ ] Signup generates 24-word mnemonic\n- [ ] User sees phrase before account is usable\n- [ ] Phrase is NOT stored server-side\n- [ ] Recovery pubkey stored in user record\n- [ ] did:plc rotationKeys includes both server and recovery keys",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T04:10:19.084452765Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T04:10:19.084452765Z",
+  "updated_at": "2026-07-20T00:21:56.765948293Z",
+  "closed_at": "2026-07-20T00:21:56.765948293Z",
+  "close_reason": "Recovery keypair + 24-word BIP-39 mnemonic generated on persona create, shown once via stderr",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.7",

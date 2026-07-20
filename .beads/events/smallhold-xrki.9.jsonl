@@ -1,0 +1,4 @@
+{"id":"019f7ce8-3c79-7f13-9891-948bd9f148d5","issue_id":"smallhold-xrki.9","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T00:23:42.457988531Z"}
+{"id":"019f7ce8-3c7c-7a8a-8c97-48a51f07bd23","issue_id":"smallhold-xrki.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-07-20T00:23:42.46069134Z"}
+{"id":"019f7ce8-3c7f-733a-9e3d-db068fd5b46e","issue_id":"smallhold-xrki.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-20T00:23:42.463212006Z"}
+{"id":"019f7ce9-c734-7721-9e81-50ed2092fa33","issue_id":"smallhold-xrki.9","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Acceptable: .expect() on 32-byte BIP-39 entropy which is always valid","created_at":"2026-07-20T00:25:23.508467854Z"}

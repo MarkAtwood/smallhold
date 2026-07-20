@@ -1,1 +1,2 @@
 {"id":"019f7891-b246-7704-8e62-43ea65d1a161","issue_id":"smallhold-bs1n.8","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T04:10:42.118460249Z"}
+{"id":"019f7ce6-a00a-76dc-b12f-45a48c8654ea","issue_id":"smallhold-bs1n.8","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"CLI recover command: mnemonic → keypair → did:key lookup → account info","created_at":"2026-07-20T00:21:56.874450658Z"}

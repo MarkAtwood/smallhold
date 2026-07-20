@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.8",
+  "title": "did:web DID document endpoint serves zeroed recovery key when not backfilled",
+  "description": "In activitypub.rs:830-835, when an account has no recovery_pubkey (None), the DID document endpoint uses a zeroed [0u8; 32] placeholder. This means:\n\n1. The DID document will contain a valid-looking but meaningless Ed25519 public key (all zeros), which is a degenerate point\n2. Any client attempting key resolution will get a bogus key without any indication that it's invalid\n3. The DID document will be structurally valid but semantically wrong\n\nShould either: (a) omit the Ed25519 verification method entirely when recovery_pubkey is None, or (b) return an error indicating backfill is required.\n\nAffected: src/activitypub.rs:830-835",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:38.903229549Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.230780757Z",
+  "closed_at": "2026-07-20T00:29:29.230780757Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review",
+    "correctness"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.8",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:38.933393127Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

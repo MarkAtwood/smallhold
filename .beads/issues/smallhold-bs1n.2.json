@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.2",
   "title": "Derive did:web from actor URL",
   "description": "Compute did:web from actor URL. did:web is resolvable via HTTPS, serves as current home pointer.\n\n## Derivation\nActor URL: https://example.com/users/alice\ndid:web: did:web:example.com:users:alice\n\nRules (did:web spec):\n- https:// becomes did:web:\n- Path slashes become colons\n- Port if non-443: did:web:example.com%3A8080:users:alice\n\n## Notes\n- did:web is computed, not stored (derivable from actor URL)\n- If actor URL changes (migration), did:web changes (expected)\n- did:key stays constant across migrations (the point)\n\n## Acceptance\n- [ ] did_web property on actor computes correctly\n- [ ] Handles ports, paths, edge cases\n- [ ] Round-trips: did:web resolves back to actor",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T03:55:20.001472166Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T03:55:20.001472166Z",
+  "updated_at": "2026-07-20T00:21:56.331241053Z",
+  "closed_at": "2026-07-20T00:21:56.331241053Z",
+  "close_reason": "did:web derived from domain+username at runtime",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.2",

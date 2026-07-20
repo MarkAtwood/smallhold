@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.8",
   "title": "Identity recovery flow for returning users",
   "description": "Allow users to recover their DID identity using a recovery phrase from a dead server.\n\n## User flow\n\n1. User clicks \"I have a recovery phrase\" on signup/login\n2. User enters 24-word phrase\n3. Server derives keypair from phrase\n4. Server looks up did:plc that has this key in rotationKeys\n5. Server signs did:plc update:\n   - Add new server key to rotationKeys\n   - Update alsoKnownAs to new actor URL\n   - Sign with recovery key\n6. POST update to plc.directory\n7. User now controls same DID from new server\n\n## Implementation\n\n```python\nasync def recover_identity(phrase: str, new_actor_url: str, new_server_key: str):\n    # Derive recovery key from phrase\n    recovery_privkey, recovery_pubkey = phrase_to_keypair(phrase)\n    recovery_did = pubkey_to_did_key(recovery_pubkey.encode())\n    \n    # Find did:plc with this rotation key\n    # (Search plc.directory or user provides their DID)\n    did_plc = await find_plc_by_rotation_key(recovery_did)\n    \n    # Get current did:plc state\n    current = await fetch_plc_document(did_plc)\n    \n    # Build update operation\n    update = {\n        \"type\": \"plc_operation\",\n        \"rotationKeys\": current[\"rotationKeys\"] + [new_server_key],\n        \"verificationMethods\": {\"atproto\": new_server_key},\n        \"alsoKnownAs\": [new_actor_url],\n        \"services\": current.get(\"services\", {}),\n        \"prev\": current[\"operation_cid\"],\n    }\n    \n    # Sign with recovery key\n    signed = sign_plc_operation(update, recovery_privkey)\n    \n    # Submit to plc.directory\n    await submit_plc_operation(did_plc, signed)\n    \n    return did_plc\n```\n\n## UI\n\n- Signup page: \"Recovering from another server? Enter recovery phrase\"\n- Recovery page: text area for 24 words\n- Validation: check BIP-39 validity before submission\n- Feedback: show recovered DID, confirm new server is now authoritative\n\n## Edge cases\n\n- Invalid phrase: reject with clear error\n- Phrase not in any did:plc: \"No identity found for this phrase\"\n- plc.directory unreachable: queue and retry\n- Multiple DIDs with same key: ask user which one\n\n## Acceptance\n\n- [ ] UI to enter recovery phrase\n- [ ] Derives correct keypair from phrase\n- [ ] Finds associated did:plc\n- [ ] Signs and submits update to plc.directory\n- [ ] New server key in rotationKeys\n- [ ] alsoKnownAs points to new server\n- [ ] User can post as recovered identity",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T04:10:42.113011952Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T04:10:42.113011952Z",
+  "updated_at": "2026-07-20T00:21:56.870594158Z",
+  "closed_at": "2026-07-20T00:21:56.870594158Z",
+  "close_reason": "CLI recover command: mnemonic → keypair → did:key lookup → account info",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.8",

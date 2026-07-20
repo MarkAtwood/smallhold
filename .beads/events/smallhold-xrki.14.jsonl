@@ -1,0 +1,4 @@
+{"id":"019f7ce8-7d3a-7671-88b4-caa18d6c9e23","issue_id":"smallhold-xrki.14","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T00:23:59.034422978Z"}
+{"id":"019f7ce8-7d3d-7761-99b3-c7f32e05b602","issue_id":"smallhold-xrki.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-20T00:23:59.037484223Z"}
+{"id":"019f7ce8-7d40-759c-ab5d-d6affdbc6cc8","issue_id":"smallhold-xrki.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-07-20T00:23:59.040368442Z"}
+{"id":"019f7ce8-8a2b-7af4-93aa-9d915375e611","issue_id":"smallhold-xrki.14","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Non-finding. DID documents are public by specification.","created_at":"2026-07-20T00:24:02.347718667Z"}

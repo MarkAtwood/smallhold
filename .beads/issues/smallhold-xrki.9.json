@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.9",
+  "title": "Gratuitous .expect() in private_key_to_mnemonic",
+  "description": "In `did.rs:37-38`:\n\n```rust\nlet mnemonic = bip39::Mnemonic::from_entropy(private_key)\n    .expect(\"32 bytes is valid BIP-39 entropy\");\n```\n\nThis `.expect()` is technically safe — the BIP-39 spec guarantees 32 bytes is valid entropy, and the function signature enforces `\u0026[u8; 32]`. The panic can never trigger in practice.\n\nHowever, per the project's AGENTS.md rule \"No `.unwrap()` in any code path reachable from a network request\" — this function is only called from CLI paths (not network request paths), so it's acceptable. Documenting this as informational only; no action needed unless the function is ever called from a request handler.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:42.455237896Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.505815142Z",
+  "closed_at": "2026-07-20T00:25:23.505815142Z",
+  "close_reason": "Acceptable: .expect() on 32-byte BIP-39 entropy which is always valid",
+  "labels": [
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.9",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:42.476941935Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

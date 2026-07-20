@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.15",
+  "title": "Actor JSON alsoKnownAs omits actor URL (Mastodon convention)",
+  "description": "In src/activitypub.rs lines 139-145, the actor document's `alsoKnownAs` array includes the did:key and did:web identifiers but does NOT include the actor's own URL (`https://domain/@username`). Mastodon includes the profile URL in `alsoKnownAs` for account migration support. The DID document endpoint (line 817) correctly includes `https://{domain}/@{username}` in its `alsoKnownAs`, but the actor JSON does not. This is a convention issue, not a spec violation, but it breaks Mastodon migration compatibility. Fix: add `also_known_as.push(json\\!(format\\!(\"https://{domain}/@{username}\")));` after line 145.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:24:00.343111552Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.291689827Z",
+  "closed_at": "2026-07-20T00:29:29.291689827Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.15",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:24:00.364636879Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{"id":"019f7ce7-d5b4-7b4c-a00c-af73a3384bbd","issue_id":"smallhold-xrki.2","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-20T00:23:16.148740928Z"}
+{"id":"019f7ce7-d5b7-7b45-bde7-fc909520460e","issue_id":"smallhold-xrki.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-07-20T00:23:16.151739163Z"}
+{"id":"019f7ce7-d5ba-7560-ac19-19f0c15d8f50","issue_id":"smallhold-xrki.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-07-20T00:23:16.154352659Z"}
+{"id":"019f7ced-87ee-709f-801d-fac8436216f0","issue_id":"smallhold-xrki.2","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Deferred: requires zeroize crate, addressed in key storage design doc","created_at":"2026-07-20T00:29:29.454041467Z"}

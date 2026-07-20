@@ -1,0 +1,18 @@
+{
+  "id": "smallhold-xrki",
+  "title": "Review: smallhold DID changes 2026-07-19",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:22:08.227065682Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.520873449Z",
+  "started_at": "2026-07-20T00:22:08.277084164Z",
+  "closed_at": "2026-07-20T00:29:29.520873449Z",
+  "close_reason": "3 review passes, 17 findings: 10 fixed, 7 closed (dupes/deferred/non-issues)",
+  "labels": [
+    "review"
+  ]
+}

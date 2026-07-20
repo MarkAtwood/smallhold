@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.6",
+  "title": "BUG: did:web domain encoding replaces dots with colons (wrong per W3C spec)",
+  "description": "In src/did.rs line 30, `domain.replace('.', \":\")` produces `did:web:example:com:users:alice` but the W3C DID Web Method spec says dots in the domain remain as-is. The correct output is `did:web:example.com:users:alice`. Colons in did:web separate path segments, not domain components. The domain is used verbatim (dots and all). Port numbers use percent-encoding (`%3A`). This bug affects: the DID document `id` field, the actor JSON `alsoKnownAs`, and the `did recover` lookup. The test on line 174 asserts the WRONG expected value. Fix: remove the `.replace('.', \":\")` call. Update the test to expect `did:web:example.com:users:alice`.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:35.293396121Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.136501512Z",
+  "closed_at": "2026-07-20T00:29:29.136501512Z",
+  "close_reason": "Closed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.6",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:35.313395984Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

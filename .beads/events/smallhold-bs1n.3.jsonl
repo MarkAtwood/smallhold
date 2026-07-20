@@ -1,1 +1,2 @@
 {"id":"019f7883-d2c2-70ab-93ad-61e78d0effc2","issue_id":"smallhold-bs1n.3","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T03:55:32.930044728Z"}
+{"id":"019f7ce6-9e5d-75ea-960f-7552695b8b4b","issue_id":"smallhold-bs1n.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Actor JSON includes did field and alsoKnownAs with did:key + did:web","created_at":"2026-07-20T00:21:56.445388296Z"}

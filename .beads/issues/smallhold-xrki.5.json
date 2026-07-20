@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.5",
+  "title": "did:web DID document missing Ed25519 recovery key verification method (diverges from gaja)",
+  "description": "smallhold's did_web_document() takes a recovery_pubkey parameter and includes an Ed25519VerificationKey2020 as a second verification method in the DID document (src/did.rs:68-117). The upstream gaja version (gaja/src/did.rs:69-103) does NOT include the recovery key in the DID document — it only has the RSA verification method.\n\nThis is an INTENTIONAL divergence — smallhold extended the DID document beyond the gaja port. However, note:\n\n1. The @context URI 'https://w3id.org/security/suites/ed2020/v1' (did.rs:87) is WRONG. The correct URI is 'https://w3id.org/security/suites/ed25519-2020/v1'. This will cause JSON-LD processors to fail to resolve the Ed25519VerificationKey2020 type.\n\n2. The Ed25519 recovery key is published in the DID document with its full public key (publicKeyMultibase), which is correct — this is the public key only, not the private key.\n\nAffected: src/did.rs:87 — wrong context URI",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:30.79117059Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.438516297Z",
+  "closed_at": "2026-07-20T00:25:23.438516297Z",
+  "close_reason": "False finding: Ed25519 recovery key IS included in the DID document",
+  "labels": [
+    "review",
+    "correctness"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.5",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:30.811670223Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

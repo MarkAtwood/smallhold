@@ -1,1 +1,2 @@
 {"id":"019f7883-56a3-77ac-876c-9ffcf9eb4593","issue_id":"smallhold-bs1n.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-07-19T03:55:01.155503525Z"}
+{"id":"019f7ce6-9d86-7766-91c3-5eb9f9f67a0f","issue_id":"smallhold-bs1n.1","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"did:key generated and stored for actors via Ed25519 + multicodec/multibase","created_at":"2026-07-20T00:21:56.230485718Z"}

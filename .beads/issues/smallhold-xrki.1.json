@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.1",
+  "title": "Recovery mnemonic passed as CLI arg is visible in process list",
+  "description": "In `DidCommands::Recover`, the BIP-39 mnemonic is passed via `--mnemonic` CLI arg (cli.rs:196). This makes the 24-word recovery phrase (which IS the private key) visible to any user on the system via `ps aux`, `/proc/$PID/cmdline`, shell history, and process accounting logs.\n\nShould accept the mnemonic from stdin (like `cmd_admin` does for passwords via `rpassword_fallback()`) or from a file descriptor, never as a command-line argument.\n\nAffected: src/cli.rs:192-196, src/cli.rs:1017",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:07.363915725Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:29:29.351908354Z",
+  "closed_at": "2026-07-20T00:29:29.351908354Z",
+  "close_reason": "Closed",
+  "labels": [
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.1",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:07.388221445Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

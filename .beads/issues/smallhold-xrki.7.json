@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.7",
+  "title": "did_document endpoint serves zeroed recovery key when account lacks one",
+  "description": "In `activitypub.rs:830-835`, when an account has no `recovery_pubkey` (pre-backfill accounts), the DID document is served with a zeroed `[0u8; 32]` recovery key:\n\n```rust\nNone =\u003e {\n    // Account has no recovery key yet; use a zeroed placeholder\n    [0u8; 32]\n}\n```\n\nThis produces a syntactically valid DID document with a meaningless Ed25519 public key (the point for the all-zeros scalar). A consumer trusting this key would accept signatures from anyone who derives the well-known zeroed key. The endpoint should return 404 or omit the recovery key verification method entirely when no recovery key exists, rather than serving a predictable placeholder.\n\nAffected: src/activitypub.rs:820-836",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:36.75587144Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.230803695Z",
+  "closed_at": "2026-07-20T00:25:23.230803695Z",
+  "close_reason": "Duplicate of .8/.17 (zeroed recovery key)",
+  "labels": [
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.7",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:36.785488316Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

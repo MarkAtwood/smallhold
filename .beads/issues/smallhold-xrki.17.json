@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xrki.17",
+  "title": "DID document uses zeroed placeholder key when recovery_pubkey is NULL",
+  "description": "In src/activitypub.rs lines 830-835, when an account has no recovery_pubkey (NULL in DB), the DID document endpoint uses `[0u8; 32]` as a placeholder for the Ed25519 public key. This publishes a DID document with a meaningless zeroed verification method that nobody can authenticate with. The document should either omit the recovery-key verification method entirely when recovery_pubkey is NULL, or return a 404/503 with a message to run backfill first. Publishing a zeroed key is worse than publishing no key -- it suggests a valid verification method exists when it does not.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:24:14.933971695Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.297562149Z",
+  "closed_at": "2026-07-20T00:25:23.297562149Z",
+  "close_reason": "Duplicate of .8 (zeroed recovery key)",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.17",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:24:14.95259773Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

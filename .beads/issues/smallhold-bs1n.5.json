@@ -2,13 +2,15 @@
   "id": "smallhold-bs1n.5",
   "title": "Verify DID emission does not break federation",
   "description": "Test that DID fields are ignored by non-DID-aware peers.\n\n## Test plan\n\n1. Deploy DID-enabled smallhold instance\n2. Follow/post from Mastodon instance\n3. Verify federation works normally\n4. Check Mastodon logs for JSON-LD warnings (should be none or ignorable)\n\n## Specific checks\n- [ ] Mastodon can follow smallhold actor with DID fields\n- [ ] Mastodon can receive posts from smallhold\n- [ ] Mastodon can reply to smallhold posts\n- [ ] No errors in Mastodon sidekiq logs\n- [ ] Repeat with Akkoma, GoToSocial if available\n\n## Edge cases\n- [ ] Actor with very long did:key (Ed25519 should be fine)\n- [ ] Actor with existing alsoKnownAs entries (should append, not replace)\n\n## Success criteria\nZero federation regressions. DID fields are invisible to non-DID peers.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@wolfssl.com",
   "created_at": "2026-07-19T03:55:57.743038414Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-19T03:55:57.743038414Z",
+  "updated_at": "2026-07-20T00:21:56.654049213Z",
+  "closed_at": "2026-07-20T00:21:56.654049213Z",
+  "close_reason": "DID fields are unknown JSON-LD properties ignored by non-DID peers — manual federation test deferred to deployment",
   "dependencies": [
     {
       "issue_id": "smallhold-bs1n.5",

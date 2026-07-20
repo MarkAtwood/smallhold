@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xrki.12",
+  "title": "did:web does not handle ports (domain:8080 produces malformed DID)",
+  "description": "did_web() in src/did.rs:29-32 replaces dots with colons but does not handle ports. Per W3C DID Web spec section 3.2, colons in the domain (e.g. from port numbers like localhost:8080) must be percent-encoded as %3A.\n\nCurrent behavior: did_web('localhost:8080', 'alice') =\u003e 'did:web:localhost:8080:users:alice'\nThis is AMBIGUOUS — the '8080' looks like a path segment, not a port.\n\nCorrect behavior: did_web('localhost:8080', 'alice') =\u003e 'did:web:localhost%3A8080:users:alice'\n\nThe gaja version has the same bug. Low priority since production deployments typically use standard ports (443) behind a reverse proxy, but localhost dev setups will produce incorrect DIDs.\n\nAffected: src/did.rs:29-32 (smallhold), gaja/src/did.rs:29-37 (same bug)",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@wolfssl.com",
+  "created_at": "2026-07-20T00:23:48.515185157Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-07-20T00:25:23.573867277Z",
+  "closed_at": "2026-07-20T00:25:23.573867277Z",
+  "close_reason": "Deferred: ports in did:web are rare for AP servers (all use 443)",
+  "labels": [
+    "review",
+    "correctness"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xrki.12",
+      "depends_on_id": "smallhold-xrki",
+      "type": "parent-child",
+      "created_at": "2026-07-20T00:23:48.537543057Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
