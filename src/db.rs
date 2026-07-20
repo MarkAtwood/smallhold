@@ -93,6 +93,32 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
             .context("migration: add accounts.recovery_pubkey")?;
     }
 
+    // Fix duplicate follow rows (NULL columns bypass SQLite UNIQUE constraints).
+    // Dedup first, then add partial unique indexes.
+    sqlx::raw_sql(
+        "DELETE FROM follows WHERE rowid NOT IN ( \
+         SELECT MIN(rowid) FROM follows GROUP BY follower_id, followee_id, followee_remote_id)"
+    )
+    .execute(pool)
+    .await
+    .context("migration: dedup follows")?;
+
+    sqlx::raw_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_local_unique \
+         ON follows(follower_id, followee_id) WHERE followee_id IS NOT NULL"
+    )
+    .execute(pool)
+    .await
+    .context("migration: add idx_follows_local_unique")?;
+
+    sqlx::raw_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_remote_unique \
+         ON follows(follower_id, followee_remote_id) WHERE followee_remote_id IS NOT NULL"
+    )
+    .execute(pool)
+    .await
+    .context("migration: add idx_follows_remote_unique")?;
+
     Ok(())
 }
 
@@ -216,12 +242,16 @@ CREATE TABLE IF NOT EXISTS follows (
     created_at          INTEGER NOT NULL,
     show_reblogs        INTEGER NOT NULL DEFAULT 1,
     notify              INTEGER NOT NULL DEFAULT 0,
-    CHECK ((followee_id IS NOT NULL) != (followee_remote_id IS NOT NULL)),
-    UNIQUE (follower_id, followee_id, followee_remote_id)
+    CHECK ((followee_id IS NOT NULL) != (followee_remote_id IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
 CREATE INDEX IF NOT EXISTS idx_follows_followee_remote ON follows(followee_remote_id);
+-- Partial unique indexes: SQLite UNIQUE constraint doesn't enforce uniqueness when columns are NULL
+CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_local_unique
+    ON follows(follower_id, followee_id) WHERE followee_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_remote_unique
+    ON follows(follower_id, followee_remote_id) WHERE followee_remote_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS follow_requests (
     id                  INTEGER PRIMARY KEY,

@@ -2626,6 +2626,23 @@ async fn timeline_home(
     )
     .await?;
 
+    // Include remote posts from followed accounts
+    let limit = params.limit.unwrap_or(20).clamp(1, 40);
+    let remote_statuses = fetch_remote_timeline(
+        &state.pool,
+        auth.account_id,
+        limit,
+        domain,
+    )
+    .await?;
+    statuses.extend(remote_statuses);
+    statuses.sort_by(|a, b| {
+        let id_a = a["id"].as_str().unwrap_or("0");
+        let id_b = b["id"].as_str().unwrap_or("0");
+        id_b.cmp(id_a)
+    });
+    statuses.truncate(limit as usize);
+
     let filters = load_active_filters(&state.pool, auth.account_id, "home").await?;
     apply_filters(&mut statuses, &filters);
 
@@ -2635,6 +2652,95 @@ async fn timeline_home(
         response.headers_mut().insert("Link", link.parse().unwrap());
     }
     Ok(response)
+}
+
+/// Fetch remote posts from accounts the user follows.
+async fn fetch_remote_timeline(
+    pool: &SqlitePool,
+    account_id: i64,
+    limit: i64,
+    domain: &str,
+) -> Result<Vec<Value>, AppError> {
+    let rows: Vec<(i64, String, String, String, i64, String, Option<String>, i64, i64, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT rp.id, rp.ap_uri, rp.content_html, rp.visibility, rp.created_at, \
+         rp.spoiler_text, rp.language, rp.remote_account_id, rp.sensitive, \
+         ra.actor_uri, ra.display_name, ra.avatar_url, ra.username \
+         FROM remote_posts rp \
+         JOIN remote_accounts ra ON rp.remote_account_id = ra.id \
+         WHERE rp.remote_account_id IN ( \
+             SELECT followee_remote_id FROM follows WHERE follower_id = ? AND followee_remote_id IS NOT NULL \
+         ) \
+         ORDER BY rp.id DESC LIMIT ?"
+    )
+    .bind(account_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    let statuses: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let acct = if let Some(ref username) = r.12 {
+                let domain_part = r.9.split("://").nth(1).and_then(|s| s.split('/').next()).unwrap_or("");
+                format!("{username}@{domain_part}")
+            } else {
+                r.9.clone()
+            };
+
+            json!({
+                "id": r.0.to_string(),
+                "created_at": millis_to_iso(r.4),
+                "in_reply_to_id": null,
+                "in_reply_to_account_id": null,
+                "sensitive": r.8 != 0,
+                "spoiler_text": r.5,
+                "visibility": r.3,
+                "language": r.6,
+                "uri": r.1,
+                "url": r.1,
+                "replies_count": 0,
+                "reblogs_count": 0,
+                "favourites_count": 0,
+                "favourited": false,
+                "reblogged": false,
+                "muted": false,
+                "bookmarked": false,
+                "pinned": false,
+                "text": null,
+                "content": r.2,
+                "reblog": null,
+                "application": null,
+                "account": {
+                    "id": r.7.to_string(),
+                    "username": r.12.as_deref().unwrap_or(""),
+                    "acct": acct,
+                    "display_name": r.10,
+                    "locked": false,
+                    "bot": false,
+                    "created_at": "1970-01-01T00:00:00.000Z",
+                    "note": "",
+                    "url": r.9,
+                    "avatar": r.11.as_deref().unwrap_or(&format!("https://{domain}/avatars/original/missing.png")),
+                    "avatar_static": r.11.as_deref().unwrap_or(&format!("https://{domain}/avatars/original/missing.png")),
+                    "header": format!("https://{domain}/headers/original/missing.png"),
+                    "header_static": format!("https://{domain}/headers/original/missing.png"),
+                    "followers_count": 0,
+                    "following_count": 0,
+                    "statuses_count": 0,
+                    "emojis": [],
+                    "fields": [],
+                },
+                "media_attachments": [],
+                "mentions": [],
+                "tags": [],
+                "emojis": [],
+                "card": null,
+                "poll": null,
+            })
+        })
+        .collect();
+
+    Ok(statuses)
 }
 
 async fn timeline_public(

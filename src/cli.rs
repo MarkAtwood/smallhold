@@ -127,7 +127,7 @@ pub enum TokenCommands {
     /// Mint a new token for a persona
     Mint {
         username: String,
-        #[arg(long, default_value = "read,write,follow")]
+        #[arg(long, default_value = "read write follow")]
         scopes: String,
     },
     /// List all tokens
