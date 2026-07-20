@@ -104,7 +104,7 @@ fn millis_to_date(ms: i64) -> String {
 
 #[derive(sqlx::FromRow)]
 pub struct AccountRow {
-    pub id: String,
+    pub id: i64,
     pub username: String,
     pub display_name: String,
     pub bio: String,
@@ -120,7 +120,7 @@ pub struct AccountRow {
 #[derive(sqlx::FromRow)]
 pub struct StatusRow {
     pub id: i64,
-    pub persona_id: String,
+    pub persona_id: i64,
     pub ap_id: String,
     pub content_html: String,
     pub spoiler_text: String,
@@ -169,7 +169,7 @@ pub fn account_to_json_with_counts(
     })
 }
 
-pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: &str) -> (i64, i64, i64) {
+pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: i64) -> (i64, i64, i64) {
     let fwp = crate::server::fw_pool(pool);
     let followers = fieldwork::followers_db::follower_count(&fwp, account_id)
         .await
@@ -186,7 +186,7 @@ pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: &str) -> 
     (followers, following, statuses)
 }
 
-pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: &str) -> Result<AccountRow, AppError> {
+pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: i64) -> Result<AccountRow, AppError> {
     let fwp = crate::server::fw_pool(pool);
     let persona = fieldwork::persona_db::get_persona_by_id(&fwp, id).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
@@ -195,7 +195,7 @@ pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: &str) -> Result<Acco
 
 fn persona_to_account_row(p: &fieldwork::persona_db::PersonaRow) -> AccountRow {
     AccountRow {
-        id: p.id.clone(),
+        id: p.id,
         username: p.username.clone(),
         display_name: p.display_name.clone(),
         bio: p.bio.clone(),
@@ -225,7 +225,7 @@ async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<V
     let row = personas.first().map(persona_to_account_row);
     match row {
         Some(r) => {
-            let (f, fo, s) = fetch_account_counts(pool, &r.id).await;
+            let (f, fo, s) = fetch_account_counts(pool, r.id).await;
             Ok(account_to_json_with_counts(&r, domain, f, fo, s))
         }
         None => Ok(json!(null)),
@@ -237,7 +237,7 @@ async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<V
 // ---------------------------------------------------------------------------
 
 pub struct AuthenticatedAccount {
-    pub account_id: String,
+    pub account_id: i64,
     pub username: String,
     pub scopes: String,
     pub token_hash: String,
@@ -290,12 +290,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
 
         // REMAINING: update token last_used_at — no fieldwork equivalent
         let now = now_millis();
-        // REMAINING: OAuth query — fieldwork has partial coverage
-        let _ = sqlx::query("UPDATE oauth_tokens SET last_used_at = ? WHERE token_hash = ?")
-            .bind(now)
-            .bind(&token_hash)
-            .execute(&state.pool)
-            .await;
+        let _ = crate::db_extras::touch_token(&state.pool, &token_hash, now).await;
 
         Ok(AuthenticatedAccount {
             account_id,
@@ -398,9 +393,9 @@ async fn authorize_form(
 ) -> Result<Html<String>, AppError> {
     let fwp = crate::server::fw_pool(&state.pool);
     let personas = fieldwork::persona_db::list_personas(&fwp).await?;
-    let accounts: Vec<(String, String, String)> = personas
+    let accounts: Vec<(i64, String, String)> = personas
         .iter()
-        .map(|p| (p.id.clone(), p.username.clone(), p.display_name.clone()))
+        .map(|p| (p.id, p.username.clone(), p.display_name.clone()))
         .collect();
 
     let response_type = html_escape(params.response_type.as_deref().unwrap_or("code"));
@@ -586,7 +581,7 @@ struct AuthorizeForm {
     password: Option<String>,
     #[serde(default)]
     passkey_token: Option<String>,
-    account_id: String,
+    account_id: i64,
     client_id: String,
     redirect_uri: String,
     #[serde(default)]
@@ -613,19 +608,15 @@ async fn authorize_submit(
             .as_deref()
             .filter(|p| !p.is_empty())
             .ok_or_else(|| AppError::bad_request("Password or passkey required"))?;
-        let admin_row: Option<(String,)> =
-            // REMAINING: admin table is smallhold-specific, not in fieldwork
-            sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
-                .fetch_optional(&state.pool)
-                .await?;
-        let (password_hash,) =
-            admin_row.ok_or_else(|| AppError::forbidden("Admin password not set"))?;
+        let password_hash = crate::db_extras::get_admin_password_hash(&state.pool)
+                .await?
+                .ok_or_else(|| AppError::forbidden("Admin password not set"))?;
         verify_password(password, &password_hash)?;
     }
 
     // Verify account exists
     let fwp_ae = crate::server::fw_pool(&state.pool);
-    let account_exists = fieldwork::persona_db::get_persona_by_id(&fwp_ae, &form.account_id).await?;
+    let account_exists = fieldwork::persona_db::get_persona_by_id(&fwp_ae, form.account_id).await?;
     if account_exists.is_none() {
         return Err(AppError::bad_request("Account not found"));
     }
@@ -659,7 +650,7 @@ async fn authorize_submit(
     .bind(&code_hash)
     .bind(app_id)
     .bind(crate::db::DEFAULT_USER_ID)
-    .bind(&form.account_id)
+    .bind(form.account_id)
     .bind(scope)
     .bind(&form.redirect_uri)
     .bind(expires_at)
@@ -739,7 +730,7 @@ async fn token(
 
     // Atomically fetch and consume the authorization code (single-use)
     // REMAINING: authorization code table — not in fieldwork
-    let code_row: Option<(i64, String, String, String)> = sqlx::query_as(
+    let code_row: Option<(i64, i64, String, String)> = sqlx::query_as(
         "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, persona_id, scopes, redirect_uri",
     )
     .bind(&code_hash)
@@ -794,7 +785,7 @@ async fn token(
 
     fieldwork::oauth_db::create_token(
         &crate::server::fw_pool(&state.pool),
-        id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, &account_id, &scopes, now,
+        id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, account_id, &scopes, now,
     ).await?;
 
     Ok(Json(json!({
@@ -826,16 +817,9 @@ async fn revoke(
     let token_hash = hex_encode(&Sha256::digest(form.token.as_bytes()));
 
     // Look up token ID by hash to use revoke_token API.
-    // ponytail: extra query to map hash→id; fieldwork API is keyed on id.
-    // REMAINING: token revocation by hash — fieldwork only has revoke_token by ID
-    let token_row: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
-    )
-    .bind(&token_hash)
-    .fetch_optional(&state.pool)
-    .await?;
+    let token_id = crate::db_extras::find_token_id_by_hash(&state.pool, &token_hash).await?;
 
-    if let Some((token_id,)) = token_row {
+    if let Some(token_id) = token_id {
         let now = now_millis();
         fieldwork::oauth_db::revoke_token(
             &crate::server::fw_pool(&state.pool), token_id, now,
@@ -853,16 +837,8 @@ async fn revoke(
 async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
-    // REMAINING: aggregate stats queries — no fieldwork equivalent
-    let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
-        .fetch_one(&state.pool)
-        .await?;
-
-    let (domain_count,): (i64,) =
-        // REMAINING: domain count — no fieldwork equivalent
-        sqlx::query_as("SELECT COUNT(DISTINCT domain) FROM remote_accounts")
-            .fetch_one(&state.pool)
-            .await?;
+    let status_count = crate::db_extras::total_post_count(&state.pool).await?;
+    let domain_count = crate::db_extras::remote_domain_count(&state.pool).await?;
 
     // ponytail: one DB query per instance call; VAPID key is immutable, could be cached in AppState
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
@@ -912,10 +888,7 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
 async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
-    // REMAINING: aggregate stats queries — no fieldwork equivalent
-    let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
-        .fetch_one(&state.pool)
-        .await?;
+    let status_count = crate::db_extras::total_post_count(&state.pool).await?;
 
     // ponytail: one DB query per instance call; VAPID key is immutable, could be cached in AppState
     let vapid_key = crate::push::get_vapid_public_key(&state.pool).await;
@@ -988,8 +961,8 @@ async fn verify_credentials(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
-    let row = fetch_account_row(&state.pool, &auth.account_id).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, &auth.account_id).await;
+    let row = fetch_account_row(&state.pool, auth.account_id).await?;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, auth.account_id).await;
     let mut v = account_to_json_with_counts(&row, domain, followers, following, statuses);
     let fields: Vec<Value> = serde_json::from_str(&row.fields_json).unwrap_or_default();
     v["source"] = json!({
@@ -1009,8 +982,9 @@ async fn get_account(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
-    let row = fetch_account_row(&state.pool, &id).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, &id).await;
+    let id: i64 = id.parse().map_err(|_| AppError::not_found("Account not found"))?;
+    let row = fetch_account_row(&state.pool, id).await?;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, id).await;
     Ok(Json(account_to_json_with_counts(
         &row, domain, followers, following, statuses,
     )))
@@ -1034,7 +1008,7 @@ async fn account_lookup(
 
     let domain = &state.config.server.domain;
     let row = fetch_account_row_by_username(&state.pool, username).await?;
-    let (followers, following, statuses) = fetch_account_counts(&state.pool, &row.id).await;
+    let (followers, following, statuses) = fetch_account_counts(&state.pool, row.id).await;
     Ok(Json(account_to_json_with_counts(
         &row, domain, followers, following, statuses,
     )))
@@ -1046,10 +1020,10 @@ async fn account_statuses(
     Path(id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, AppError> {
-    let account_id = id;
+    let account_id: i64 = id.parse().map_err(|_| AppError::not_found("Account not found"))?;
 
     // Verify account exists
-    let _row = fetch_account_row(&state.pool, &account_id).await?;
+    let _row = fetch_account_row(&state.pool, account_id).await?;
 
     let limit: i64 = params
         .get("limit")
@@ -1067,7 +1041,7 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
-            .bind(&account_id)
+            .bind(account_id)
             .bind(max_id)
             .bind(limit)
             .fetch_all(&state.pool)
@@ -1077,7 +1051,7 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
             )
-            .bind(&account_id)
+            .bind(account_id)
             .bind(min_id)
             .bind(limit)
             .fetch_all(&state.pool)
@@ -1087,13 +1061,13 @@ async fn account_statuses(
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
-            .bind(&account_id)
+            .bind(account_id)
             .bind(limit)
             .fetch_all(&state.pool)
             .await?
     };
 
-    let account_row = fetch_account_row(&state.pool, &account_id).await?;
+    let account_row = fetch_account_row(&state.pool, account_id).await?;
     let account_json = account_to_json(&account_row, domain);
 
     let items: Vec<Value> = statuses
@@ -1247,7 +1221,7 @@ async fn verify_app_credentials(
     let app_row: Option<(String, Option<String>)> = sqlx::query_as(
         "SELECT oa.name, oa.website FROM oauth_tokens ot JOIN oauth_apps oa ON ot.app_id = oa.id WHERE ot.persona_id = ? AND ot.revoked_at IS NULL ORDER BY ot.last_used_at DESC LIMIT 1",
     )
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -1286,7 +1260,7 @@ async fn get_lists(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let fwp_l = crate::server::fw_pool(&state.pool);
-    let list_rows = fieldwork::lists_db::get_lists(&fwp_l, &auth.account_id).await?;
+    let list_rows = fieldwork::lists_db::get_lists(&fwp_l, auth.account_id).await?;
     let rows: Vec<(i64, String, String)> = list_rows.iter().map(|l| (l.id, l.title.clone(), l.replies_policy.clone())).collect();
 
     let lists: Vec<Value> = rows
@@ -1327,7 +1301,7 @@ async fn create_list(
         "INSERT INTO lists (id, user_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .bind(&body.title)
     .bind(&body.replies_policy)
     .bind(now)
@@ -1424,7 +1398,7 @@ async fn delete_list(
     let del_list = fieldwork::lists_db::get_list(
         &crate::server::fw_pool(&state.pool), list_id,
     ).await?;
-    if del_list.as_ref().map(|l| l.user_id.as_str()) != Some(&auth.account_id) {
+    if del_list.as_ref().map(|l| l.user_id) != Some(auth.account_id) {
         return Err(AppError::not_found("List not found"));
     }
     fieldwork::lists_db::delete_list(
@@ -1503,8 +1477,9 @@ async fn add_list_accounts(
     }
 
     for aid_str in &body.account_ids {
+        let aid: i64 = aid_str.parse().map_err(|_| AppError::bad_request("Invalid account ID"))?;
         fieldwork::lists_db::add_to_list(
-            &crate::server::fw_pool(&state.pool), list_id, Some(aid_str.as_str()), None,
+            &crate::server::fw_pool(&state.pool), list_id, Some(aid), None,
         ).await?;
     }
 
@@ -1534,8 +1509,9 @@ async fn remove_list_accounts(
     }
 
     for aid_str in &body.account_ids {
+        let aid: i64 = aid_str.parse().map_err(|_| AppError::bad_request("Invalid account ID"))?;
         fieldwork::lists_db::remove_from_list(
-            &crate::server::fw_pool(&state.pool), list_id, Some(aid_str.as_str()), None,
+            &crate::server::fw_pool(&state.pool), list_id, Some(aid), None,
         ).await?;
     }
 
@@ -1646,7 +1622,7 @@ async fn list_filters_v2(
     let filter_ids: Vec<(i64,)> =
         {
             let fwp_fl = crate::server::fw_pool(&state.pool);
-            let filters = fieldwork::filters_db::get_filters(&fwp_fl, &auth.account_id).await?;
+            let filters = fieldwork::filters_db::get_filters(&fwp_fl, auth.account_id).await?;
             filters.into_iter().map(|f| (f.id,)).collect::<Vec<_>>()
         };
 
@@ -1676,7 +1652,7 @@ async fn create_filter_v2(
          VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .bind(&body.title)
     .bind(&context_json)
     .bind(&body.filter_action)
@@ -1744,7 +1720,7 @@ async fn update_filter_v2(
          FROM filters WHERE id = ? AND user_id = ?",
     )
     .bind(filter_id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .fetch_optional(&state.pool)
     .await?;
     let (_fid, cur_title, cur_context, cur_action, cur_expires) =
@@ -1817,7 +1793,7 @@ async fn delete_filter_v2(
     let del_filter = fieldwork::filters_db::get_filter(
         &crate::server::fw_pool(&state.pool), filter_id,
     ).await?;
-    if del_filter.as_ref().map(|f| f.user_id.as_str()) != Some(&auth.account_id) {
+    if del_filter.as_ref().map(|f| f.user_id) != Some(auth.account_id) {
         return Err(AppError::not_found("Filter not found"));
     }
     fieldwork::filters_db::delete_filter(
@@ -1926,7 +1902,7 @@ async fn delete_filter_keyword(
          (SELECT id FROM filters WHERE user_id = ?)",
     )
     .bind(keyword_id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .execute(&state.pool)
     .await?;
 
@@ -1949,7 +1925,7 @@ async fn list_filters_v1(
          WHERE f.user_id = ? \
          ORDER BY fk.id",
     )
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -1987,7 +1963,7 @@ async fn list_sessions(
          WHERE t.persona_id = ? AND t.revoked_at IS NULL \
          ORDER BY t.created_at",
     )
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -2024,7 +2000,7 @@ async fn revoke_session(
     )
     .bind(now)
     .bind(token_id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .execute(&state.pool)
     .await?;
 
@@ -2046,7 +2022,7 @@ async fn revoke_all_sessions(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND token_hash != ? AND revoked_at IS NULL",
     )
     .bind(now)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .bind(&auth.token_hash)
     .execute(&state.pool)
     .await?;

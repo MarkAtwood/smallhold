@@ -576,7 +576,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             let bio_html = bio.as_ref().map(|b| render_bio(b));
             fieldwork::persona_db::update_persona_profile(
                 &fw_pool(&pool),
-                &persona.id,
+                persona.id,
                 display_name.as_deref(),
                 bio.as_deref(),
                 bio_html.as_deref(),
@@ -669,7 +669,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
     match cmd {
         TokenCommands::Mint { username, scopes } => {
-            let account: Option<(String,)> =
+            let account: Option<(i64,)> =
                 
                 {
                     let p = fieldwork::persona_db::get_persona_by_username(&fw_pool(&pool), &username).await?;
@@ -700,7 +700,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
             fieldwork::oauth_db::create_token(
                 &fw_pool(&pool),
-                id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, &account_id, &scopes, now,
+                id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, account_id, &scopes, now,
             ).await?;
 
             eprintln!("Token minted for @{username} (scopes: {scopes}):");
@@ -764,7 +764,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             let result = if let Some(ref uname) = username {
-                let account: Option<(String,)> =
+                let account: Option<(i64,)> =
                     
                     // REMAINING: persona query — fieldwork has partial coverage
                     sqlx::query_as("SELECT id FROM personas WHERE username = ?")
@@ -800,11 +800,11 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("Revoked {} token(s){scope}.", result.rows_affected());
         }
         TokenCommands::Sessions => {
-            let accounts: Vec<(String, String)> =
+            let accounts: Vec<(i64, String)> =
                 
                 {
                     let personas = fieldwork::persona_db::list_personas(&fw_pool(&pool)).await?;
-                    personas.iter().map(|p| (p.id.clone(), p.username.clone())).collect::<Vec<_>>()
+                    personas.iter().map(|p| (p.id, p.username.clone())).collect::<Vec<_>>()
                 };
 
             for (account_id, username) in &accounts {
@@ -1064,7 +1064,7 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let did_key = crate::did::ed25519_to_did_key(&pub_key);
 
             // REMAINING: reason varies
-            let account: Option<(String, String, String)> =  sqlx::query_as(
+            let account: Option<(i64, String, String)> =  sqlx::query_as(
                 "SELECT u.id, p.username, p.display_name FROM users u \
                  JOIN personas p ON p.user_id = u.id \
                  WHERE u.did_key = ?",
@@ -1093,7 +1093,7 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
         DidCommands::Backfill => {
             // Check if the single user already has a DID key
             // REMAINING: reason varies
-            let user_row: Option<(String,)> =  sqlx::query_as(
+            let user_row: Option<(i64,)> =  sqlx::query_as(
                 "SELECT id FROM users WHERE did_key IS NULL",
             )
             .fetch_optional(&pool)
@@ -1105,7 +1105,7 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             }
 
             // REMAINING: persona query — fieldwork has partial coverage
-            let personas: Vec<(String, String)> =  sqlx::query_as(
+            let personas: Vec<(i64, String)> =  sqlx::query_as(
                 "SELECT id, username FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
@@ -1155,7 +1155,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
         RelayCommands::Add { url } => {
             // Fetch the relay's actor document to get its inbox URL.
             // REMAINING: reason varies
-            let first_account: Option<(String, String, String)> =  sqlx::query_as(
+            let first_account: Option<(i64, String, String)> =  sqlx::query_as(
                 "SELECT id, username, private_key_pem FROM personas ORDER BY created_at LIMIT 1",
             )
             .fetch_optional(&pool)
@@ -1211,7 +1211,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 "object": &url
             });
 
-            crate::delivery::enqueue_delivery(&pool, inbox_url, &account_id, &follow_activity)
+            crate::delivery::enqueue_delivery(&pool, inbox_url, account_id, &follow_activity)
                 .await
                 .context("Failed to enqueue Follow activity")?;
 
@@ -1226,7 +1226,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let stored_follow_id = relay.follow_id.clone();
 
             // Get the first local account to send the Undo.
-            let first_account: Option<(String, String)> =
+            let first_account: Option<(i64, String)> =
                 
                 // REMAINING: persona query — fieldwork has partial coverage
                 sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at LIMIT 1")
@@ -1252,7 +1252,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 }
             });
 
-            crate::delivery::enqueue_delivery(&pool, &inbox_url, &account_id, &undo_activity)
+            crate::delivery::enqueue_delivery(&pool, &inbox_url, account_id, &undo_activity)
                 .await
                 .context("Failed to enqueue Undo activity")?;
 

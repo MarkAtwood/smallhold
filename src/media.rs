@@ -278,8 +278,8 @@ async fn process_upload(
         &fw_pool(&state.pool),
         &fieldwork::media_db::MediaRow {
             id,
-            user_id: crate::db::DEFAULT_USER_ID.to_string(),
-            persona_id: auth.account_id.clone(),
+            user_id: crate::db::DEFAULT_USER_ID,
+            persona_id: auth.account_id,
             post_id: None,
             file_path: rel_path.clone(),
             mime_type: mime.clone(),
@@ -361,16 +361,8 @@ async fn update_media(
         .description
         .map(|d| d.chars().take(MAX_DESCRIPTION_CHARS).collect::<String>());
 
-    // ponytail: fieldwork::media_db has no update_description function.
-    // This is a single-column update not worth a new fieldwork function.
-    // REMAINING: query
-
-    // REMAINING: media query
-    sqlx::query("UPDATE media SET description = ? WHERE id = ?")
-        .bind(&description)
-        .bind(media_id)
-        .execute(&state.pool)
-        .await?;
+    crate::db_extras::update_media_description(&state.pool, media_id, description.as_deref()).await
+        .map_err(AppError::from)?;
 
     row.description = description;
 

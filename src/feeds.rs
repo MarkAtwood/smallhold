@@ -15,7 +15,7 @@ struct FeedPost {
 }
 
 /// Look up persona_id by username, returning 404 if not found.
-async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<String, AppError> {
+async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
     let persona = fieldwork::persona_db::get_persona_by_username(&fw_pool(pool), username)
         .await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
@@ -25,7 +25,7 @@ async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<S
 /// Fetch last 20 public posts for an account.
 async fn fetch_public_posts(
     pool: &sqlx::SqlitePool,
-    account_id: &str,
+    account_id: i64,
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by
     // visibility or exclude boosts. Custom query needed for feed generation.
@@ -71,7 +71,7 @@ async fn rss_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, &account_id).await?;
+    let posts = fetch_public_posts(&state.pool, account_id).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);
@@ -120,7 +120,7 @@ async fn atom_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, &account_id).await?;
+    let posts = fetch_public_posts(&state.pool, account_id).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);

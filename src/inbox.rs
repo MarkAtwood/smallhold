@@ -242,7 +242,7 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
     // Compute our local digest for followers from the remote actor's domain.
     let local_digest = match crate::federation::compute_follower_sync_digest(
         &state.pool,
-        &account_id,
+        account_id,
         &actor_domain,
     )
     .await
@@ -641,7 +641,7 @@ async fn resolve_local_account(
     pool: &SqlitePool,
     domain: &str,
     uri: &str,
-) -> Result<Option<(String, String, bool)>, AppError> {
+) -> Result<Option<(i64, String, bool)>, AppError> {
     let prefix = format!("https://{domain}/users/");
     let username = match uri.strip_prefix(&prefix) {
         Some(u) => u,
@@ -659,7 +659,7 @@ async fn resolve_local_account(
 async fn enqueue_activity(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_persona_id: &str,
+    sender_persona_id: i64,
     activity: &Value,
 ) -> Result<(), AppError> {
     delivery::enqueue_delivery(pool, target_inbox, sender_persona_id, activity)
@@ -670,7 +670,7 @@ async fn enqueue_activity(
 /// Check if a remote account is blocked or muted by a local account.
 async fn is_blocked_or_muted(
     pool: &SqlitePool,
-    persona_id: &str,
+    persona_id: i64,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
     let fwp = &fw_pool(pool);
@@ -738,18 +738,18 @@ async fn handle_follow(
     } else {
         // Auto-accept: insert into followers.
         fieldwork::followers_db::add_follower(
-            &fw_pool(&state.pool), &account_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+            &fw_pool(&state.pool), account_id, crate::db::DEFAULT_USER_ID, remote.id, now,
         ).await?;
 
         // Create a notification (unless blocked/muted).
-        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
             let notif_id = generate_id();
             fieldwork::notifications_db::create_notification(
                 &fw_pool(&state.pool),
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                    persona_id: account_id.clone(),
+                    user_id: crate::db::DEFAULT_USER_ID,
+                    persona_id: account_id,
                     kind: "follow".to_string(),
                     from_persona_id: None,
                     from_remote_account_id: Some(remote.id),
@@ -764,11 +764,11 @@ async fn handle_follow(
             let pool = state.pool.clone();
             let actor = remote.actor_uri.clone();
             let push_domain = domain.clone();
-            let push_account_id = account_id.clone();
+            let push_account_id = account_id;
             tokio::spawn(async move {
                 crate::push::send_push_notification(
                     &pool,
-                    &push_account_id,
+                    push_account_id,
                     "follow",
                     "New follower",
                     &actor,
@@ -794,7 +794,7 @@ async fn handle_follow(
             .as_deref()
             .unwrap_or(&remote.inbox_url);
 
-        enqueue_activity(&state.pool, target_inbox, &account_id, &accept_activity).await?;
+        enqueue_activity(&state.pool, target_inbox, account_id, &accept_activity).await?;
 
         tracing::info!(
             follower = %remote.actor_uri,
@@ -839,7 +839,7 @@ async fn handle_undo_follow(
     if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
         fieldwork::followers_db::remove_follower(
-            &fw_pool(&state.pool), &account_id, remote.id,
+            &fw_pool(&state.pool), account_id, remote.id,
         ).await?;
 
         // Also remove any pending follow request.
@@ -1073,14 +1073,14 @@ async fn handle_create(
                 .await?;
 
                 // Create a mention notification (unless blocked/muted).
-                if !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await? {
+                if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
                     let notif_id = generate_id();
                     fieldwork::notifications_db::create_notification(
                         &fw_pool(&state.pool),
                         &fieldwork::notifications_db::NotificationRow {
                             id: notif_id,
-                            user_id: persona_id.clone(),
-                            persona_id: persona_id.clone(),
+                            user_id: crate::db::DEFAULT_USER_ID,
+                            persona_id: persona_id,
                             kind: "mention".to_string(),
                             from_persona_id: None,
                             from_remote_account_id: Some(remote.id),
@@ -1101,11 +1101,11 @@ async fn handle_create(
                     let pool = state.pool.clone();
                     let actor = remote.actor_uri.clone();
                     let push_domain = domain.clone();
-                    let push_persona_id = persona_id.clone();
+                    let push_persona_id = persona_id;
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            &push_persona_id,
+                            push_persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1167,15 +1167,15 @@ async fn handle_create(
                 .await?;
 
                 if exists.0 == 0
-                    && !is_blocked_or_muted(&state.pool, &persona_id, remote.id).await?
+                    && !is_blocked_or_muted(&state.pool, persona_id, remote.id).await?
                 {
                     let notif_id = generate_id();
                     fieldwork::notifications_db::create_notification(
                         &fw_pool(&state.pool),
                         &fieldwork::notifications_db::NotificationRow {
                             id: notif_id,
-                            user_id: persona_id.clone(),
-                            persona_id: persona_id.clone(),
+                            user_id: crate::db::DEFAULT_USER_ID,
+                            persona_id: persona_id,
                             kind: "mention".to_string(),
                             from_persona_id: None,
                             from_remote_account_id: Some(remote.id),
@@ -1196,11 +1196,11 @@ async fn handle_create(
                     let pool = state.pool.clone();
                     let actor = remote.actor_uri.clone();
                     let push_domain = domain.clone();
-                    let push_persona_id = persona_id.clone();
+                    let push_persona_id = persona_id;
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            &push_persona_id,
+                            push_persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1472,7 +1472,7 @@ async fn handle_like(
     }
 
     // Look up the local post.
-    let post_row: Option<(i64, String)> =
+    let post_row: Option<(i64, i64)> =
         // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
             sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(liked_uri)
@@ -1480,7 +1480,7 @@ async fn handle_like(
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
@@ -1491,8 +1491,8 @@ async fn handle_like(
                 &fw_pool(&state.pool),
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                    persona_id: account_id.clone(),
+                    user_id: crate::db::DEFAULT_USER_ID,
+                    persona_id: account_id,
                     kind: "favourite".to_string(),
                     from_persona_id: None,
                     from_remote_account_id: Some(remote.id),
@@ -1508,11 +1508,11 @@ async fn handle_like(
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
                 let push_domain = state.config.server.domain.clone();
-                let push_account_id = account_id.clone();
+                let push_account_id = account_id;
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
                         &pool,
-                        &push_account_id,
+                        push_account_id,
                         "favourite",
                         "New favourite",
                         &actor,
@@ -1546,7 +1546,7 @@ async fn handle_announce(
     }
 
     // Look up the local post being boosted.
-    let post_row: Option<(i64, String)> =
+    let post_row: Option<(i64, i64)> =
         // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
             sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(boosted_uri)
@@ -1554,7 +1554,7 @@ async fn handle_announce(
             .await?;
 
     if let Some((post_id, account_id)) = post_row {
-        if !is_blocked_or_muted(&state.pool, &account_id, remote.id).await? {
+        if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
             let now = chrono::Utc::now().timestamp();
             let notif_id = generate_id();
 
@@ -1562,8 +1562,8 @@ async fn handle_announce(
                 &fw_pool(&state.pool),
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                    persona_id: account_id.clone(),
+                    user_id: crate::db::DEFAULT_USER_ID,
+                    persona_id: account_id,
                     kind: "reblog".to_string(),
                     from_persona_id: None,
                     from_remote_account_id: Some(remote.id),
@@ -1579,11 +1579,11 @@ async fn handle_announce(
                 let pool = state.pool.clone();
                 let actor = remote.actor_uri.clone();
                 let push_domain = state.config.server.domain.clone();
-                let push_account_id = account_id.clone();
+                let push_account_id = account_id;
                 tokio::spawn(async move {
                     crate::push::send_push_notification(
                         &pool,
-                        &push_account_id,
+                        push_account_id,
                         "reblog",
                         "New boost",
                         &actor,
@@ -1737,7 +1737,7 @@ async fn handle_move(
     // Migrate follows: for each local account following the old remote account,
     // create a follow on the new account and enqueue a Follow activity.
     // REMAINING: follower sync query with JOIN — no fieldwork equivalent
-    let local_followers: Vec<(String, String, String)> = sqlx::query_as(
+    let local_followers: Vec<(i64, String, String)> = sqlx::query_as(
         "SELECT a.id, a.username, a.private_key_pem
          FROM follows f
          JOIN personas a ON a.id = f.persona_id
@@ -1753,7 +1753,7 @@ async fn handle_move(
     for (local_id, local_username, _) in &local_followers {
         // Insert new follow.
         fieldwork::follows_db::follow_remote(
-            &fw_pool(&state.pool), local_id, crate::db::DEFAULT_USER_ID, new_account.id, now,
+            &fw_pool(&state.pool), *local_id, crate::db::DEFAULT_USER_ID, new_account.id, now,
         ).await?;
 
         // Enqueue a Follow activity to the new actor.
@@ -1771,7 +1771,7 @@ async fn handle_move(
             .as_deref()
             .unwrap_or(&new_account.inbox_url);
 
-        enqueue_activity(&state.pool, target_inbox, local_id, &follow_activity).await?;
+        enqueue_activity(&state.pool, target_inbox, *local_id, &follow_activity).await?;
     }
 
     // Remove old follows.
@@ -1836,7 +1836,7 @@ async fn handle_accept(
     // This is a confirmation. If it's somehow not there, we can insert it.
     let now = chrono::Utc::now().timestamp();
     fieldwork::follows_db::follow_remote(
-        &fw_pool(&state.pool), &local_id, crate::db::DEFAULT_USER_ID, remote.id, now,
+        &fw_pool(&state.pool), local_id, crate::db::DEFAULT_USER_ID, remote.id, now,
     ).await?;
 
     // Check if this Accept is from a relay we subscribed to.
@@ -1888,7 +1888,7 @@ async fn handle_reject(
 
     // Remove the pending follow.
     fieldwork::follows_db::unfollow_remote(
-        &fw_pool(&state.pool), &local_id, remote.id,
+        &fw_pool(&state.pool), local_id, remote.id,
     ).await?;
 
     // Check if this Reject is from a relay we subscribed to.

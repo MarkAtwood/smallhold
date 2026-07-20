@@ -306,7 +306,7 @@ async fn profile_page(
     let persona = fieldwork::persona_db::get_persona_by_username(
         &fw_pool(&state.pool), &username,
     ).await?;
-    let aid = persona.as_ref().map(|p| p.id.as_str()).unwrap_or("");
+    let aid = persona.as_ref().map(|p| p.id).unwrap_or(0);
 
     let (post_count,): (i64,) = // REMAINING: ActivityPub query — can be converted to fieldwork
  sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
@@ -584,7 +584,7 @@ async fn followers_collection(
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let count = fieldwork::followers_db::follower_count(
-        &fw_pool(&state.pool), &persona.id,
+        &fw_pool(&state.pool), persona.id,
     ).await?;
 
     let domain = &state.config.server.domain;
@@ -607,7 +607,7 @@ async fn following_collection(
     .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let count = fieldwork::follows_db::following_count(
-        &fw_pool(&state.pool), &persona.id,
+        &fw_pool(&state.pool), persona.id,
     ).await?;
 
     let domain = &state.config.server.domain;

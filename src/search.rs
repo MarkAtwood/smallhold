@@ -46,7 +46,7 @@ impl SearchIndex {
         })
     }
 
-    pub async fn index_post(&self, post_id: i64, content: &str, account_id: &str) -> Result<()> {
+    pub async fn index_post(&self, post_id: i64, content: &str, account_id: i64) -> Result<()> {
         let mut writer = self.writer.lock().await;
         let id_term = Term::from_field_text(self.id_field, &post_id.to_string());
         writer.delete_term(id_term);

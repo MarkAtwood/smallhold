@@ -3,9 +3,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, S
 use sqlx::SqlitePool;
 use std::str::FromStr;
 
-/// The single owner user ID. Matches the legacy migration value and is used
-/// for all user-level columns in the canonical schema.
-pub const DEFAULT_USER_ID: &str = "legacy-owner";
+/// The single owner user ID. Matches fieldwork's LEGACY_SMALLHOLD migration
+/// value (1000000000001) and is used for all user-level columns.
+pub const DEFAULT_USER_ID: i64 = 1_000_000_000_001;
 
 /// Ensure the default single-user row exists. Called on startup and before
 /// persona creation on fresh installs.

@@ -143,7 +143,7 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
     let user_count = personas.len() as i64;
     let mut local_posts = 0i64;
     for p in &personas {
-        local_posts += fieldwork::posts_db::posts_count(&fwp, &p.id).await?;
+        local_posts += fieldwork::posts_db::posts_count(&fwp, p.id).await?;
     }
 
     let body = serde_json::json!({

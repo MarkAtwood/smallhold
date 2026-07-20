@@ -15,7 +15,7 @@ use crate::server::fw_pool;
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
-    sender_persona_id: String,
+    sender_persona_id: i64,
     activity_json: String,
     attempts: i32,
     private_key_pem: String,
@@ -48,7 +48,7 @@ fn now_secs() -> i64 {
 pub async fn enqueue_delivery(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_persona_id: &str,
+    sender_persona_id: i64,
     activity_json: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let json = serde_json::to_string(activity_json)?;
@@ -67,7 +67,7 @@ pub async fn enqueue_delivery(
 /// Fan-out an activity to every subscribed relay's inbox.
 pub async fn enqueue_to_relays(
     pool: &SqlitePool,
-    sender_persona_id: &str,
+    sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let relays = fieldwork::relay::get_accepted(&fw_pool(pool)).await?;
@@ -82,7 +82,7 @@ pub async fn enqueue_to_relays(
 /// Fan-out an activity to every follower's inbox (deduped by shared inbox).
 pub async fn enqueue_to_followers(
     pool: &SqlitePool,
-    sender_persona_id: &str,
+    sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let inboxes = fieldwork::followers_db::follower_inboxes(&fw_pool(pool), sender_persona_id).await?;
@@ -208,7 +208,7 @@ async fn deliver_one(
     // FEP-8fcf: Include Collection-Synchronization header with follower digest
     // for the target domain so the remote server can detect follower drift.
     if let Some(digest) =
-        crate::federation::compute_follower_sync_digest(pool, &row.sender_persona_id, &target_domain)
+        crate::federation::compute_follower_sync_digest(pool, row.sender_persona_id, &target_domain)
             .await
     {
         let sync_val =
@@ -294,7 +294,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
     let due_posts = fieldwork::scheduled_db::fetch_due(&fwp, now_ms).await?;
 
     for sched in due_posts {
-        if let Err(e) = create_scheduled_post(pool, domain, &sched.persona_id, &sched.params_json, now_ms).await
+        if let Err(e) = create_scheduled_post(pool, domain, sched.persona_id, &sched.params_json, now_ms).await
         {
             tracing::error!("Failed to create scheduled post {}: {e}", sched.id);
             // Delete the row anyway to avoid infinite retry of a broken scheduled post
@@ -312,7 +312,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
 async fn create_scheduled_post(
     pool: &SqlitePool,
     domain: &str,
-    account_id: &str,
+    account_id: i64,
     params_json: &str,
     now_ms: i64,
 ) -> anyhow::Result<()> {
@@ -348,8 +348,8 @@ async fn create_scheduled_post(
         &fw_pool(pool),
         &fieldwork::posts_db::PostRow {
             id: post_id,
-            user_id: crate::db::DEFAULT_USER_ID.to_string(),
-            persona_id: account_id.to_string(),
+            user_id: crate::db::DEFAULT_USER_ID,
+            persona_id: account_id,
             ap_id: ap_id.clone(),
             in_reply_to_id: None,
             in_reply_to_uri: None,
@@ -411,7 +411,7 @@ async fn create_scheduled_post(
             None => {
                 let local = fieldwork::persona_db::get_persona_by_username(&fwp, &m.username).await?;
                 if let Some(p) = local {
-                    fieldwork::mentions_db::add_mention(&fwp, post_id, None, Some(&p.id)).await?;
+                    fieldwork::mentions_db::add_mention(&fwp, post_id, None, Some(p.id)).await?;
                 }
             }
             Some(mention_domain) => {

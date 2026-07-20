@@ -38,7 +38,7 @@ pub struct AlertsConfig {
 #[allow(dead_code)]
 struct SubscriptionRow {
     id: i64,
-    user_id: String,
+    user_id: i64,
     endpoint: String,
     key_p256dh: String,
     key_auth: String,
@@ -93,7 +93,7 @@ pub async fn get_vapid_public_key(pool: &SqlitePool) -> String {
 
 pub async fn create_subscription(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     endpoint: &str,
     p256dh: &str,
     auth: &str,
@@ -110,7 +110,7 @@ pub async fn create_subscription(
         &fw_pool(pool),
         &fieldwork::push_db::PushSubscriptionRow {
             id,
-            user_id: account_id.to_string(),
+            user_id: account_id,
             endpoint: endpoint.to_string(),
             key_p256dh: p256dh.to_string(),
             key_auth: auth.to_string(),
@@ -133,7 +133,7 @@ pub async fn create_subscription(
 
 pub async fn get_subscription(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
 ) -> Result<Option<Value>, AppError> {
     let fw_row = fieldwork::push_db::get_subscription(&fw_pool(pool), account_id).await?;
 
@@ -161,7 +161,7 @@ pub async fn get_subscription(
 
 pub async fn update_subscription(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     alerts: &AlertsConfig,
     policy: &str,
 ) -> Result<Value, AppError> {
@@ -186,7 +186,7 @@ pub async fn update_subscription(
         .ok_or_else(|| AppError::not_found("No push subscription"))
 }
 
-pub async fn delete_subscription(pool: &SqlitePool, account_id: &str) -> Result<(), AppError> {
+pub async fn delete_subscription(pool: &SqlitePool, account_id: i64) -> Result<(), AppError> {
     fieldwork::push_db::delete_subscription(&fw_pool(pool), account_id).await?;
     Ok(())
 }
@@ -220,7 +220,7 @@ fn subscription_to_json(
 /// Send a push notification to a local account. Fire-and-forget; errors are logged, not propagated.
 pub async fn send_push_notification(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     notification_type: &str,
     title: &str,
     body: &str,
@@ -235,7 +235,7 @@ pub async fn send_push_notification(
 
 async fn send_push_inner(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     notification_type: &str,
     title: &str,
     body: &str,
@@ -533,7 +533,7 @@ async fn create_push_subscription(
 
     let result = create_subscription(
         &state.pool,
-        &auth.account_id,
+        auth.account_id,
         &endpoint,
         &p256dh,
         &auth_key,
@@ -549,7 +549,7 @@ async fn get_push_subscription(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    let sub = get_subscription(&state.pool, &auth.account_id)
+    let sub = get_subscription(&state.pool, auth.account_id)
         .await?
         .ok_or_else(|| AppError::not_found("No push subscription"))?;
     Ok(Json(sub))
@@ -567,7 +567,7 @@ async fn update_push_subscription(
         .and_then(|d| d.policy.as_deref())
         .unwrap_or("all");
 
-    let result = update_subscription(&state.pool, &auth.account_id, &alerts, policy).await?;
+    let result = update_subscription(&state.pool, auth.account_id, &alerts, policy).await?;
     Ok(Json(result))
 }
 
@@ -575,7 +575,7 @@ async fn delete_push_subscription(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    delete_subscription(&state.pool, &auth.account_id).await?;
+    delete_subscription(&state.pool, auth.account_id).await?;
     Ok(Json(json!({})))
 }
 

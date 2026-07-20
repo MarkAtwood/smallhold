@@ -88,7 +88,7 @@ struct ActiveKeyword {
 /// Load all active (non-expired) filters for the given account and context.
 async fn load_active_filters(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     context: &str,
 ) -> Result<Vec<ActiveFilter>, AppError> {
     let now = now_millis();
@@ -511,7 +511,7 @@ fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
 #[derive(Debug)]
 pub struct PostRow {
     pub id: i64,
-    pub persona_id: String,
+    pub persona_id: i64,
     pub ap_id: String,
     pub in_reply_to_id: Option<i64>,
     pub in_reply_to_uri: Option<String>,
@@ -531,7 +531,7 @@ pub struct PostRow {
 pub fn fw_to_local_post(p: &fieldwork::posts_db::PostRow) -> PostRow {
     PostRow {
         id: p.id,
-        persona_id: p.persona_id.clone(),
+        persona_id: p.persona_id,
         ap_id: p.ap_id.clone(),
         in_reply_to_id: p.in_reply_to_id,
         in_reply_to_uri: p.in_reply_to_uri.clone(),
@@ -743,9 +743,9 @@ pub async fn load_status(
     pool: &SqlitePool,
     post: &PostRow,
     domain: &str,
-    viewer_account_id: Option<&str>,
+    viewer_account_id: Option<i64>,
 ) -> Result<Value, AppError> {
-    let account = fetch_account_row(pool, &post.persona_id).await?;
+    let account = fetch_account_row(pool, post.persona_id).await?;
     let account_json = account_to_json(&account, domain);
 
     // Fetch media attachments
@@ -781,7 +781,7 @@ pub async fn load_status(
     // Fetch mentions for display
     let fwp_mentions = crate::server::fw_pool(pool);
     let fw_mentions = fieldwork::mentions_db::get_mentions(&fwp_mentions, post.id).await?;
-    let mention_rows: Vec<(Option<String>, Option<i64>)> = fw_mentions
+    let mention_rows: Vec<(Option<i64>, Option<i64>)> = fw_mentions
         .into_iter()
         .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
         .collect();
@@ -789,7 +789,7 @@ pub async fn load_status(
     let mut mention_vals = Vec::new();
     for (local_id, remote_id) in &mention_rows {
         if let Some(aid) = local_id {
-            if let Ok(a) = fetch_account_row(pool, aid).await {
+            if let Ok(a) = fetch_account_row(pool, *aid).await {
                 mention_vals.push(json!({
                     "id": a.id.to_string(),
                     "username": a.username,
@@ -878,7 +878,7 @@ pub async fn load_status(
             let pinned: (i64,) = sqlx::query_as(
                 "SELECT COUNT(*) FROM pinned_posts WHERE persona_id = ? AND post_id = ?",
             )
-            .bind(&post.persona_id)
+            .bind(post.persona_id)
             .bind(post.id)
             .fetch_one(pool)
             .await?;
@@ -940,7 +940,7 @@ async fn fetch_paginated_statuses(
     base_binds: &[String],
     params: &PaginationParams,
     domain: &str,
-    viewer_account_id: Option<&str>,
+    viewer_account_id: Option<i64>,
     order_asc: bool,
 ) -> Result<Vec<Value>, AppError> {
     let (page_clause, page_binds) = pagination_clause(params);
@@ -1002,7 +1002,7 @@ async fn create_status(
         let existing = fieldwork::idempotency_db::check_key(
             &crate::server::fw_pool(&state.pool),
             &key_hash,
-            &auth.account_id,
+            auth.account_id,
         )
         .await?;
 
@@ -1010,7 +1010,7 @@ async fn create_status(
             let post = get_local_post(&state.pool, post_id).await?
                 .ok_or_else(|| AppError::not_found("Post not found"))?;
 
-            let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+            let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
             return Ok((StatusCode::OK, Json(status)).into_response());
         }
     }
@@ -1085,8 +1085,8 @@ async fn create_status(
                 &crate::server::fw_pool(&state.pool),
                 &fieldwork::scheduled_db::ScheduledRow {
                     id: sched_id,
-                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                    persona_id: auth.account_id.clone(),
+                    user_id: crate::db::DEFAULT_USER_ID,
+                    persona_id: auth.account_id,
                     scheduled_at: scheduled_ms,
                     params_json: params_json.clone(),
                     created_at: now,
@@ -1137,8 +1137,8 @@ async fn create_status(
         &crate::server::fw_pool(&state.pool),
         &fieldwork::posts_db::PostRow {
             id: post_id,
-            user_id: crate::db::DEFAULT_USER_ID.to_string(),
-            persona_id: auth.account_id.clone(),
+            user_id: crate::db::DEFAULT_USER_ID,
+            persona_id: auth.account_id,
             ap_id: ap_id.clone(),
             in_reply_to_id,
             in_reply_to_uri: None,
@@ -1167,7 +1167,7 @@ async fn create_status(
         )
         .bind(post_id)
         .bind(mid)
-        .bind(&auth.account_id)
+        .bind(auth.account_id)
         .execute(&state.pool)
         .await?;
     }
@@ -1179,11 +1179,11 @@ async fn create_status(
                 let local_persona = fieldwork::persona_db::get_persona_by_username(
                     &crate::server::fw_pool(&state.pool), &m.username,
                 ).await?;
-                let local: Option<(String,)> = local_persona.map(|p| (p.id,));
+                let local: Option<(i64,)> = local_persona.map(|p| (p.id,));
                 if let Some((aid,)) = local {
                     fieldwork::mentions_db::add_mention(
                         &crate::server::fw_pool(&state.pool),
-                        post_id, None, Some(&aid),
+                        post_id, None, Some(aid),
                     ).await?;
 
                     // Notification for local mention (dedup via unique index)
@@ -1194,10 +1194,10 @@ async fn create_status(
                             &crate::server::fw_pool(&state.pool),
                             &fieldwork::notifications_db::NotificationRow {
                                 id: notif_id,
-                                user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                                persona_id: aid.clone(),
+                                user_id: crate::db::DEFAULT_USER_ID,
+                                persona_id: aid,
                                 kind: "mention".to_string(),
-                                from_persona_id: Some(auth.account_id.clone()),
+                                from_persona_id: Some(auth.account_id),
                                 from_remote_account_id: None,
                                 post_id: Some(post_id),
                                 remote_post_id: None,
@@ -1213,7 +1213,7 @@ async fn create_status(
                         tokio::spawn(async move {
                             crate::push::send_push_notification(
                                 &pool,
-                                &aid,
+                                aid,
                                 "mention",
                                 "New mention",
                                 &from_user,
@@ -1247,13 +1247,13 @@ async fn create_status(
     // Store idempotency key
     if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
-        fieldwork::idempotency_db::store_key(&fwp, &key_hash, &auth.account_id, post_id, now).await?;
+        fieldwork::idempotency_db::store_key(&fwp, &key_hash, auth.account_id, post_id, now).await?;
     }
 
     // REMAINING: update last_status_at — no fieldwork equivalent
     sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now)
-        .bind(&auth.account_id)
+        .bind(auth.account_id)
         .execute(&state.pool)
         .await?;
 
@@ -1420,7 +1420,7 @@ async fn create_status(
                     if let Some(ref ra) = remote_acct {
                         let inbox_url = ra.inbox_url.clone();
                         if let Err(e) =
-                            enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
                                 .await
                         {
                             tracing::error!("Failed to enqueue DM delivery to {}: {e}", inbox_url);
@@ -1429,12 +1429,12 @@ async fn create_status(
                 }
             }
         } else {
-            if let Err(e) = enqueue_to_followers(&state.pool, &auth.account_id, &activity).await {
+            if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
                 tracing::error!("Failed to enqueue Create activity: {e}");
             }
 
             if visibility == "public" {
-                if let Err(e) = enqueue_to_relays(&state.pool, &auth.account_id, &activity).await {
+                if let Err(e) = enqueue_to_relays(&state.pool, auth.account_id, &activity).await {
                     tracing::error!("Failed to enqueue Create activity to relays: {e}");
                 }
             }
@@ -1458,7 +1458,7 @@ async fn create_status(
     let post =
         get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
 
     // Publish streaming events
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1477,7 +1477,7 @@ async fn create_status(
 
     // Index for full-text search
     if let Some(ref search) = state.search {
-        let _ = search.index_post(post_id, &text, &auth.account_id).await;
+        let _ = search.index_post(post_id, &text, auth.account_id).await;
     }
 
     Ok((StatusCode::OK, Json(status)).into_response())
@@ -1508,7 +1508,7 @@ async fn delete_status(
     }
 
     // Build response before deletion (Mastodon returns the deleted status)
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
 
     // Enqueue Delete activity for federation
     let ap_id = format!(
@@ -1527,7 +1527,7 @@ async fn delete_status(
         }
     });
 
-    if let Err(e) = enqueue_to_followers(&state.pool, &auth.account_id, &delete_activity).await {
+    if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &delete_activity).await {
         tracing::error!("Failed to enqueue delete activity: {e}");
     }
 
@@ -1687,7 +1687,7 @@ async fn edit_status(
             None => {
                 let local = fieldwork::persona_db::get_persona_by_username(&fwp_edit, &m.username).await?;
                 if let Some(p) = local {
-                    fieldwork::mentions_db::add_mention(&fwp_edit, post_id, None, Some(&p.id)).await?;
+                    fieldwork::mentions_db::add_mention(&fwp_edit, post_id, None, Some(p.id)).await?;
                 }
             }
             Some(mention_domain) => {
@@ -1820,7 +1820,7 @@ async fn edit_status(
             }
         });
 
-        if let Err(e) = enqueue_to_followers(&state.pool, &auth.account_id, &activity).await {
+        if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
             tracing::error!("Failed to enqueue Update activity: {e}");
         }
     }
@@ -1829,7 +1829,7 @@ async fn edit_status(
     let updated_post =
         get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id)).await?;
 
     // Publish streaming status.update event
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1846,7 +1846,7 @@ async fn edit_status(
 
     // Update search index
     if let Some(ref search) = state.search {
-        let _ = search.index_post(post_id, &text, &auth.account_id).await;
+        let _ = search.index_post(post_id, &text, auth.account_id).await;
     }
 
     Ok(Json(status))
@@ -1901,7 +1901,7 @@ async fn status_history(
         return Err(AppError::not_found("Status not found"));
     }
 
-    let account = fetch_account_row(&state.pool, &post.persona_id).await?;
+    let account = fetch_account_row(&state.pool, post.persona_id).await?;
     let account_json = account_to_json(&account, domain);
 
     // Fetch previous versions from post_edits, ordered oldest first
@@ -2034,7 +2034,7 @@ async fn favourite(
 
     fieldwork::interactions_db::favourite(
         &crate::server::fw_pool(&state.pool),
-        crate::db::DEFAULT_USER_ID, &auth.account_id, Some(post_id), None, now,
+        crate::db::DEFAULT_USER_ID, auth.account_id, Some(post_id), None, now,
     ).await?;
 
     if post.persona_id != auth.account_id {
@@ -2043,10 +2043,10 @@ async fn favourite(
             &crate::server::fw_pool(&state.pool),
             &fieldwork::notifications_db::NotificationRow {
                 id: notif_id,
-                user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                persona_id: post.persona_id.clone(),
+                user_id: crate::db::DEFAULT_USER_ID,
+                persona_id: post.persona_id,
                 kind: "favourite".to_string(),
-                from_persona_id: Some(auth.account_id.clone()),
+                from_persona_id: Some(auth.account_id),
                 from_remote_account_id: None,
                 post_id: Some(post_id),
                 remote_post_id: None,
@@ -2057,13 +2057,13 @@ async fn favourite(
 
         // Fire-and-forget push notification
         let pool = state.pool.clone();
-        let target = post.persona_id.clone();
+        let target = post.persona_id;
         let from_user = auth.username.clone();
         let push_domain = domain.clone();
         tokio::spawn(async move {
             crate::push::send_push_notification(
                 &pool,
-                &target,
+                target,
                 "favourite",
                 "New favourite",
                 &from_user,
@@ -2076,7 +2076,7 @@ async fn favourite(
 
     // Enqueue outbound Like activity
     {
-        let post_author = fetch_account_row(&state.pool, &post.persona_id).await?;
+        let post_author = fetch_account_row(&state.pool, post.persona_id).await?;
         let actor = format!("https://{domain}/users/{}", auth.username);
         let object_uri = format!(
             "https://{domain}/users/{}/statuses/{post_id}",
@@ -2110,7 +2110,7 @@ async fn favourite(
                     });
                     if let Some((inbox_url,)) = inbox {
                         if let Err(e) =
-                            enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
                                 .await
                         {
                             tracing::error!("Failed to enqueue Like activity: {e}");
@@ -2121,7 +2121,7 @@ async fn favourite(
         }
     }
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2140,12 +2140,12 @@ async fn unfavourite(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unfavourite(
-        &crate::server::fw_pool(&state.pool), &auth.account_id, Some(post_id), None,
+        &crate::server::fw_pool(&state.pool), auth.account_id, Some(post_id), None,
     ).await?;
 
     // Enqueue outbound Undo{Like} activity
     {
-        let post_author = fetch_account_row(&state.pool, &post.persona_id).await?;
+        let post_author = fetch_account_row(&state.pool, post.persona_id).await?;
         let actor = format!("https://{domain}/users/{}", auth.username);
         let object_uri = format!(
             "https://{domain}/users/{}/statuses/{post_id}",
@@ -2180,7 +2180,7 @@ async fn unfavourite(
                     });
                     if let Some((inbox_url,)) = inbox {
                         if let Err(e) =
-                            enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
+                            enqueue_delivery(&state.pool, &inbox_url, auth.account_id, &activity)
                                 .await
                         {
                             tracing::error!("Failed to enqueue Undo Like activity: {e}");
@@ -2191,7 +2191,7 @@ async fn unfavourite(
         }
     }
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2215,7 +2215,7 @@ async fn reblog(
     let existing: Option<(i64,)> =
         // REMAINING: boost existence check — no fieldwork equivalent
         sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-            .bind(&auth.account_id)
+            .bind(auth.account_id)
             .bind(post_id)
             .fetch_optional(&state.pool)
             .await?;
@@ -2230,8 +2230,8 @@ async fn reblog(
             &crate::server::fw_pool(&state.pool),
             &fieldwork::posts_db::PostRow {
                 id: new_id,
-                user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                persona_id: auth.account_id.clone(),
+                user_id: crate::db::DEFAULT_USER_ID,
+                persona_id: auth.account_id,
                 ap_id: ap_id.clone(),
                 in_reply_to_id: None,
                 in_reply_to_uri: None,
@@ -2257,10 +2257,10 @@ async fn reblog(
                 &crate::server::fw_pool(&state.pool),
                 &fieldwork::notifications_db::NotificationRow {
                     id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
-                    persona_id: original.persona_id.clone(),
+                    user_id: crate::db::DEFAULT_USER_ID,
+                    persona_id: original.persona_id,
                     kind: "reblog".to_string(),
-                    from_persona_id: Some(auth.account_id.clone()),
+                    from_persona_id: Some(auth.account_id),
                     from_remote_account_id: None,
                     post_id: Some(post_id),
                     remote_post_id: None,
@@ -2271,13 +2271,13 @@ async fn reblog(
 
             // Fire-and-forget push notification
             let pool = state.pool.clone();
-            let target = original.persona_id.clone();
+            let target = original.persona_id;
             let from_user = auth.username.clone();
             let push_domain = domain.clone();
             tokio::spawn(async move {
                 crate::push::send_push_notification(
                     &pool,
-                    &target,
+                    target,
                     "reblog",
                     "New boost",
                     &from_user,
@@ -2290,7 +2290,7 @@ async fn reblog(
 
         // Enqueue outbound Announce activity
         {
-            let post_author = fetch_account_row(&state.pool, &original.persona_id).await?;
+            let post_author = fetch_account_row(&state.pool, original.persona_id).await?;
             let actor = format!("https://{domain}/users/{}", auth.username);
             let object_uri = format!(
                 "https://{domain}/users/{}/statuses/{post_id}",
@@ -2309,7 +2309,7 @@ async fn reblog(
             });
 
             // Deliver to followers
-            if let Err(e) = enqueue_to_followers(&state.pool, &auth.account_id, &activity).await {
+            if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await {
                 tracing::error!("Failed to enqueue Announce activity to followers: {e}");
             }
 
@@ -2337,7 +2337,7 @@ async fn reblog(
                             if let Err(e) = enqueue_delivery(
                                 &state.pool,
                                 &inbox_url,
-                                &auth.account_id,
+                                auth.account_id,
                                 &activity,
                             )
                             .await
@@ -2356,7 +2356,7 @@ async fn reblog(
     let boost_post =
         get_local_post(&state.pool, boost_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2373,7 +2373,7 @@ async fn unreblog(
     let boost: Option<(i64,)> =
         // REMAINING: boost existence check — no fieldwork equivalent
         sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
-            .bind(&auth.account_id)
+            .bind(auth.account_id)
             .bind(post_id)
             .fetch_optional(&state.pool)
             .await?;
@@ -2384,7 +2384,7 @@ async fn unreblog(
             let original = get_local_post(&state.pool, post_id).await?;
 
             if let Some(ref orig) = original {
-                let post_author = fetch_account_row(&state.pool, &orig.persona_id).await?;
+                let post_author = fetch_account_row(&state.pool, orig.persona_id).await?;
                 let actor = format!("https://{domain}/users/{}", auth.username);
                 let object_uri = format!(
                     "https://{domain}/users/{}/statuses/{post_id}",
@@ -2406,7 +2406,7 @@ async fn unreblog(
                 });
 
                 // Deliver Undo to followers
-                if let Err(e) = enqueue_to_followers(&state.pool, &auth.account_id, &activity).await
+                if let Err(e) = enqueue_to_followers(&state.pool, auth.account_id, &activity).await
                 {
                     tracing::error!("Failed to enqueue Undo Announce to followers: {e}");
                 }
@@ -2432,7 +2432,7 @@ async fn unreblog(
                                 if let Err(e) = enqueue_delivery(
                                     &state.pool,
                                     &inbox_url,
-                                    &auth.account_id,
+                                    auth.account_id,
                                     &activity,
                                 )
                                 .await
@@ -2453,7 +2453,7 @@ async fn unreblog(
         sqlx::query(
             "DELETE FROM notifications WHERE kind = 'reblog' AND from_persona_id = ? AND post_id = ?",
         )
-        .bind(&auth.account_id)
+        .bind(auth.account_id)
         .bind(post_id)
         .execute(&state.pool)
         .await?;
@@ -2469,7 +2469,7 @@ async fn unreblog(
         get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2491,10 +2491,10 @@ async fn bookmark(
 
     fieldwork::interactions_db::bookmark(
         &crate::server::fw_pool(&state.pool),
-        crate::db::DEFAULT_USER_ID, &auth.account_id, Some(post_id), None, now,
+        crate::db::DEFAULT_USER_ID, auth.account_id, Some(post_id), None, now,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2513,10 +2513,10 @@ async fn unbookmark(
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unbookmark(
-        &crate::server::fw_pool(&state.pool), &auth.account_id, Some(post_id), None,
+        &crate::server::fw_pool(&state.pool), auth.account_id, Some(post_id), None,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -2536,7 +2536,7 @@ async fn timeline_home(
         OR (visibility IN ('public', 'unlisted') AND id IN \
         (SELECT pt.post_id FROM post_tags pt JOIN followed_tags ft \
         ON pt.tag = ft.tag WHERE ft.user_id = ?)))";
-    let base_binds = vec![auth.account_id.clone(), auth.account_id.clone(), auth.account_id.clone()];
+    let base_binds = vec![auth.account_id.to_string(), auth.account_id.to_string(), auth.account_id.to_string()];
 
     let mut statuses = fetch_paginated_statuses(
         &state.pool,
@@ -2544,7 +2544,7 @@ async fn timeline_home(
         &base_binds,
         &params,
         domain,
-        Some(auth.account_id.as_str()),
+        Some(auth.account_id),
         false,
     )
     .await?;
@@ -2553,7 +2553,7 @@ async fn timeline_home(
     let limit = params.limit.unwrap_or(20).clamp(1, 40);
     let remote_statuses = fetch_remote_timeline(
         &state.pool,
-        &auth.account_id,
+        auth.account_id,
         limit,
         domain,
     )
@@ -2566,7 +2566,7 @@ async fn timeline_home(
     });
     statuses.truncate(limit as usize);
 
-    let filters = load_active_filters(&state.pool, &auth.account_id, "home").await?;
+    let filters = load_active_filters(&state.pool, auth.account_id, "home").await?;
     apply_filters(&mut statuses, &filters);
 
     let url_base = format!("https://{domain}/api/v1/timelines/home");
@@ -2580,7 +2580,7 @@ async fn timeline_home(
 /// Fetch remote posts from accounts the user follows.
 async fn fetch_remote_timeline(
     pool: &SqlitePool,
-    account_id: &str,
+    account_id: i64,
     limit: i64,
     domain: &str,
 ) -> Result<Vec<Value>, AppError> {
@@ -2801,7 +2801,7 @@ async fn timeline_list(
 
     let base_binds = match replies_policy.as_str() {
         "none" => vec![list_id.to_string()],
-        "followed" => vec![list_id.to_string(), auth.account_id.clone()],
+        "followed" => vec![list_id.to_string(), auth.account_id.to_string()],
         _ => vec![list_id.to_string(), list_id.to_string()],
     };
 
@@ -2811,7 +2811,7 @@ async fn timeline_list(
         &base_binds,
         &params,
         domain,
-        Some(auth.account_id.as_str()),
+        Some(auth.account_id),
         false,
     )
     .await?;
@@ -2832,9 +2832,9 @@ async fn timeline_list(
 struct NotificationRow {
     id: i64,
     #[allow(dead_code)]
-    persona_id: String,
+    persona_id: i64,
     kind: String,
-    from_persona_id: Option<String>,
+    from_persona_id: Option<i64>,
     from_remote_account_id: Option<i64>,
     post_id: Option<i64>,
     created_at: i64,
@@ -2859,10 +2859,10 @@ async fn serialize_notification(
     pool: &SqlitePool,
     notif: &NotificationRow,
     domain: &str,
-    viewer_account_id: &str,
+    viewer_account_id: i64,
 ) -> Result<Value, AppError> {
     let from_account = if let Some(ref aid) = notif.from_persona_id {
-        let a = fetch_account_row(pool, aid).await?;
+        let a = fetch_account_row(pool, *aid).await?;
         account_to_json(&a, domain)
     } else if let Some(rid) = notif.from_remote_account_id {
         // REMAINING: remote account by ID — actor_cache has no get_by_id
@@ -2952,7 +2952,7 @@ async fn get_notifications(
 
     // REMAINING: paginated notification query — no fieldwork equivalent
     let mut query = sqlx::query(&sql);
-    query = query.bind(&auth.account_id);
+    query = query.bind(auth.account_id);
     for b in &page_binds {
         query = query.bind(b);
     }
@@ -2963,7 +2963,7 @@ async fn get_notifications(
 
     let mut values = Vec::with_capacity(notifs.len());
     for n in &notifs {
-        let v = serialize_notification(&state.pool, n, domain, &auth.account_id).await?;
+        let v = serialize_notification(&state.pool, n, domain, auth.account_id).await?;
         values.push(v);
     }
 
@@ -2997,13 +2997,13 @@ async fn get_notification(
          FROM notifications WHERE id = ? AND persona_id = ?",
     )
     .bind(notif_id)
-    .bind(&auth.account_id)
+    .bind(auth.account_id)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("Notification not found"))?;
     let notif = NotificationRow::from_sqlx_row(notif_raw);
 
-    let value = serialize_notification(&state.pool, &notif, domain, &auth.account_id).await?;
+    let value = serialize_notification(&state.pool, &notif, domain, auth.account_id).await?;
     Ok(Json(value))
 }
 
@@ -3012,7 +3012,7 @@ async fn clear_notifications(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     fieldwork::notifications_db::clear_notifications(
-        &crate::server::fw_pool(&state.pool), &auth.account_id,
+        &crate::server::fw_pool(&state.pool), auth.account_id,
     ).await?;
 
     Ok(Json(json!({})))
@@ -3030,7 +3030,7 @@ async fn dismiss_notification(
     // REMAINING: dismiss single notification — fieldwork only has clear_notifications
     sqlx::query("DELETE FROM notifications WHERE id = ? AND persona_id = ?")
         .bind(notif_id)
-        .bind(&auth.account_id)
+        .bind(auth.account_id)
         .execute(&state.pool)
         .await?;
 
@@ -3062,10 +3062,10 @@ async fn pin_status(
     }
 
     fieldwork::interactions_db::pin_post(
-        &crate::server::fw_pool(&state.pool), &auth.account_id, post_id, now,
+        &crate::server::fw_pool(&state.pool), auth.account_id, post_id, now,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 
@@ -3088,10 +3088,10 @@ async fn unpin_status(
     }
 
     fieldwork::interactions_db::unpin_post(
-        &crate::server::fw_pool(&state.pool), &auth.account_id, post_id,
+        &crate::server::fw_pool(&state.pool), auth.account_id, post_id,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
     Ok(Json(status))
 }
 // ---------------------------------------------------------------------------
@@ -3163,7 +3163,7 @@ async fn list_scheduled_statuses(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let sched_rows = fieldwork::scheduled_db::list_scheduled(
-        &crate::server::fw_pool(&state.pool), &auth.account_id,
+        &crate::server::fw_pool(&state.pool), auth.account_id,
     ).await?;
 
     let items: Vec<Value> = sched_rows
@@ -3280,24 +3280,24 @@ async fn conversation_participants(
     pool: &SqlitePool,
     post: &PostRow,
     domain: &str,
-    current_account_id: &str,
+    current_account_id: i64,
 ) -> Result<Vec<Value>, AppError> {
     let mut accounts = Vec::new();
     if post.persona_id != current_account_id {
-        let author = fetch_account_row(pool, &post.persona_id).await?;
+        let author = fetch_account_row(pool, post.persona_id).await?;
         accounts.push(account_to_json(&author, domain));
     }
     // Add mentioned accounts (excluding current user)
     let fwp_cp = crate::server::fw_pool(pool);
     let cp_mentions = fieldwork::mentions_db::get_mentions(&fwp_cp, post.id).await?;
-    let mention_rows: Vec<(Option<String>, Option<i64>)> = cp_mentions
+    let mention_rows: Vec<(Option<i64>, Option<i64>)> = cp_mentions
         .into_iter()
         .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
         .collect();
     for (local_id, remote_id) in &mention_rows {
         if let Some(aid) = local_id {
-            if aid != current_account_id {
-                if let Ok(a) = fetch_account_row(pool, aid).await {
+            if *aid != current_account_id {
+                if let Ok(a) = fetch_account_row(pool, *aid).await {
                     accounts.push(account_to_json(&a, domain));
                 }
             }
@@ -3373,9 +3373,9 @@ async fn list_conversations(
 
     // REMAINING: reason varies
     let mut query = sqlx::query(&sql);
-    query = query.bind(&auth.account_id);
-    query = query.bind(&auth.account_id);
-    query = query.bind(&auth.account_id);
+    query = query.bind(auth.account_id);
+    query = query.bind(auth.account_id);
+    query = query.bind(auth.account_id);
     for b in &page_binds {
         query = query.bind(b);
     }
@@ -3390,15 +3390,15 @@ async fn list_conversations(
     // mentions/accounts for all post IDs would eliminate the per-post queries.
     let mut conversations = Vec::with_capacity(posts.len());
     for p in &posts {
-        let status = load_status(&state.pool, p, domain, Some(auth.account_id.as_str())).await?;
+        let status = load_status(&state.pool, p, domain, Some(auth.account_id)).await?;
 
         // Determine unread: not in conversation_read_markers
         let is_read = fieldwork::conversations_db::is_read(
-            &crate::server::fw_pool(&state.pool), &auth.account_id, p.id,
+            &crate::server::fw_pool(&state.pool), auth.account_id, p.id,
         ).await?;
         let unread = !is_read && p.persona_id != auth.account_id;
 
-        let accounts = conversation_participants(&state.pool, p, domain, &auth.account_id).await?;
+        let accounts = conversation_participants(&state.pool, p, domain, auth.account_id).await?;
 
         conversations.push(json!({
             "id": p.id.to_string(),
@@ -3443,7 +3443,7 @@ async fn mark_conversation_read(
     let is_involved = post.persona_id == auth.account_id || {
         let fwp_m = crate::server::fw_pool(&state.pool);
         let m_rows = fieldwork::mentions_db::get_mentions(&fwp_m, post_id).await?;
-        m_rows.iter().any(|m| m.mentioned_persona_id.as_deref() == Some(&auth.account_id))
+        m_rows.iter().any(|m| m.mentioned_persona_id == Some(auth.account_id))
     };
 
     if !is_involved {
@@ -3453,14 +3453,14 @@ async fn mark_conversation_read(
     // Mark as read
     fieldwork::conversations_db::mark_read(
         &crate::server::fw_pool(&state.pool),
-        &auth.account_id,
+        auth.account_id,
         post_id,
     )
     .await?;
 
     // Return the updated conversation object
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
-    let accounts = conversation_participants(&state.pool, &post, domain, &auth.account_id).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let accounts = conversation_participants(&state.pool, &post, domain, auth.account_id).await?;
 
     Ok(Json(json!({
         "id": post.id.to_string(),
@@ -3482,7 +3482,7 @@ async fn delete_conversation(
     // Mark as hidden for this user (don't delete the actual post)
     fieldwork::conversations_db::hide(
         &crate::server::fw_pool(&state.pool),
-        &auth.account_id,
+        auth.account_id,
         post_id,
     )
     .await?;
@@ -3685,7 +3685,7 @@ mod tests {
     fn serialize_status_shape() {
         let post = PostRow {
             id: 12345,
-            persona_id: "1".to_string(),
+            persona_id: 1,
             ap_id: "https://example.com/users/writer/statuses/12345".to_string(),
             in_reply_to_id: None,
             in_reply_to_uri: None,

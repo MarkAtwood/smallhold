@@ -4,6 +4,7 @@ pub mod cards;
 pub mod cli;
 pub mod config;
 pub mod db;
+pub mod db_extras;
 pub mod delivery;
 pub mod did;
 pub mod discovery;
