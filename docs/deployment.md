@@ -111,12 +111,24 @@ server {
 4. **Rate limiting on auth endpoints** — `POST /oauth/authorize`, `POST /oauth/token`, `POST /oauth/authorize/webauthn/*`, `POST /admin/webauthn/register/begin` — recommend 5 requests/minute per IP
 5. **Connection limits on streaming** — recommend 4 concurrent connections per IP to `/api/v1/streaming`
 6. **Request body size** — 40MB (matches `limits.max_media_mb` default)
+7. **Security headers** — the application does not set these; the proxy must:
+   - `X-Content-Type-Options: nosniff`
+   - `X-Frame-Options: DENY`
+   - `Referrer-Policy: same-origin`
+   - `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+   - `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors 'none'` (on HTML pages)
+8. **Cache-Control** — the proxy should set per-path caching:
+   - `/api/*`, `/oauth/*`, `/inbox`: `no-store`
+   - `/.well-known/*`, `/nodeinfo`: `public, max-age=300`
+   - `/users/*`: `public, max-age=60`
+   - `/media/*`: `public, max-age=31536000, immutable`
 
 ### What happens without a proxy
 
 - No TLS — federation peers will refuse to connect (ActivityPub requires HTTPS)
 - No rate limiting — brute-force attacks on admin password are uncapped
 - No connection limits — a single client can exhaust server resources via streaming
+- No security headers — XSS, clickjacking, MIME sniffing attacks possible
 - `X-Real-IP` will be missing — all requests appear from 127.0.0.1
 
 ## Configuration
