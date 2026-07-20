@@ -97,7 +97,7 @@ async fn user_inbox(
     request: axum::extract::Request,
 ) -> Result<impl IntoResponse, AppError> {
     // Verify the target account exists.
-    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
+    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas WHERE username = ?")
         .bind(&username)
         .fetch_one(&state.pool)
         .await?;
@@ -223,7 +223,7 @@ async fn check_follower_sync(state: &AppState, header_val: &str, actor_uri: &str
 
     // Look up local account.
     let account_row: Option<(i64,)> =
-        match sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+        match sqlx::query_as("SELECT id FROM personas WHERE username = ?")
             .bind(username)
             .fetch_optional(&state.pool)
             .await
@@ -463,7 +463,7 @@ async fn lookup_by_key_id(
 /// Uses the first local account found.
 async fn get_signing_credentials(state: &AppState) -> Result<(String, String), AppError> {
     let row: Option<(String, String)> =
-        sqlx::query_as("SELECT username, private_key_pem FROM accounts LIMIT 1")
+        sqlx::query_as("SELECT username, private_key_pem FROM personas LIMIT 1")
             .fetch_optional(&state.pool)
             .await?;
 
@@ -667,7 +667,7 @@ async fn resolve_local_account(
     };
 
     let row: Option<(i64, String, bool)> =
-        sqlx::query_as("SELECT id, username, is_locked FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id, username, is_locked FROM personas WHERE username = ? LIMIT 1")
             .bind(username)
             .fetch_optional(pool)
             .await?;
@@ -679,10 +679,10 @@ async fn resolve_local_account(
 async fn enqueue_activity(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_account_id: i64,
+    sender_persona_id: i64,
     activity: &Value,
 ) -> Result<(), AppError> {
-    delivery::enqueue_delivery(pool, target_inbox, sender_account_id, activity)
+    delivery::enqueue_delivery(pool, target_inbox, sender_persona_id, activity)
         .await
         .map_err(|e| AppError::internal(format!("enqueue delivery: {e}")))
 }
@@ -690,16 +690,16 @@ async fn enqueue_activity(
 /// Check if a remote account is blocked or muted by a local account.
 async fn is_blocked_or_muted(
     pool: &SqlitePool,
-    local_account_id: i64,
+    persona_id: i64,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
     let row: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM blocks WHERE account_id = ? AND blocked_remote_id = ?
-         UNION SELECT 1 FROM mutes WHERE account_id = ? AND muted_remote_id = ?",
+        "SELECT 1 FROM blocks WHERE persona_id = ? AND target_remote_id = ?
+         UNION SELECT 1 FROM mutes WHERE persona_id = ? AND target_remote_id = ?",
     )
-    .bind(local_account_id)
+    .bind(persona_id)
     .bind(remote_account_id)
-    .bind(local_account_id)
+    .bind(persona_id)
     .bind(remote_account_id)
     .fetch_optional(pool)
     .await?;
@@ -742,7 +742,7 @@ async fn handle_follow(
         let req_id = generate_id();
 
         sqlx::query(
-            "INSERT OR IGNORE INTO follow_requests (id, requester_remote_id, target_account_id, ap_id, created_at)
+            "INSERT OR IGNORE INTO follow_requests (id, requester_remote_id, target_persona_id, ap_id, created_at)
              VALUES (?, ?, ?, ?, ?)",
         )
         .bind(req_id)
@@ -761,10 +761,11 @@ async fn handle_follow(
     } else {
         // Auto-accept: insert into followers.
         sqlx::query(
-            "INSERT OR IGNORE INTO followers (local_account_id, remote_account_id, accepted_at)
-             VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at)
+             VALUES (?, ?, ?, ?)",
         )
         .bind(account_id)
+        .bind(crate::db::DEFAULT_USER_ID)
         .bind(remote.id)
         .bind(now)
         .execute(&state.pool)
@@ -774,10 +775,11 @@ async fn handle_follow(
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
             let notif_id = generate_id();
             sqlx::query(
-                "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, created_at)
-                 VALUES (?, ?, 'follow', ?, ?)",
+                "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, created_at)
+                 VALUES (?, ?, ?, 'follow', ?, ?)",
             )
             .bind(notif_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(account_id)
             .bind(remote.id)
             .bind(now)
@@ -861,7 +863,7 @@ async fn handle_undo_follow(
     let domain = &state.config.server.domain;
     if let Some((account_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await?
     {
-        sqlx::query("DELETE FROM followers WHERE local_account_id = ? AND remote_account_id = ?")
+        sqlx::query("DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?")
             .bind(account_id)
             .bind(remote.id)
             .execute(&state.pool)
@@ -869,7 +871,7 @@ async fn handle_undo_follow(
 
         // Also remove any pending follow request.
         sqlx::query(
-            "DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_account_id = ?",
+            "DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?",
         )
         .bind(remote.id)
         .bind(account_id)
@@ -878,7 +880,7 @@ async fn handle_undo_follow(
 
         tracing::info!(
             follower = %remote.actor_uri,
-            target_account_id = account_id,
+            target_persona_id = account_id,
             "unfollowed"
         );
     }
@@ -897,7 +899,7 @@ async fn handle_undo_like(
     if !liked_uri.is_empty() {
         // Find local post by ap_id, then delete the favourite notification.
         let post_row: Option<(i64, i64)> =
-            sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
                 .bind(liked_uri)
                 .fetch_optional(&state.pool)
                 .await?;
@@ -905,7 +907,7 @@ async fn handle_undo_like(
         if let Some((post_id, account_id)) = post_row {
             sqlx::query(
                 "DELETE FROM notifications
-                 WHERE account_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
+                 WHERE persona_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
             )
             .bind(account_id)
             .bind(remote.id)
@@ -927,7 +929,7 @@ async fn handle_undo_announce(
     let boosted_uri = object_id(&inner["object"]).unwrap_or("");
     if !boosted_uri.is_empty() {
         let post_row: Option<(i64, i64)> =
-            sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
                 .bind(boosted_uri)
                 .fetch_optional(&state.pool)
                 .await?;
@@ -935,7 +937,7 @@ async fn handle_undo_announce(
         if let Some((post_id, account_id)) = post_row {
             sqlx::query(
                 "DELETE FROM notifications
-                 WHERE account_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
+                 WHERE persona_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
             )
             .bind(account_id)
             .bind(remote.id)
@@ -1076,27 +1078,27 @@ async fn handle_create(
                 None => continue,
             };
 
-            if let Some((local_account_id, _, _)) =
+            if let Some((persona_id, _, _)) =
                 resolve_local_account(&state.pool, domain, href).await?
             {
                 sqlx::query(
-                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_account_id)
+                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
                      VALUES (?, ?)",
                 )
                 .bind(post_id)
-                .bind(local_account_id)
+                .bind(persona_id)
                 .execute(&state.pool)
                 .await?;
 
                 // Create a mention notification (unless blocked/muted).
-                if !is_blocked_or_muted(&state.pool, local_account_id, remote.id).await? {
+                if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
                     let notif_id = generate_id();
                     sqlx::query(
-                        "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, remote_post_id, created_at)
-                         VALUES (?, ?, 'mention', ?, ?, ?)",
+                        "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, remote_post_id, created_at)
+                         VALUES (?, ?, ?, 'mention', ?, ?, ?)",
                     )
                     .bind(notif_id)
-                    .bind(local_account_id)
+                    .bind(persona_id)
                     .bind(remote.id)
                     .bind(post_id)
                     .bind(now)
@@ -1106,7 +1108,7 @@ async fn handle_create(
                     publish(StreamEvent {
                         event_type: "notification".into(),
                         payload: notif_id.to_string(),
-                        channel: format!("user:{}", local_account_id),
+                        channel: format!("user:{}", persona_id),
                     });
 
                     // Fire-and-forget push notification
@@ -1116,7 +1118,7 @@ async fn handle_create(
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            local_account_id,
+                            persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1152,39 +1154,39 @@ async fn handle_create(
     if visibility == "direct" {
         let recipients = collect_recipients(activity);
         for uri in recipients {
-            if let Some((local_account_id, _, _)) =
+            if let Some((persona_id, _, _)) =
                 resolve_local_account(&state.pool, domain, uri).await?
             {
                 // Insert mention (ignore if already exists from tag processing).
                 sqlx::query(
-                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_account_id)
+                    "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
                      VALUES (?, ?)",
                 )
                 .bind(post_id)
-                .bind(local_account_id)
+                .bind(persona_id)
                 .execute(&state.pool)
                 .await?;
 
                 // Check if notification already exists for this account+post before inserting.
                 let exists: (i64,) = sqlx::query_as(
                     "SELECT COUNT(*) FROM notifications
-                     WHERE account_id = ? AND kind = 'mention' AND remote_post_id = ?",
+                     WHERE persona_id = ? AND kind = 'mention' AND remote_post_id = ?",
                 )
-                .bind(local_account_id)
+                .bind(persona_id)
                 .bind(post_id)
                 .fetch_one(&state.pool)
                 .await?;
 
                 if exists.0 == 0
-                    && !is_blocked_or_muted(&state.pool, local_account_id, remote.id).await?
+                    && !is_blocked_or_muted(&state.pool, persona_id, remote.id).await?
                 {
                     let notif_id = generate_id();
                     sqlx::query(
-                        "INSERT INTO notifications (id, account_id, kind, from_remote_account_id, remote_post_id, created_at)
-                         VALUES (?, ?, 'mention', ?, ?, ?)",
+                        "INSERT INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, remote_post_id, created_at)
+                         VALUES (?, ?, ?, 'mention', ?, ?, ?)",
                     )
                     .bind(notif_id)
-                    .bind(local_account_id)
+                    .bind(persona_id)
                     .bind(remote.id)
                     .bind(post_id)
                     .bind(now)
@@ -1194,7 +1196,7 @@ async fn handle_create(
                     publish(StreamEvent {
                         event_type: "notification".into(),
                         payload: notif_id.to_string(),
-                        channel: format!("user:{}", local_account_id),
+                        channel: format!("user:{}", persona_id),
                     });
 
                     // Fire-and-forget push notification
@@ -1204,7 +1206,7 @@ async fn handle_create(
                     tokio::spawn(async move {
                         crate::push::send_push_notification(
                             &pool,
-                            local_account_id,
+                            persona_id,
                             "mention",
                             "New mention",
                             &actor,
@@ -1465,7 +1467,7 @@ async fn handle_like(
 
     // Look up the local post.
     let post_row: Option<(i64, i64)> =
-        sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+        sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(liked_uri)
             .fetch_optional(&state.pool)
             .await?;
@@ -1476,10 +1478,11 @@ async fn handle_like(
             let notif_id = generate_id();
 
             let result = sqlx::query(
-                "INSERT OR IGNORE INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
-                 VALUES (?, ?, 'favourite', ?, ?, ?)",
+                "INSERT OR IGNORE INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, post_id, created_at)
+                 VALUES (?, ?, ?, 'favourite', ?, ?, ?)",
             )
             .bind(notif_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(account_id)
             .bind(remote.id)
             .bind(post_id)
@@ -1530,7 +1533,7 @@ async fn handle_announce(
 
     // Look up the local post being boosted.
     let post_row: Option<(i64, i64)> =
-        sqlx::query_as("SELECT id, account_id FROM posts WHERE ap_id = ? LIMIT 1")
+        sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(boosted_uri)
             .fetch_optional(&state.pool)
             .await?;
@@ -1541,10 +1544,11 @@ async fn handle_announce(
             let notif_id = generate_id();
 
             let result = sqlx::query(
-                "INSERT OR IGNORE INTO notifications (id, account_id, kind, from_remote_account_id, post_id, created_at)
-                 VALUES (?, ?, 'reblog', ?, ?, ?)",
+                "INSERT OR IGNORE INTO notifications (id, user_id, persona_id, kind, from_remote_account_id, post_id, created_at)
+                 VALUES (?, ?, ?, 'reblog', ?, ?, ?)",
             )
             .bind(notif_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(account_id)
             .bind(remote.id)
             .bind(post_id)
@@ -1713,7 +1717,7 @@ async fn handle_move(
     let local_followers: Vec<(i64, String, String)> = sqlx::query_as(
         "SELECT a.id, a.username, a.private_key_pem
          FROM follows f
-         JOIN accounts a ON a.id = f.follower_id
+         JOIN personas a ON a.id = f.persona_id
          WHERE f.followee_remote_id = ?",
     )
     .bind(remote.id)
@@ -1726,10 +1730,11 @@ async fn handle_move(
     for (local_id, local_username, _) in &local_followers {
         // Insert new follow.
         sqlx::query(
-            "INSERT OR IGNORE INTO follows (follower_id, followee_remote_id, created_at)
-             VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at)
+             VALUES (?, ?, ?, ?)",
         )
         .bind(local_id)
+        .bind(crate::db::DEFAULT_USER_ID)
         .bind(new_account.id)
         .bind(now)
         .execute(&state.pool)
@@ -1814,10 +1819,11 @@ async fn handle_accept(
     // This is a confirmation. If it's somehow not there, we can insert it.
     let now = chrono::Utc::now().timestamp();
     sqlx::query(
-        "INSERT OR IGNORE INTO follows (follower_id, followee_remote_id, created_at)
-         VALUES (?, ?, ?)",
+        "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at)
+             VALUES (?, ?, ?, ?)",
     )
     .bind(local_id)
+    .bind(crate::db::DEFAULT_USER_ID)
     .bind(remote.id)
     .bind(now)
     .execute(&state.pool)
@@ -1837,7 +1843,7 @@ async fn handle_accept(
     }
 
     tracing::info!(
-        local_account_id = local_id,
+        persona_id = local_id,
         remote_actor = %remote.actor_uri,
         "follow accepted by remote"
     );
@@ -1875,7 +1881,7 @@ async fn handle_reject(
     };
 
     // Remove the pending follow.
-    sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_remote_id = ?")
+    sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
         .bind(local_id)
         .bind(remote.id)
         .execute(&state.pool)
@@ -1895,7 +1901,7 @@ async fn handle_reject(
     }
 
     tracing::info!(
-        local_account_id = local_id,
+        persona_id = local_id,
         remote_actor = %remote.actor_uri,
         "follow rejected by remote"
     );

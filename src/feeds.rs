@@ -15,9 +15,9 @@ struct FeedPost {
     created_at: i64,
 }
 
-/// Look up account_id by username, returning 404 if not found.
+/// Look up.persona_id by username, returning 404 if not found.
 async fn resolve_account_id(pool: &sqlx::SqlitePool, username: &str) -> Result<i64, AppError> {
-    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
         .bind(username)
         .fetch_optional(pool)
         .await?;
@@ -33,7 +33,7 @@ async fn fetch_public_posts(
     let posts: Vec<FeedPost> = sqlx::query_as(
         "SELECT id, content_html, created_at \
          FROM posts \
-         WHERE account_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
+         WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
          ORDER BY created_at DESC \
          LIMIT 20",
     )

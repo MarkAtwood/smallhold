@@ -261,9 +261,10 @@ async fn process_upload(
     let file_size = clean_data.len() as i64;
 
     sqlx::query(
-        "INSERT INTO media (id, account_id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO media (id, user_id, persona_id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
+    .bind(crate::db::DEFAULT_USER_ID)
     .bind(auth.account_id)
     .bind(&rel_path)
     .bind(&mime)
@@ -327,7 +328,7 @@ async fn update_media(
         .map_err(|_| AppError::not_found("Media not found"))?;
 
     let row: Option<MediaRow> = sqlx::query_as(
-        "SELECT id, file_path, mime_type, width, height, blurhash, description, created_at FROM media WHERE id = ? AND account_id = ?",
+        "SELECT id, file_path, mime_type, width, height, blurhash, description, created_at FROM media WHERE id = ? AND user_id = ?",
     )
     .bind(media_id)
     .bind(auth.account_id)

@@ -3,6 +3,29 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, S
 use sqlx::SqlitePool;
 use std::str::FromStr;
 
+/// The single owner user ID. Matches the legacy migration value and is used
+/// for all user-level columns in the canonical schema.
+pub const DEFAULT_USER_ID: &str = "legacy-owner";
+
+/// Ensure the default single-user row exists. Called on startup and before
+/// persona creation on fresh installs.
+pub async fn ensure_default_user(pool: &SqlitePool) -> Result<()> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    sqlx::query(
+        "INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) \
+         VALUES (?, 'admin@localhost', 'Owner', 'admin', ?)",
+    )
+    .bind(DEFAULT_USER_ID)
+    .bind(now)
+    .execute(pool)
+    .await
+    .context("Failed to ensure default user")?;
+    Ok(())
+}
+
 pub async fn create_pool(database_path: &str) -> Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(database_path)?
         .journal_mode(SqliteJournalMode::Wal)
@@ -18,515 +41,30 @@ pub async fn create_pool(database_path: &str) -> Result<SqlitePool> {
         .await
         .context("Failed to connect to SQLite database")?;
 
-    initialize_schema(&pool).await?;
+    // Delegate schema creation and migration to fieldwork's canonical schema.
+    let fw_pool = fieldwork::db::Pool::Sqlite(pool.clone());
+    fieldwork::db::migrate_full(&fw_pool, Some(&fieldwork::db::LEGACY_SMALLHOLD), &[])
+        .await
+        .context("Failed to run fieldwork schema migrations")?;
+
+    // Ensure the admin table exists (smallhold-specific, not in fieldwork schema).
+    sqlx::raw_sql(
+        "CREATE TABLE IF NOT EXISTS admin (
+            id            INTEGER PRIMARY KEY CHECK (id = 1),
+            password_hash TEXT NOT NULL,
+            totp_secret   TEXT,
+            created_at    INTEGER NOT NULL
+        )"
+    )
+    .execute(&pool)
+    .await
+    .context("Failed to create admin table")?;
+
+    // Ensure the single-owner user row exists for FK references.
+    ensure_default_user(&pool).await?;
+
     Ok(pool)
 }
-
-async fn initialize_schema(pool: &SqlitePool) -> Result<()> {
-    sqlx::raw_sql(SCHEMA)
-        .execute(pool)
-        .await
-        .context("Failed to initialize database schema")?;
-
-    run_migrations(pool).await?;
-    Ok(())
-}
-
-/// Run idempotent schema migrations for columns added after initial release.
-async fn run_migrations(pool: &SqlitePool) -> Result<()> {
-    // FEP-f228: add context_url to posts and remote_posts.
-    // SQLite errors on duplicate ADD COLUMN, so check first.
-    let has_context_url: bool = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM pragma_table_info('posts') WHERE name = 'context_url'",
-    )
-    .fetch_optional(pool)
-    .await?
-    .is_some();
-
-    if !has_context_url {
-        sqlx::raw_sql("ALTER TABLE posts ADD COLUMN context_url TEXT")
-            .execute(pool)
-            .await
-            .context("migration: add posts.context_url")?;
-    }
-
-    let has_remote_context_url: bool = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM pragma_table_info('remote_posts') WHERE name = 'context_url'",
-    )
-    .fetch_optional(pool)
-    .await?
-    .is_some();
-
-    if !has_remote_context_url {
-        sqlx::raw_sql("ALTER TABLE remote_posts ADD COLUMN context_url TEXT")
-            .execute(pool)
-            .await
-            .context("migration: add remote_posts.context_url")?;
-    }
-
-    // DID support: add did_key and recovery_pubkey to accounts.
-    let has_did_key: bool = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM pragma_table_info('accounts') WHERE name = 'did_key'",
-    )
-    .fetch_optional(pool)
-    .await?
-    .is_some();
-
-    if !has_did_key {
-        sqlx::raw_sql("ALTER TABLE accounts ADD COLUMN did_key TEXT")
-            .execute(pool)
-            .await
-            .context("migration: add accounts.did_key")?;
-    }
-
-    let has_recovery_pubkey: bool = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM pragma_table_info('accounts') WHERE name = 'recovery_pubkey'",
-    )
-    .fetch_optional(pool)
-    .await?
-    .is_some();
-
-    if !has_recovery_pubkey {
-        sqlx::raw_sql("ALTER TABLE accounts ADD COLUMN recovery_pubkey TEXT")
-            .execute(pool)
-            .await
-            .context("migration: add accounts.recovery_pubkey")?;
-    }
-
-    // Fix duplicate follow rows (NULL columns bypass SQLite UNIQUE constraints).
-    // Dedup first, then add partial unique indexes.
-    sqlx::raw_sql(
-        "DELETE FROM follows WHERE rowid NOT IN ( \
-         SELECT MIN(rowid) FROM follows GROUP BY follower_id, followee_id, followee_remote_id)"
-    )
-    .execute(pool)
-    .await
-    .context("migration: dedup follows")?;
-
-    sqlx::raw_sql(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_local_unique \
-         ON follows(follower_id, followee_id) WHERE followee_id IS NOT NULL"
-    )
-    .execute(pool)
-    .await
-    .context("migration: add idx_follows_local_unique")?;
-
-    sqlx::raw_sql(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_remote_unique \
-         ON follows(follower_id, followee_remote_id) WHERE followee_remote_id IS NOT NULL"
-    )
-    .execute(pool)
-    .await
-    .context("migration: add idx_follows_remote_unique")?;
-
-    Ok(())
-}
-
-const SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS admin (
-    id            INTEGER PRIMARY KEY CHECK (id = 1),
-    password_hash TEXT NOT NULL,
-    totp_secret   TEXT,
-    created_at    INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS accounts (
-    id              INTEGER PRIMARY KEY,
-    username        TEXT NOT NULL UNIQUE,
-    display_name    TEXT NOT NULL,
-    bio             TEXT NOT NULL DEFAULT '',
-    bio_html        TEXT NOT NULL DEFAULT '',
-    private_key_pem TEXT NOT NULL,
-    public_key_pem  TEXT NOT NULL,
-    avatar_media_id INTEGER,
-    header_media_id INTEGER,
-    is_locked       INTEGER NOT NULL DEFAULT 0,
-    discoverable    INTEGER NOT NULL DEFAULT 1,
-    bot             INTEGER NOT NULL DEFAULT 0,
-    fields_json     TEXT NOT NULL DEFAULT '[]',
-    created_at      INTEGER NOT NULL,
-    last_status_at  INTEGER,
-    did_key         TEXT,
-    recovery_pubkey TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username);
-
-CREATE TABLE IF NOT EXISTS remote_accounts (
-    id                  INTEGER PRIMARY KEY,
-    actor_uri           TEXT NOT NULL UNIQUE,
-    username            TEXT NOT NULL,
-    domain              TEXT NOT NULL,
-    display_name        TEXT NOT NULL,
-    bio_html            TEXT NOT NULL DEFAULT '',
-    avatar_url          TEXT,
-    header_url          TEXT,
-    public_key_pem      TEXT NOT NULL,
-    public_key_id       TEXT NOT NULL UNIQUE,
-    inbox_url           TEXT NOT NULL,
-    shared_inbox_url    TEXT,
-    followers_url       TEXT,
-    is_locked           INTEGER NOT NULL DEFAULT 0,
-    bot                 INTEGER NOT NULL DEFAULT 0,
-    last_fetched_at     INTEGER NOT NULL,
-    fetched_failed_at   INTEGER,
-    fetch_fail_count    INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_remote_accounts_webfinger ON remote_accounts(username, domain);
-
-CREATE TABLE IF NOT EXISTS posts (
-    id                INTEGER PRIMARY KEY,
-    account_id        INTEGER NOT NULL REFERENCES accounts(id),
-    ap_id             TEXT NOT NULL UNIQUE,
-    in_reply_to_id    INTEGER,
-    in_reply_to_uri   TEXT,
-    boost_of_id       INTEGER,
-    boost_of_uri      TEXT,
-    content           TEXT NOT NULL,
-    content_html      TEXT NOT NULL,
-    spoiler_text      TEXT NOT NULL DEFAULT '',
-    visibility        TEXT NOT NULL,
-    sensitive         INTEGER NOT NULL DEFAULT 0,
-    language          TEXT,
-    context_url       TEXT,
-    created_at        INTEGER NOT NULL,
-    edited_at         INTEGER
-);
-CREATE INDEX IF NOT EXISTS idx_posts_account_created ON posts(account_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_posts_in_reply_to ON posts(in_reply_to_id);
-
-CREATE TABLE IF NOT EXISTS remote_posts (
-    id                INTEGER PRIMARY KEY,
-    ap_uri            TEXT NOT NULL UNIQUE,
-    remote_account_id INTEGER NOT NULL REFERENCES remote_accounts(id),
-    in_reply_to_uri   TEXT,
-    content_html      TEXT NOT NULL,
-    spoiler_text      TEXT NOT NULL DEFAULT '',
-    visibility        TEXT NOT NULL,
-    sensitive         INTEGER NOT NULL DEFAULT 0,
-    language          TEXT,
-    context_url       TEXT,
-    created_at        INTEGER NOT NULL,
-    fetched_at        INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_remote_posts_account_created ON remote_posts(remote_account_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS mentions (
-    post_id            INTEGER,
-    remote_post_id     INTEGER,
-    mentioned_account_id INTEGER,
-    mentioned_remote_id  INTEGER,
-    CHECK ((post_id IS NOT NULL) != (remote_post_id IS NOT NULL)),
-    CHECK ((mentioned_account_id IS NOT NULL) != (mentioned_remote_id IS NOT NULL))
-);
-CREATE INDEX IF NOT EXISTS idx_mentions_post ON mentions(post_id);
-CREATE INDEX IF NOT EXISTS idx_mentions_local ON mentions(mentioned_account_id);
-
-CREATE TABLE IF NOT EXISTS media (
-    id             INTEGER PRIMARY KEY,
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    post_id        INTEGER REFERENCES posts(id),
-    file_path      TEXT NOT NULL,
-    mime_type      TEXT NOT NULL,
-    file_size      INTEGER NOT NULL,
-    width          INTEGER,
-    height         INTEGER,
-    blurhash       TEXT,
-    description    TEXT NOT NULL DEFAULT '',
-    created_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS follows (
-    follower_id         INTEGER NOT NULL REFERENCES accounts(id),
-    followee_id         INTEGER REFERENCES accounts(id),
-    followee_remote_id  INTEGER REFERENCES remote_accounts(id),
-    created_at          INTEGER NOT NULL,
-    show_reblogs        INTEGER NOT NULL DEFAULT 1,
-    notify              INTEGER NOT NULL DEFAULT 0,
-    CHECK ((followee_id IS NOT NULL) != (followee_remote_id IS NOT NULL))
-);
-CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
-CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
-CREATE INDEX IF NOT EXISTS idx_follows_followee_remote ON follows(followee_remote_id);
--- Partial unique indexes: SQLite UNIQUE constraint doesn't enforce uniqueness when columns are NULL
-CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_local_unique
-    ON follows(follower_id, followee_id) WHERE followee_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_follows_remote_unique
-    ON follows(follower_id, followee_remote_id) WHERE followee_remote_id IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS follow_requests (
-    id                  INTEGER PRIMARY KEY,
-    requester_remote_id INTEGER NOT NULL REFERENCES remote_accounts(id),
-    target_account_id   INTEGER NOT NULL REFERENCES accounts(id),
-    ap_id               TEXT NOT NULL UNIQUE,
-    created_at          INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS followers (
-    local_account_id    INTEGER NOT NULL REFERENCES accounts(id),
-    remote_account_id   INTEGER NOT NULL REFERENCES remote_accounts(id),
-    accepted_at         INTEGER NOT NULL,
-    UNIQUE (local_account_id, remote_account_id)
-);
-CREATE INDEX IF NOT EXISTS idx_followers_local ON followers(local_account_id);
-
-CREATE TABLE IF NOT EXISTS favourites (
-    account_id      INTEGER NOT NULL REFERENCES accounts(id),
-    post_id         INTEGER REFERENCES posts(id),
-    remote_post_id  INTEGER REFERENCES remote_posts(id),
-    created_at      INTEGER NOT NULL,
-    CHECK ((post_id IS NOT NULL) != (remote_post_id IS NOT NULL)),
-    UNIQUE (account_id, post_id, remote_post_id)
-);
-
-CREATE TABLE IF NOT EXISTS notifications (
-    id             INTEGER PRIMARY KEY,
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    kind           TEXT NOT NULL,
-    from_account_id        INTEGER REFERENCES accounts(id),
-    from_remote_account_id INTEGER REFERENCES remote_accounts(id),
-    post_id        INTEGER REFERENCES posts(id),
-    remote_post_id INTEGER REFERENCES remote_posts(id),
-    created_at     INTEGER NOT NULL,
-    read_at        INTEGER
-);
-CREATE INDEX IF NOT EXISTS idx_notifications_account_created ON notifications(account_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup ON notifications(account_id, kind, COALESCE(from_account_id, 0), COALESCE(from_remote_account_id, 0), COALESCE(post_id, 0), COALESCE(remote_post_id, 0));
-
-CREATE TABLE IF NOT EXISTS oauth_apps (
-    id            INTEGER PRIMARY KEY,
-    client_id     TEXT NOT NULL UNIQUE,
-    client_secret TEXT NOT NULL,
-    name          TEXT NOT NULL,
-    website       TEXT,
-    redirect_uri  TEXT NOT NULL,
-    scopes        TEXT NOT NULL,
-    created_at    INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS oauth_tokens (
-    id             INTEGER PRIMARY KEY,
-    token_hash     TEXT NOT NULL UNIQUE,
-    app_id         INTEGER NOT NULL REFERENCES oauth_apps(id),
-    account_id     INTEGER REFERENCES accounts(id),
-    scopes         TEXT NOT NULL,
-    created_at     INTEGER NOT NULL,
-    last_used_at   INTEGER,
-    revoked_at     INTEGER
-);
-
-CREATE TABLE IF NOT EXISTS oauth_authz_codes (
-    code_hash     TEXT PRIMARY KEY,
-    app_id        INTEGER NOT NULL REFERENCES oauth_apps(id),
-    account_id    INTEGER NOT NULL REFERENCES accounts(id),
-    scopes        TEXT NOT NULL,
-    redirect_uri  TEXT NOT NULL,
-    expires_at    INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS domain_blocks (
-    domain         TEXT PRIMARY KEY,
-    severity       TEXT NOT NULL,
-    reject_media   INTEGER NOT NULL DEFAULT 0,
-    reject_reports INTEGER NOT NULL DEFAULT 0,
-    reason         TEXT NOT NULL DEFAULT '',
-    created_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS delivery_queue (
-    id             INTEGER PRIMARY KEY,
-    target_inbox   TEXT NOT NULL,
-    sender_account_id INTEGER NOT NULL REFERENCES accounts(id),
-    activity_json  TEXT NOT NULL,
-    attempts       INTEGER NOT NULL DEFAULT 0,
-    next_attempt_at INTEGER NOT NULL,
-    last_error     TEXT,
-    created_at     INTEGER NOT NULL,
-    delivered_at   INTEGER,
-    dead_at        INTEGER
-);
-CREATE INDEX IF NOT EXISTS idx_delivery_pending ON delivery_queue(next_attempt_at) WHERE delivered_at IS NULL AND dead_at IS NULL;
-
-CREATE TABLE IF NOT EXISTS idempotency_keys (
-    key_hash       TEXT PRIMARY KEY,
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    post_id        INTEGER NOT NULL REFERENCES posts(id),
-    created_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS also_known_as (
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    uri            TEXT NOT NULL,
-    UNIQUE (account_id, uri)
-);
-
-CREATE TABLE IF NOT EXISTS bookmarks (
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    post_id        INTEGER REFERENCES posts(id),
-    remote_post_id INTEGER REFERENCES remote_posts(id),
-    created_at     INTEGER NOT NULL,
-    UNIQUE (account_id, post_id, remote_post_id)
-);
-
-CREATE TABLE IF NOT EXISTS markers (
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    timeline       TEXT NOT NULL,
-    last_read_id   TEXT NOT NULL,
-    version        INTEGER NOT NULL DEFAULT 0,
-    updated_at     INTEGER NOT NULL,
-    UNIQUE (account_id, timeline)
-);
-
-CREATE TABLE IF NOT EXISTS post_tags (
-    post_id        INTEGER NOT NULL REFERENCES posts(id),
-    tag             TEXT NOT NULL,
-    UNIQUE (post_id, tag)
-);
-CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag);
-
-CREATE TABLE IF NOT EXISTS pinned_posts (
-    account_id INTEGER NOT NULL REFERENCES accounts(id),
-    post_id    INTEGER NOT NULL REFERENCES posts(id),
-    pinned_at  INTEGER NOT NULL,
-    UNIQUE (account_id, post_id)
-);
-
-CREATE TABLE IF NOT EXISTS lists (
-    id             INTEGER PRIMARY KEY,
-    account_id     INTEGER NOT NULL REFERENCES accounts(id),
-    title          TEXT NOT NULL,
-    replies_policy TEXT NOT NULL DEFAULT 'list',
-    created_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS list_accounts (
-    list_id    INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
-    account_id INTEGER NOT NULL,
-    UNIQUE (list_id, account_id)
-);
-
-CREATE TABLE IF NOT EXISTS followed_tags (
-    account_id INTEGER NOT NULL REFERENCES accounts(id),
-    tag        TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    UNIQUE (account_id, tag)
-);
-
-CREATE TABLE IF NOT EXISTS filters (
-    id            INTEGER PRIMARY KEY,
-    account_id    INTEGER NOT NULL REFERENCES accounts(id),
-    title         TEXT NOT NULL,
-    context       TEXT NOT NULL DEFAULT '[]',
-    filter_action TEXT NOT NULL DEFAULT 'warn',
-    expires_at    INTEGER,
-    created_at    INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS filter_keywords (
-    id         INTEGER PRIMARY KEY,
-    filter_id  INTEGER NOT NULL REFERENCES filters(id) ON DELETE CASCADE,
-    keyword    TEXT NOT NULL,
-    whole_word INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS scheduled_statuses (
-    id            INTEGER PRIMARY KEY,
-    account_id    INTEGER NOT NULL REFERENCES accounts(id),
-    scheduled_at  INTEGER NOT NULL,
-    params_json   TEXT NOT NULL,
-    created_at    INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_statuses(scheduled_at);
-
-CREATE TABLE IF NOT EXISTS webauthn_credentials (
-    id              INTEGER PRIMARY KEY,
-    credential_json TEXT NOT NULL,
-    created_at      INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS webauthn_challenges (
-    challenge_id    TEXT PRIMARY KEY,
-    state_json      TEXT NOT NULL,
-    created_at      INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id              INTEGER PRIMARY KEY,
-    account_id      INTEGER NOT NULL REFERENCES accounts(id),
-    endpoint        TEXT NOT NULL,
-    key_p256dh      TEXT NOT NULL,
-    key_auth        TEXT NOT NULL,
-    alerts_mention  INTEGER NOT NULL DEFAULT 1,
-    alerts_favourite INTEGER NOT NULL DEFAULT 1,
-    alerts_reblog   INTEGER NOT NULL DEFAULT 1,
-    alerts_follow   INTEGER NOT NULL DEFAULT 1,
-    alerts_poll     INTEGER NOT NULL DEFAULT 0,
-    policy          TEXT NOT NULL DEFAULT 'all',
-    created_at      INTEGER NOT NULL,
-    UNIQUE (account_id)
-);
-
-CREATE TABLE IF NOT EXISTS vapid_keys (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),
-    private_key_pem TEXT NOT NULL,
-    public_key_base64 TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS conversation_read_markers (
-    account_id      INTEGER NOT NULL REFERENCES accounts(id),
-    post_id         INTEGER NOT NULL REFERENCES posts(id),
-    UNIQUE (account_id, post_id)
-);
-
-CREATE TABLE IF NOT EXISTS conversation_hidden (
-    account_id      INTEGER NOT NULL REFERENCES accounts(id),
-    post_id         INTEGER NOT NULL REFERENCES posts(id),
-    UNIQUE (account_id, post_id)
-);
-
-CREATE TABLE IF NOT EXISTS post_edits (
-    id              INTEGER PRIMARY KEY,
-    post_id         INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    content         TEXT NOT NULL,
-    content_html    TEXT NOT NULL,
-    spoiler_text    TEXT NOT NULL DEFAULT '',
-    sensitive       INTEGER NOT NULL DEFAULT 0,
-    created_at      INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_post_edits_post ON post_edits(post_id, created_at);
-
-CREATE TABLE IF NOT EXISTS relays (
-    id          INTEGER PRIMARY KEY,
-    inbox_url   TEXT NOT NULL UNIQUE,
-    actor_uri   TEXT NOT NULL,
-    follow_id   TEXT NOT NULL DEFAULT '',
-    state       TEXT NOT NULL DEFAULT 'pending',
-    created_at  INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS link_cards (
-    id            INTEGER PRIMARY KEY,
-    url           TEXT NOT NULL UNIQUE,
-    card_type     TEXT NOT NULL DEFAULT 'link',
-    title         TEXT NOT NULL DEFAULT '',
-    description   TEXT NOT NULL DEFAULT '',
-    image_url     TEXT,
-    author_name   TEXT NOT NULL DEFAULT '',
-    author_url    TEXT NOT NULL DEFAULT '',
-    provider_name TEXT NOT NULL DEFAULT '',
-    provider_url  TEXT NOT NULL DEFAULT '',
-    html          TEXT NOT NULL DEFAULT '',
-    width         INTEGER NOT NULL DEFAULT 0,
-    height        INTEGER NOT NULL DEFAULT 0,
-    fetched_at    INTEGER NOT NULL,
-    failed        INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS post_cards (
-    post_id       INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    card_url      TEXT NOT NULL,
-    UNIQUE (post_id)
-);
-"#;
 
 #[cfg(test)]
 mod tests {

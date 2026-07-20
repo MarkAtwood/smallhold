@@ -65,7 +65,7 @@ fn ap_response(body: Value) -> Response {
         .into_response()
 }
 
-/// Row from the accounts table needed for actor documents and profile pages.
+/// Row from the personas + users tables needed for actor documents and profile pages.
 #[derive(sqlx::FromRow)]
 struct AccountRow {
     username: String,
@@ -81,13 +81,15 @@ struct AccountRow {
     recovery_pubkey: Option<String>,
 }
 
-/// Looks up a local account by username, returning 404 if not found.
+/// Looks up a local persona by username (with DID data from users table).
 async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
     let row: AccountRow = sqlx::query_as(
-        "SELECT username, display_name, bio_html, public_key_pem,
-                is_locked, discoverable, bot, fields_json, created_at,
-                did_key, recovery_pubkey
-         FROM accounts WHERE username = ? LIMIT 1",
+        "SELECT p.username, p.display_name, p.bio_html, p.public_key_pem,
+                p.is_locked, p.discoverable, p.bot, p.fields_json, p.created_at,
+                u.did_key, u.recovery_pubkey
+         FROM personas p
+         JOIN users u ON p.user_id = u.id
+         WHERE p.username = ? LIMIT 1",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -249,7 +251,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
     let custom_css = load_extra_css(&state.config);
 
     let accounts: Vec<(String, String)> =
-        sqlx::query_as("SELECT username, display_name FROM accounts ORDER BY created_at")
+        sqlx::query_as("SELECT username, display_name FROM personas ORDER BY created_at")
             .fetch_all(&state.pool)
             .await?;
 
@@ -297,20 +299,20 @@ async fn profile_page(
     let custom_css = load_extra_css(&state.config);
 
     // Counts
-    let account_id: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+    let account_id: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
         .bind(&username)
         .fetch_optional(&state.pool)
         .await?;
     let aid = account_id.map(|r| r.0).unwrap_or(0);
 
-    let (post_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ?")
+    let (post_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
         .bind(aid)
         .fetch_one(&state.pool)
         .await
         .unwrap_or((0,));
 
     let (follower_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE local_account_id = ?")
+        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
             .bind(aid)
             .fetch_one(&state.pool)
             .await
@@ -332,7 +334,7 @@ async fn profile_page(
 
     // Recent posts
     let posts: Vec<PostRow> = sqlx::query_as(
-        "SELECT id, content_html, created_at FROM posts WHERE account_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 20",
+        "SELECT id, content_html, created_at FROM posts WHERE persona_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 20",
     )
     .bind(aid)
     .fetch_all(&state.pool)
@@ -416,7 +418,7 @@ async fn post_page(
 
     let post: PostRow = sqlx::query_as(
         "SELECT p.id, p.content_html, p.created_at FROM posts p \
-         JOIN accounts a ON p.account_id = a.id \
+         JOIN personas a ON p.persona_id = a.id \
          WHERE p.id = ? AND a.username = ? AND p.visibility IN ('public', 'unlisted')",
     )
     .bind(pid)
@@ -497,7 +499,7 @@ async fn outbox(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
@@ -508,7 +510,7 @@ async fn outbox(
     let actor_uri = format!("https://{domain}/users/{username}");
 
     let (total,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM posts WHERE account_id = ? AND visibility = 'public'")
+        sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND visibility = 'public'")
             .bind(account_id)
             .fetch_one(&state.pool)
             .await?;
@@ -516,7 +518,7 @@ async fn outbox(
     let posts: Vec<PostRow> = sqlx::query_as(
         "SELECT id, content_html, context_url, created_at \
          FROM posts \
-         WHERE account_id = ? AND visibility = 'public' \
+         WHERE persona_id = ? AND visibility = 'public' \
          ORDER BY created_at DESC \
          LIMIT 20",
     )
@@ -567,7 +569,7 @@ async fn followers_collection(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
@@ -575,7 +577,7 @@ async fn followers_collection(
     let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
     let (count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE local_account_id = ?")
+        sqlx::query_as("SELECT COUNT(*) FROM followers WHERE persona_id = ?")
             .bind(account_id)
             .fetch_one(&state.pool)
             .await?;
@@ -595,14 +597,14 @@ async fn following_collection(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
 
     let (account_id,) = account_row.ok_or_else(|| AppError::not_found("Account not found"))?;
 
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE follower_id = ?")
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ?")
         .bind(account_id)
         .fetch_one(&state.pool)
         .await?;
@@ -625,7 +627,7 @@ async fn featured(
     let domain = &state.config.server.domain;
 
     let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
@@ -636,7 +638,7 @@ async fn featured(
     let posts: Vec<PostRow> = sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
-         WHERE pp.account_id = ? AND p.visibility = 'public' \
+         WHERE pp.persona_id = ? AND p.visibility = 'public' \
          ORDER BY pp.pinned_at DESC",
     )
     .bind(account_id)
@@ -703,7 +705,7 @@ async fn ap_context_collection(
 ) -> Result<Response, AppError> {
     // Verify account exists.
     let account_row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM accounts WHERE username = ? LIMIT 1")
+        sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
             .await?;
@@ -724,7 +726,7 @@ async fn ap_context_collection(
 
     // Verify the post exists and belongs to this account.
     let post_exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM posts WHERE id = ? AND account_id = ?")
+        sqlx::query_as("SELECT id FROM posts WHERE id = ? AND user_id = ?")
             .bind(post_id)
             .bind(account_id)
             .fetch_optional(&state.pool)
@@ -747,7 +749,7 @@ async fn ap_context_collection(
     let posts: Vec<ContextPostRow> = sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
          FROM posts p \
-         JOIN accounts a ON p.account_id = a.id \
+         JOIN personas a ON p.persona_id = a.id \
          WHERE p.context_url = ? \
            AND p.visibility IN ('public', 'unlisted') \
          ORDER BY p.created_at ASC",

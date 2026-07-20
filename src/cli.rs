@@ -506,10 +506,14 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
+            // Ensure the single-owner user exists for FK reference
+            crate::db::ensure_default_user(&pool).await?;
+
             sqlx::query(
-                "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, is_locked, bot, created_at, did_key, recovery_pubkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, is_locked, bot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(&username)
             .bind(&display_name)
             .bind(private_key_pem.as_str())
@@ -517,11 +521,19 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             .bind(locked as i32)
             .bind(bot as i32)
             .bind(now)
-            .bind(&did_key)
-            .bind(&recovery_pubkey_hex)
             .execute(&pool)
             .await
             .context("Failed to create persona (username may already exist)")?;
+
+            // Store DID keys on the users table (canonical schema)
+            sqlx::query(
+                "UPDATE users SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
+            )
+            .bind(&did_key)
+            .bind(&recovery_pubkey_hex)
+            .bind(crate::db::DEFAULT_USER_ID)
+            .execute(&pool)
+            .await?;
 
             eprintln!("Created persona: @{username} (id: {id})");
             eprintln!("  DID: {did_key}");
@@ -531,7 +543,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
         }
         PersonaCommands::List => {
             let rows: Vec<(i64, String, String, i64)> = sqlx::query_as(
-                "SELECT id, username, display_name, created_at FROM accounts ORDER BY created_at",
+                "SELECT id, username, display_name, created_at FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
             .await?;
@@ -550,7 +562,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             bio,
         } => {
             if let Some(dn) = &display_name {
-                sqlx::query("UPDATE accounts SET display_name = ? WHERE username = ?")
+                sqlx::query("UPDATE personas SET display_name = ? WHERE username = ?")
                     .bind(dn)
                     .bind(&username)
                     .execute(&pool)
@@ -558,7 +570,7 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             }
             if let Some(b) = &bio {
                 let html = render_bio(b);
-                sqlx::query("UPDATE accounts SET bio = ?, bio_html = ? WHERE username = ?")
+                sqlx::query("UPDATE personas SET bio = ?, bio_html = ? WHERE username = ?")
                     .bind(b)
                     .bind(&html)
                     .bind(&username)
@@ -651,7 +663,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
     match cmd {
         TokenCommands::Mint { username, scopes } => {
             let account: Option<(i64,)> =
-                sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                     .bind(&username)
                     .fetch_optional(&pool)
                     .await?;
@@ -679,11 +691,12 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             sqlx::query(
-                "INSERT INTO oauth_tokens (id, token_hash, app_id, account_id, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO oauth_tokens (id, token_hash, app_id, user_id, persona_id, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(id)
             .bind(&token_hash)
             .bind(app_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(account_id)
             .bind(&scopes)
             .bind(now)
@@ -699,7 +712,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             let rows: Vec<(i64, String, String, i64, Option<i64>, String)> = sqlx::query_as(
                 "SELECT t.id, a.username, t.scopes, t.created_at, t.last_used_at, oa.name \
                  FROM oauth_tokens t \
-                 JOIN accounts a ON t.account_id = a.id \
+                 JOIN personas a ON t.persona_id = a.id \
                  JOIN oauth_apps oa ON t.app_id = oa.id \
                  WHERE t.revoked_at IS NULL \
                  ORDER BY t.created_at",
@@ -750,7 +763,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
             let result = if let Some(ref uname) = username {
                 let account: Option<(i64,)> =
-                    sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                    sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                         .bind(uname)
                         .fetch_optional(&pool)
                         .await?;
@@ -758,7 +771,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                     account.ok_or_else(|| anyhow::anyhow!("Persona @{uname} not found"))?;
 
                 sqlx::query(
-                    "UPDATE oauth_tokens SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL",
+                    "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND revoked_at IS NULL",
                 )
                 .bind(now)
                 .bind(account_id)
@@ -779,7 +792,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
         }
         TokenCommands::Sessions => {
             let accounts: Vec<(i64, String)> =
-                sqlx::query_as("SELECT id, username FROM accounts ORDER BY username")
+                sqlx::query_as("SELECT id, username FROM personas ORDER BY username")
                     .fetch_all(&pool)
                     .await?;
 
@@ -790,7 +803,7 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                     "SELECT t.id, oa.name, t.scopes, t.last_used_at \
                      FROM oauth_tokens t \
                      JOIN oauth_apps oa ON t.app_id = oa.id \
-                     WHERE t.account_id = ? AND t.revoked_at IS NULL \
+                     WHERE t.persona_id = ? AND t.revoked_at IS NULL \
                      ORDER BY t.last_used_at DESC NULLS LAST",
                 )
                 .bind(account_id)
@@ -1024,8 +1037,10 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let pub_key = crate::did::ed25519_public_from_private(&priv_key);
             let did_key = crate::did::ed25519_to_did_key(&pub_key);
 
-            let account: Option<(i64, String, String)> = sqlx::query_as(
-                "SELECT id, username, display_name FROM accounts WHERE did_key = ?",
+            let account: Option<(String, String, String)> = sqlx::query_as(
+                "SELECT u.id, p.username, p.display_name FROM users u \
+                 JOIN personas p ON p.user_id = u.id \
+                 WHERE u.did_key = ?",
             )
             .bind(&did_key)
             .fetch_optional(&pool)
@@ -1034,7 +1049,7 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             match account {
                 Some((id, username, display_name)) => {
                     eprintln!("Found account:");
-                    eprintln!("  ID: {id}");
+                    eprintln!("  User ID: {id}");
                     eprintln!("  Username: @{username}");
                     eprintln!("  Display name: {display_name}");
                     eprintln!("  DID: {did_key}");
@@ -1049,35 +1064,43 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             }
         }
         DidCommands::Backfill => {
-            let rows: Vec<(i64, String)> = sqlx::query_as(
-                "SELECT id, username FROM accounts WHERE did_key IS NULL",
+            // Check if the single user already has a DID key
+            let user_row: Option<(String,)> = sqlx::query_as(
+                "SELECT id FROM users WHERE did_key IS NULL",
             )
-            .fetch_all(&pool)
+            .fetch_optional(&pool)
             .await?;
 
-            if rows.is_empty() {
+            if user_row.is_none() {
                 eprintln!("All accounts already have DID keys.");
                 return Ok(());
             }
 
-            eprintln!("Backfilling {} account(s)...", rows.len());
+            let personas: Vec<(i64, String)> = sqlx::query_as(
+                "SELECT id, username FROM personas ORDER BY created_at",
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            eprintln!("Backfilling DID keys...");
             eprintln!();
 
-            for (id, username) in &rows {
-                let (recovery_priv, recovery_pub) = crate::did::generate_recovery_keypair();
-                let did_key = crate::did::ed25519_to_did_key(&recovery_pub);
-                let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
-                let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
+            let (recovery_priv, recovery_pub) = crate::did::generate_recovery_keypair();
+            let did_key = crate::did::ed25519_to_did_key(&recovery_pub);
+            let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
+            let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
 
-                sqlx::query(
-                    "UPDATE accounts SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
-                )
-                .bind(&did_key)
-                .bind(&recovery_pubkey_hex)
-                .bind(id)
-                .execute(&pool)
-                .await
-                .with_context(|| format!("Failed to update @{username}"))?;
+            sqlx::query(
+                "UPDATE users SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
+            )
+            .bind(&did_key)
+            .bind(&recovery_pubkey_hex)
+            .bind(crate::db::DEFAULT_USER_ID)
+            .execute(&pool)
+            .await
+            .context("Failed to update user DID keys")?;
+
+            for (_id, username) in &personas {
 
                 eprintln!("@{username}:");
                 eprintln!("  DID: {did_key}");
@@ -1100,7 +1123,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
         RelayCommands::Add { url } => {
             // Fetch the relay's actor document to get its inbox URL.
             let first_account: Option<(i64, String, String)> = sqlx::query_as(
-                "SELECT id, username, private_key_pem FROM accounts ORDER BY created_at LIMIT 1",
+                "SELECT id, username, private_key_pem FROM personas ORDER BY created_at LIMIT 1",
             )
             .fetch_optional(&pool)
             .await?;
@@ -1172,7 +1195,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
 
             // Get the first local account to send the Undo.
             let first_account: Option<(i64, String)> =
-                sqlx::query_as("SELECT id, username FROM accounts ORDER BY created_at LIMIT 1")
+                sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at LIMIT 1")
                     .fetch_optional(&pool)
                     .await?;
 

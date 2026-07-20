@@ -14,7 +14,7 @@ use crate::posting::render_content;
 struct DeliveryRow {
     id: i64,
     target_inbox: String,
-    sender_account_id: i64,
+    sender_persona_id: i64,
     activity_json: String,
     attempts: i32,
     private_key_pem: String,
@@ -26,7 +26,7 @@ impl std::fmt::Debug for DeliveryRow {
         f.debug_struct("DeliveryRow")
             .field("id", &self.id)
             .field("target_inbox", &self.target_inbox)
-            .field("sender_account_id", &self.sender_account_id)
+            .field("sender_persona_id", &self.sender_persona_id)
             .field("activity_json", &self.activity_json)
             .field("attempts", &self.attempts)
             .field("private_key_pem", &"[REDACTED]")
@@ -43,7 +43,7 @@ static CIRCUIT_BREAKER: LazyLock<CircuitBreaker> = LazyLock::new(CircuitBreaker:
 pub async fn enqueue_delivery(
     pool: &SqlitePool,
     target_inbox: &str,
-    sender_account_id: i64,
+    sender_persona_id: i64,
     activity_json: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let id = generate_id();
@@ -52,12 +52,12 @@ pub async fn enqueue_delivery(
 
     sqlx::query(
         "INSERT INTO delivery_queue \
-         (id, target_inbox, sender_account_id, activity_json, attempts, next_attempt_at, created_at) \
+         (id, target_inbox, sender_persona_id, activity_json, attempts, next_attempt_at, created_at) \
          VALUES (?, ?, ?, ?, 0, ?, ?)",
     )
     .bind(id)
     .bind(target_inbox)
-    .bind(sender_account_id)
+    .bind(sender_persona_id)
     .bind(&json)
     .bind(now)
     .bind(now)
@@ -70,7 +70,7 @@ pub async fn enqueue_delivery(
 /// Fan-out an activity to every subscribed relay's inbox.
 pub async fn enqueue_to_relays(
     pool: &SqlitePool,
-    sender_account_id: i64,
+    sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let inboxes: Vec<(String,)> =
@@ -79,7 +79,7 @@ pub async fn enqueue_to_relays(
             .await?;
 
     for (inbox,) in inboxes {
-        enqueue_delivery(pool, &inbox, sender_account_id, activity).await?;
+        enqueue_delivery(pool, &inbox, sender_persona_id, activity).await?;
     }
 
     Ok(())
@@ -88,21 +88,21 @@ pub async fn enqueue_to_relays(
 /// Fan-out an activity to every follower's inbox (deduped by shared inbox).
 pub async fn enqueue_to_followers(
     pool: &SqlitePool,
-    sender_account_id: i64,
+    sender_persona_id: i64,
     activity: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let inboxes: Vec<(String,)> = sqlx::query_as(
         "SELECT DISTINCT COALESCE(ra.shared_inbox_url, ra.inbox_url) as inbox \
          FROM followers f \
          JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.local_account_id = ?",
+         WHERE f.persona_id = ?",
     )
-    .bind(sender_account_id)
+    .bind(sender_persona_id)
     .fetch_all(pool)
     .await?;
 
     for (inbox,) in inboxes {
-        enqueue_delivery(pool, &inbox, sender_account_id, activity).await?;
+        enqueue_delivery(pool, &inbox, sender_persona_id, activity).await?;
     }
 
     Ok(())
@@ -137,10 +137,10 @@ async fn process_batch(
     let now = chrono::Utc::now().timestamp_millis();
 
     let rows: Vec<DeliveryRow> = sqlx::query_as(
-        "SELECT d.id, d.target_inbox, d.sender_account_id, d.activity_json, d.attempts, \
+        "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
                 a.private_key_pem, a.username \
          FROM delivery_queue d \
-         JOIN accounts a ON d.sender_account_id = a.id \
+         JOIN personas a ON d.sender_persona_id = a.id \
          WHERE d.delivered_at IS NULL AND d.dead_at IS NULL AND d.next_attempt_at <= ? \
          ORDER BY d.next_attempt_at \
          LIMIT ?",
@@ -218,7 +218,7 @@ async fn deliver_one(
     // FEP-8fcf: Include Collection-Synchronization header with follower digest
     // for the target domain so the remote server can detect follower drift.
     if let Some(digest) =
-        crate::federation::compute_follower_sync_digest(pool, row.sender_account_id, &target_domain)
+        crate::federation::compute_follower_sync_digest(pool, row.sender_persona_id, &target_domain)
             .await
     {
         let sync_val =
@@ -331,7 +331,7 @@ async fn process_scheduled_posts(pool: &SqlitePool, config: &Config) -> anyhow::
     let domain = &config.server.domain;
 
     let due_posts: Vec<(i64, i64, String)> = sqlx::query_as(
-        "SELECT id, account_id, params_json FROM scheduled_statuses \
+        "SELECT id, persona_id, params_json FROM scheduled_statuses \
          WHERE scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
     )
     .bind(now_ms)
@@ -381,7 +381,7 @@ async fn create_scheduled_post(
         .unwrap_or("");
     let language = params.get("language").and_then(|v| v.as_str());
 
-    let account: (String,) = sqlx::query_as("SELECT username FROM accounts WHERE id = ?")
+    let account: (String,) = sqlx::query_as("SELECT username FROM personas WHERE id = ?")
         .bind(account_id)
         .fetch_one(pool)
         .await?;
@@ -394,11 +394,12 @@ async fn create_scheduled_post(
     let context_url = format!("{ap_id}/context");
 
     sqlx::query(
-        "INSERT INTO posts (id, account_id, ap_id, context_url, content, content_html, \
+        "INSERT INTO posts (id, user_id, persona_id, ap_id, context_url, content, content_html, \
          spoiler_text, visibility, sensitive, language, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(post_id)
+    .bind(crate::db::DEFAULT_USER_ID)
     .bind(account_id)
     .bind(&ap_id)
     .bind(&context_url)
@@ -428,7 +429,7 @@ async fn create_scheduled_post(
         .unwrap_or_default();
     for mid in &media_ids {
         sqlx::query(
-            "UPDATE media SET post_id = ? WHERE id = ? AND account_id = ? AND post_id IS NULL",
+            "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
         )
         .bind(post_id)
         .bind(mid)
@@ -451,13 +452,13 @@ async fn create_scheduled_post(
         match &m.domain {
             None => {
                 let local: Option<(i64,)> =
-                    sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+                    sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                         .bind(&m.username)
                         .fetch_optional(pool)
                         .await?;
                 if let Some((aid,)) = local {
                     sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_account_id) \
+                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_persona_id) \
                          VALUES (?, ?)",
                     )
                     .bind(post_id)
@@ -489,7 +490,7 @@ async fn create_scheduled_post(
     }
 
     // Update last_status_at
-    sqlx::query("UPDATE accounts SET last_status_at = ? WHERE id = ?")
+    sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now_ms)
         .bind(account_id)
         .execute(pool)

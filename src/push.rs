@@ -38,7 +38,7 @@ pub struct AlertsConfig {
 #[allow(dead_code)]
 struct SubscriptionRow {
     id: i64,
-    account_id: i64,
+    user_id: i64,
     endpoint: String,
     key_p256dh: String,
     key_auth: String,
@@ -115,13 +115,13 @@ pub async fn create_subscription(
         .as_millis() as i64;
 
     // Upsert: replace any existing subscription for this account
-    sqlx::query("DELETE FROM push_subscriptions WHERE account_id = ?")
+    sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
         .bind(account_id)
         .execute(pool)
         .await?;
 
     sqlx::query(
-        "INSERT INTO push_subscriptions (id, account_id, endpoint, key_p256dh, key_auth, \
+        "INSERT INTO push_subscriptions (id, user_id, endpoint, key_p256dh, key_auth, \
          alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, policy, created_at) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
@@ -151,9 +151,9 @@ pub async fn get_subscription(
     account_id: i64,
 ) -> Result<Option<Value>, AppError> {
     let row: Option<SubscriptionRow> = sqlx::query_as(
-        "SELECT id, account_id, endpoint, key_p256dh, key_auth, \
+        "SELECT id, user_id, endpoint, key_p256dh, key_auth, \
          alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, \
-         policy, created_at FROM push_subscriptions WHERE account_id = ?",
+         policy, created_at FROM push_subscriptions WHERE user_id = ?",
     )
     .bind(account_id)
     .fetch_optional(pool)
@@ -190,7 +190,7 @@ pub async fn update_subscription(
     sqlx::query(
         "UPDATE push_subscriptions SET alerts_mention = ?, alerts_favourite = ?, \
          alerts_reblog = ?, alerts_follow = ?, alerts_poll = ?, policy = ? \
-         WHERE account_id = ?",
+         WHERE user_id = ?",
     )
     .bind(alerts.mention)
     .bind(alerts.favourite)
@@ -208,7 +208,7 @@ pub async fn update_subscription(
 }
 
 pub async fn delete_subscription(pool: &SqlitePool, account_id: i64) -> Result<(), AppError> {
-    sqlx::query("DELETE FROM push_subscriptions WHERE account_id = ?")
+    sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
         .bind(account_id)
         .execute(pool)
         .await?;
@@ -266,9 +266,9 @@ async fn send_push_inner(
     domain: &str,
 ) -> anyhow::Result<()> {
     let row: Option<SubscriptionRow> = sqlx::query_as(
-        "SELECT id, account_id, endpoint, key_p256dh, key_auth, \
+        "SELECT id, user_id, endpoint, key_p256dh, key_auth, \
          alerts_mention, alerts_favourite, alerts_reblog, alerts_follow, alerts_poll, \
-         policy, created_at FROM push_subscriptions WHERE account_id = ?",
+         policy, created_at FROM push_subscriptions WHERE user_id = ?",
     )
     .bind(account_id)
     .fetch_optional(pool)
@@ -344,7 +344,7 @@ async fn send_push_inner(
     // 404 or 410 means the subscription is stale — delete it
     if status == 404 || status == 410 {
         tracing::info!(account_id, "push endpoint gone, removing subscription");
-        sqlx::query("DELETE FROM push_subscriptions WHERE account_id = ?")
+        sqlx::query("DELETE FROM push_subscriptions WHERE user_id = ?")
             .bind(account_id)
             .execute(pool)
             .await?;

@@ -68,7 +68,7 @@ async fn webfinger(
         return Err(AppError::not_found("unknown domain"));
     }
 
-    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE username = ?")
+    let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas WHERE username = ?")
         .bind(username)
         .fetch_one(&state.pool)
         .await?;
@@ -138,7 +138,7 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
         .fetch_one(&state.pool)
         .await?;
 
-    let (user_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
+    let (user_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personas")
         .fetch_one(&state.pool)
         .await?;
 

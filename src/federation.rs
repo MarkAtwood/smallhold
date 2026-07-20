@@ -494,7 +494,7 @@ pub async fn compute_follower_sync_digest(
     let uris: Vec<(String,)> = sqlx::query_as(
         "SELECT ra.actor_uri FROM followers f \
          JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.local_account_id = ? AND ra.domain = ?",
+         WHERE f.persona_id = ? AND ra.domain = ?",
     )
     .bind(account_id)
     .bind(target_domain)
@@ -879,9 +879,11 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Create a local account
         let acct_id = crate::id::generate_id();
+        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
+            .execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
         .bind(acct_id)
         .execute(&pool)
@@ -899,9 +901,11 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Create a local account
         let acct_id = crate::id::generate_id();
+        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
+            .execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
         .bind(acct_id)
         .execute(&pool)
@@ -930,9 +934,10 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         // Add follower
         sqlx::query(
-            "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+            "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
         )
         .bind(acct_id)
+        .bind(crate::db::DEFAULT_USER_ID)
         .bind(rid)
         .execute(&pool)
         .await
@@ -958,9 +963,11 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         let acct_id = crate::id::generate_id();
+        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
+            .execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
         .bind(acct_id)
         .execute(&pool)
@@ -987,9 +994,10 @@ zloXrMaFLBPp2UUN/amDTUIJ
             };
             let rid = upsert_remote_account(&pool, &data).await.unwrap();
             sqlx::query(
-                "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+                "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
             )
             .bind(acct_id)
+        .bind(crate::db::DEFAULT_USER_ID)
             .bind(rid)
             .execute(&pool)
             .await
@@ -1021,9 +1029,11 @@ zloXrMaFLBPp2UUN/amDTUIJ
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
 
         let acct_id = crate::id::generate_id();
+        sqlx::query("INSERT OR IGNORE INTO users (id, email, display_name, role, created_at) VALUES ('test-user', 'test@test', 'Test', 'admin', 0)")
+            .execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO accounts (id, username, display_name, private_key_pem, public_key_pem, created_at)
-             VALUES (?, 'testuser', 'Test', 'privkey', 'pubkey', 0)",
+            "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, created_at)
+             VALUES (?, 'test-user', 'testuser', 'Test', 'privkey', 'pubkey', 0)",
         )
         .bind(acct_id)
         .execute(&pool)
@@ -1070,9 +1080,10 @@ zloXrMaFLBPp2UUN/amDTUIJ
 
         for rid in [rid1, rid2] {
             sqlx::query(
-                "INSERT INTO followers (local_account_id, remote_account_id, accepted_at) VALUES (?, ?, 0)",
+                "INSERT INTO followers (persona_id, user_id, remote_account_id, accepted_at) VALUES (?, ?, ?, 0)",
             )
             .bind(acct_id)
+        .bind(crate::db::DEFAULT_USER_ID)
             .bind(rid)
             .execute(&pool)
             .await

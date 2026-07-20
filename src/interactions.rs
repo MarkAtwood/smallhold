@@ -17,41 +17,8 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// ---------------------------------------------------------------------------
-// Schema: blocks and mutes tables (created lazily, once per process)
-// ---------------------------------------------------------------------------
-
-static TABLES_ENSURED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
-
-async fn ensure_interaction_tables(pool: &sqlx::SqlitePool) -> Result<(), AppError> {
-    TABLES_ENSURED
-        .get_or_try_init(|| async {
-            sqlx::raw_sql(
-                "CREATE TABLE IF NOT EXISTS blocks (
-                    account_id        INTEGER NOT NULL REFERENCES accounts(id),
-                    blocked_account_id   INTEGER REFERENCES accounts(id),
-                    blocked_remote_id    INTEGER REFERENCES remote_accounts(id),
-                    created_at        INTEGER NOT NULL,
-                    CHECK ((blocked_account_id IS NOT NULL) != (blocked_remote_id IS NOT NULL)),
-                    UNIQUE (account_id, blocked_account_id, blocked_remote_id)
-                );
-                CREATE TABLE IF NOT EXISTS mutes (
-                    account_id        INTEGER NOT NULL REFERENCES accounts(id),
-                    muted_account_id     INTEGER REFERENCES accounts(id),
-                    muted_remote_id      INTEGER REFERENCES remote_accounts(id),
-                    created_at        INTEGER NOT NULL,
-                    CHECK ((muted_account_id IS NOT NULL) != (muted_remote_id IS NOT NULL)),
-                    UNIQUE (account_id, muted_account_id, muted_remote_id)
-                );",
-            )
-            .execute(pool)
-            .await
-            .map(|_| ())
-            .map_err(AppError::from)
-        })
-        .await
-        .copied()
-}
+// ponytail: blocks and mutes tables are now part of fieldwork's canonical schema,
+// created by migrate_full() at startup. No lazy creation needed.
 
 // ---------------------------------------------------------------------------
 // Relationship JSON builder
@@ -60,66 +27,66 @@ async fn ensure_interaction_tables(pool: &sqlx::SqlitePool) -> Result<(), AppErr
 async fn build_relationship(
     pool: &sqlx::SqlitePool,
     source_account_id: i64,
-    target_account_id: i64,
+    target_persona_id: i64,
 ) -> Result<Value, AppError> {
     // Following (local -> local)
     let (following_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE follower_id = ? AND followee_id = ?")
+        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
             .bind(source_account_id)
-            .bind(target_account_id)
+            .bind(target_persona_id)
             .fetch_one(pool)
             .await?;
 
     // Followed-by (target -> source, local -> local)
     let (followed_by_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE follower_id = ? AND followee_id = ?")
-            .bind(target_account_id)
+        sqlx::query_as("SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
+            .bind(target_persona_id)
             .bind(source_account_id)
             .fetch_one(pool)
             .await?;
 
     // Show reblogs
     let show_reblogs_row: Option<(bool,)> = sqlx::query_as(
-        "SELECT show_reblogs FROM follows WHERE follower_id = ? AND followee_id = ?",
+        "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_persona_id = ?",
     )
     .bind(source_account_id)
-    .bind(target_account_id)
+    .bind(target_persona_id)
     .fetch_optional(pool)
     .await?;
     let showing_reblogs = show_reblogs_row.map(|(v,)| v).unwrap_or(true);
 
     // Notify
     let notify_row: Option<(bool,)> =
-        sqlx::query_as("SELECT notify FROM follows WHERE follower_id = ? AND followee_id = ?")
+        sqlx::query_as("SELECT notify FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
             .bind(source_account_id)
-            .bind(target_account_id)
+            .bind(target_persona_id)
             .fetch_optional(pool)
             .await?;
     let notifying = notify_row.map(|(v,)| v).unwrap_or(false);
 
     // Blocking
     let (blocking_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM blocks WHERE account_id = ? AND blocked_account_id = ?",
+        "SELECT COUNT(*) FROM blocks WHERE persona_id = ? AND target_persona_id = ?",
     )
     .bind(source_account_id)
-    .bind(target_account_id)
+    .bind(target_persona_id)
     .fetch_one(pool)
     .await?;
 
     // Blocked-by
     let (blocked_by_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM blocks WHERE account_id = ? AND blocked_account_id = ?",
+        "SELECT COUNT(*) FROM blocks WHERE persona_id = ? AND target_persona_id = ?",
     )
-    .bind(target_account_id)
+    .bind(target_persona_id)
     .bind(source_account_id)
     .fetch_one(pool)
     .await?;
 
     // Muting
     let (muting_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM mutes WHERE account_id = ? AND muted_account_id = ?")
+        sqlx::query_as("SELECT COUNT(*) FROM mutes WHERE persona_id = ? AND target_persona_id = ?")
             .bind(source_account_id)
-            .bind(target_account_id)
+            .bind(target_persona_id)
             .fetch_one(pool)
             .await?;
 
@@ -129,7 +96,7 @@ async fn build_relationship(
     let requested = false;
 
     Ok(json!({
-        "id": target_account_id.to_string(),
+        "id": target_persona_id.to_string(),
         "following": following_count > 0,
         "showing_reblogs": showing_reblogs,
         "notifying": notifying,
@@ -154,7 +121,7 @@ async fn build_relationship_remote(
 ) -> Result<Value, AppError> {
     // Following (local -> remote)
     let (following_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM follows WHERE follower_id = ? AND followee_remote_id = ?",
+        "SELECT COUNT(*) FROM follows WHERE persona_id = ? AND followee_remote_id = ?",
     )
     .bind(source_account_id)
     .bind(target_remote_id)
@@ -163,7 +130,7 @@ async fn build_relationship_remote(
 
     // Followed-by (remote -> local)
     let (followed_by_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM followers WHERE local_account_id = ? AND remote_account_id = ?",
+        "SELECT COUNT(*) FROM followers WHERE persona_id = ? AND remote_account_id = ?",
     )
     .bind(source_account_id)
     .bind(target_remote_id)
@@ -172,7 +139,7 @@ async fn build_relationship_remote(
 
     // Show reblogs
     let show_reblogs_row: Option<(bool,)> = sqlx::query_as(
-        "SELECT show_reblogs FROM follows WHERE follower_id = ? AND followee_remote_id = ?",
+        "SELECT show_reblogs FROM follows WHERE persona_id = ? AND followee_remote_id = ?",
     )
     .bind(source_account_id)
     .bind(target_remote_id)
@@ -182,7 +149,7 @@ async fn build_relationship_remote(
 
     // Blocking
     let (blocking_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM blocks WHERE account_id = ? AND blocked_remote_id = ?",
+        "SELECT COUNT(*) FROM blocks WHERE persona_id = ? AND target_remote_id = ?",
     )
     .bind(source_account_id)
     .bind(target_remote_id)
@@ -191,7 +158,7 @@ async fn build_relationship_remote(
 
     // Muting
     let (muting_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM mutes WHERE account_id = ? AND muted_remote_id = ?")
+        sqlx::query_as("SELECT COUNT(*) FROM mutes WHERE persona_id = ? AND target_remote_id = ?")
             .bind(source_account_id)
             .bind(target_remote_id)
             .fetch_one(pool)
@@ -234,7 +201,7 @@ async fn resolve_target(pool: &sqlx::SqlitePool, id_str: &str) -> Result<TargetA
         .map_err(|_| AppError::not_found("Account not found"))?;
 
     // Check local first
-    let local: Option<(i64,)> = sqlx::query_as("SELECT id FROM accounts WHERE id = ?")
+    let local: Option<(i64,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
         .bind(id)
         .fetch_optional(pool)
         .await?;
@@ -271,7 +238,6 @@ async fn follow(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     auth.require_scope("write")?;
-    ensure_interaction_tables(&state.pool).await?;
     let domain = &state.config.server.domain;
     let now = now_millis();
 
@@ -283,10 +249,11 @@ async fn follow(
                 return Err(AppError::unprocessable("Cannot follow yourself"));
             }
             sqlx::query(
-                "INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) \
-                 VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_persona_id, created_at) \
+                 VALUES (?, ?, ?, ?)",
             )
             .bind(auth.account_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(target_id)
             .bind(now)
             .execute(&state.pool)
@@ -304,10 +271,11 @@ async fn follow(
         } => {
             // Insert follow locally
             sqlx::query(
-                "INSERT OR IGNORE INTO follows (follower_id, followee_remote_id, created_at) \
-                 VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO follows (persona_id, user_id, followee_remote_id, created_at) \
+                 VALUES (?, ?, ?, ?)",
             )
             .bind(auth.account_id)
+            .bind(crate::db::DEFAULT_USER_ID)
             .bind(remote_id)
             .bind(now)
             .execute(&state.pool)
@@ -349,14 +317,13 @@ async fn unfollow(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    ensure_interaction_tables(&state.pool).await?;
     let domain = &state.config.server.domain;
 
     let target = resolve_target(&state.pool, &id).await?;
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?")
+            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
                 .bind(auth.account_id)
                 .bind(target_id)
                 .execute(&state.pool)
@@ -372,7 +339,7 @@ async fn unfollow(
             inbox_url,
             shared_inbox_url,
         } => {
-            sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_remote_id = ?")
+            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
                 .bind(auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
@@ -435,8 +402,8 @@ async fn followers_list(
     let local_followers: Vec<AccountRow> = sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
-         FROM follows f JOIN accounts a ON f.follower_id = a.id \
-         WHERE f.followee_id = ? ORDER BY f.created_at DESC LIMIT ?",
+         FROM follows f JOIN personas a ON f.persona_id = a.id \
+         WHERE f.followee_persona_id = ? ORDER BY f.created_at DESC LIMIT ?",
     )
     .bind(account_id)
     .bind(limit)
@@ -447,7 +414,7 @@ async fn followers_list(
     let remote_followers: Vec<(i64, String, String, String, String)> = sqlx::query_as(
         "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
          FROM followers f JOIN remote_accounts ra ON f.remote_account_id = ra.id \
-         WHERE f.local_account_id = ? ORDER BY f.accepted_at DESC LIMIT ?",
+         WHERE f.persona_id = ? ORDER BY f.accepted_at DESC LIMIT ?",
     )
     .bind(account_id)
     .bind(limit)
@@ -512,8 +479,8 @@ async fn following_list(
     let local_following: Vec<AccountRow> = sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
-         FROM follows f JOIN accounts a ON f.followee_id = a.id \
-         WHERE f.follower_id = ? AND f.followee_id IS NOT NULL \
+         FROM follows f JOIN personas a ON f.followee_persona_id = a.id \
+         WHERE f.persona_id = ? AND f.followee_persona_id IS NOT NULL \
          ORDER BY f.created_at DESC LIMIT ?",
     )
     .bind(account_id)
@@ -525,7 +492,7 @@ async fn following_list(
     let remote_following: Vec<(i64, String, String, String, String)> = sqlx::query_as(
         "SELECT ra.id, ra.username, ra.domain, ra.display_name, ra.bio_html \
          FROM follows f JOIN remote_accounts ra ON f.followee_remote_id = ra.id \
-         WHERE f.follower_id = ? AND f.followee_remote_id IS NOT NULL \
+         WHERE f.persona_id = ? AND f.followee_remote_id IS NOT NULL \
          ORDER BY f.created_at DESC LIMIT ?",
     )
     .bind(account_id)
@@ -577,7 +544,6 @@ async fn block(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     auth.require_scope("write")?;
-    ensure_interaction_tables(&state.pool).await?;
     let domain = &state.config.server.domain;
     let now = now_millis();
 
@@ -590,7 +556,7 @@ async fn block(
             }
 
             sqlx::query(
-                "INSERT OR IGNORE INTO blocks (account_id, blocked_account_id, created_at) \
+                "INSERT OR IGNORE INTO blocks (persona_id, target_persona_id, created_at) \
                  VALUES (?, ?, ?)",
             )
             .bind(auth.account_id)
@@ -600,12 +566,12 @@ async fn block(
             .await?;
 
             // Remove mutual follows
-            sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?")
+            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
                 .bind(auth.account_id)
                 .bind(target_id)
                 .execute(&state.pool)
                 .await?;
-            sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?")
+            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_persona_id = ?")
                 .bind(target_id)
                 .bind(auth.account_id)
                 .execute(&state.pool)
@@ -622,7 +588,7 @@ async fn block(
             shared_inbox_url,
         } => {
             sqlx::query(
-                "INSERT OR IGNORE INTO blocks (account_id, blocked_remote_id, created_at) \
+                "INSERT OR IGNORE INTO blocks (persona_id, target_remote_id, created_at) \
                  VALUES (?, ?, ?)",
             )
             .bind(auth.account_id)
@@ -632,13 +598,13 @@ async fn block(
             .await?;
 
             // Remove follow + follower relationships
-            sqlx::query("DELETE FROM follows WHERE follower_id = ? AND followee_remote_id = ?")
+            sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
                 .bind(auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
                 .await?;
             sqlx::query(
-                "DELETE FROM followers WHERE local_account_id = ? AND remote_account_id = ?",
+                "DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?",
             )
             .bind(auth.account_id)
             .bind(remote_id)
@@ -674,13 +640,12 @@ async fn unblock(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    ensure_interaction_tables(&state.pool).await?;
 
     let target = resolve_target(&state.pool, &id).await?;
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM blocks WHERE account_id = ? AND blocked_account_id = ?")
+            sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_persona_id = ?")
                 .bind(auth.account_id)
                 .bind(target_id)
                 .execute(&state.pool)
@@ -691,7 +656,7 @@ async fn unblock(
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
-            sqlx::query("DELETE FROM blocks WHERE account_id = ? AND blocked_remote_id = ?")
+            sqlx::query("DELETE FROM blocks WHERE persona_id = ? AND target_remote_id = ?")
                 .bind(auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
@@ -714,7 +679,6 @@ async fn mute(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     auth.require_scope("write")?;
-    ensure_interaction_tables(&state.pool).await?;
     let now = now_millis();
 
     let target = resolve_target(&state.pool, &id).await?;
@@ -726,7 +690,7 @@ async fn mute(
             }
 
             sqlx::query(
-                "INSERT OR IGNORE INTO mutes (account_id, muted_account_id, created_at) \
+                "INSERT OR IGNORE INTO mutes (persona_id, target_persona_id, created_at) \
                  VALUES (?, ?, ?)",
             )
             .bind(auth.account_id)
@@ -741,7 +705,7 @@ async fn mute(
         }
         TargetAccount::Remote { id: remote_id, .. } => {
             sqlx::query(
-                "INSERT OR IGNORE INTO mutes (account_id, muted_remote_id, created_at) \
+                "INSERT OR IGNORE INTO mutes (persona_id, target_remote_id, created_at) \
                  VALUES (?, ?, ?)",
             )
             .bind(auth.account_id)
@@ -766,13 +730,12 @@ async fn unmute(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    ensure_interaction_tables(&state.pool).await?;
 
     let target = resolve_target(&state.pool, &id).await?;
 
     match target {
         TargetAccount::Local(target_id) => {
-            sqlx::query("DELETE FROM mutes WHERE account_id = ? AND muted_account_id = ?")
+            sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_persona_id = ?")
                 .bind(auth.account_id)
                 .bind(target_id)
                 .execute(&state.pool)
@@ -783,7 +746,7 @@ async fn unmute(
                 .map(Json)
         }
         TargetAccount::Remote { id: remote_id, .. } => {
-            sqlx::query("DELETE FROM mutes WHERE account_id = ? AND muted_remote_id = ?")
+            sqlx::query("DELETE FROM mutes WHERE persona_id = ? AND target_remote_id = ?")
                 .bind(auth.account_id)
                 .bind(remote_id)
                 .execute(&state.pool)
@@ -833,7 +796,7 @@ async fn update_credentials(
     let mut changed = false;
 
     if let Some(ref display_name) = body.display_name {
-        sqlx::query("UPDATE accounts SET display_name = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET display_name = ? WHERE id = ?")
             .bind(display_name)
             .bind(auth.account_id)
             .execute(&state.pool)
@@ -843,7 +806,7 @@ async fn update_credentials(
 
     if let Some(ref note) = body.note {
         let rendered = render_content(note, domain);
-        sqlx::query("UPDATE accounts SET bio = ?, bio_html = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET bio = ?, bio_html = ? WHERE id = ?")
             .bind(note)
             .bind(&rendered.html)
             .bind(auth.account_id)
@@ -853,7 +816,7 @@ async fn update_credentials(
     }
 
     if let Some(locked) = body.locked {
-        sqlx::query("UPDATE accounts SET is_locked = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET is_locked = ? WHERE id = ?")
             .bind(locked)
             .bind(auth.account_id)
             .execute(&state.pool)
@@ -862,7 +825,7 @@ async fn update_credentials(
     }
 
     if let Some(bot) = body.bot {
-        sqlx::query("UPDATE accounts SET bot = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET bot = ? WHERE id = ?")
             .bind(bot)
             .bind(auth.account_id)
             .execute(&state.pool)
@@ -871,7 +834,7 @@ async fn update_credentials(
     }
 
     if let Some(discoverable) = body.discoverable {
-        sqlx::query("UPDATE accounts SET discoverable = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET discoverable = ? WHERE id = ?")
             .bind(discoverable)
             .bind(auth.account_id)
             .execute(&state.pool)
@@ -887,7 +850,7 @@ async fn update_credentials(
             .collect();
         let fields_str =
             serde_json::to_string(&fields_json).map_err(|e| AppError::internal(e.to_string()))?;
-        sqlx::query("UPDATE accounts SET fields_json = ? WHERE id = ?")
+        sqlx::query("UPDATE personas SET fields_json = ? WHERE id = ?")
             .bind(&fields_str)
             .bind(auth.account_id)
             .execute(&state.pool)
@@ -975,7 +938,7 @@ async fn follow_requests(
 ) -> Result<Json<Value>, AppError> {
     let requests: Vec<(i64, i64, i64)> = sqlx::query_as(
         "SELECT fr.id, fr.requester_remote_id, fr.created_at \
-         FROM follow_requests fr WHERE fr.target_account_id = ? \
+         FROM follow_requests fr WHERE fr.target_persona_id = ? \
          ORDER BY fr.created_at DESC",
     )
     .bind(auth.account_id)
@@ -1036,7 +999,7 @@ async fn authorize_follow(
     // Find and validate the follow request
     let request: Option<(i64, String)> = sqlx::query_as(
         "SELECT id, ap_id FROM follow_requests \
-         WHERE requester_remote_id = ? AND target_account_id = ?",
+         WHERE requester_remote_id = ? AND target_persona_id = ?",
     )
     .bind(remote_id)
     .bind(auth.account_id)
@@ -1050,10 +1013,11 @@ async fn authorize_follow(
 
     // Accept: insert into followers
     sqlx::query(
-        "INSERT OR IGNORE INTO followers (local_account_id, remote_account_id, accepted_at) \
-         VALUES (?, ?, ?)",
+        "INSERT OR IGNORE INTO followers (persona_id, user_id, remote_account_id, accepted_at) \
+         VALUES (?, ?, ?, ?)",
     )
     .bind(auth.account_id)
+    .bind(crate::db::DEFAULT_USER_ID)
     .bind(remote_id)
     .bind(now)
     .execute(&state.pool)
@@ -1112,7 +1076,7 @@ async fn reject_follow(
     // Find and validate the follow request
     let request: Option<(i64, String)> = sqlx::query_as(
         "SELECT id, ap_id FROM follow_requests \
-         WHERE requester_remote_id = ? AND target_account_id = ?",
+         WHERE requester_remote_id = ? AND target_persona_id = ?",
     )
     .bind(remote_id)
     .bind(auth.account_id)
@@ -1207,7 +1171,7 @@ async fn search(
                     Ok(actor_uri) => {
                         // Get signing credentials
                         let signing: Option<(String, String)> = sqlx::query_as(
-                            "SELECT username, private_key_pem FROM accounts WHERE id = ?",
+                            "SELECT username, private_key_pem FROM personas WHERE id = ?",
                         )
                         .bind(auth.account_id)
                         .fetch_optional(&state.pool)
@@ -1283,7 +1247,7 @@ async fn search(
         let local_matches: Vec<AccountRow> = sqlx::query_as(
             "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, \
              bot, fields_json, created_at, last_status_at \
-             FROM accounts \
+             FROM personas \
              WHERE username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' \
              LIMIT ?",
         )
@@ -1427,7 +1391,7 @@ async fn followed_tags_list(
         .min(100);
 
     let tags: Vec<(String,)> = sqlx::query_as(
-        "SELECT tag FROM followed_tags WHERE account_id = ? ORDER BY created_at DESC LIMIT ?",
+        "SELECT tag FROM followed_tags WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
     )
     .bind(auth.account_id)
     .bind(limit)
@@ -1453,7 +1417,7 @@ async fn follow_tag(
     let now = now_millis();
 
     sqlx::query(
-        "INSERT OR IGNORE INTO followed_tags (account_id, tag, created_at) VALUES (?, ?, ?)",
+        "INSERT OR IGNORE INTO followed_tags (user_id, tag, created_at) VALUES (?, ?, ?)",
     )
     .bind(auth.account_id)
     .bind(&tag)
@@ -1473,7 +1437,7 @@ async fn unfollow_tag(
     let domain = &state.config.server.domain;
     let tag = id.to_lowercase();
 
-    sqlx::query("DELETE FROM followed_tags WHERE account_id = ? AND tag = ?")
+    sqlx::query("DELETE FROM followed_tags WHERE user_id = ? AND tag = ?")
         .bind(auth.account_id)
         .bind(&tag)
         .execute(&state.pool)
@@ -1499,7 +1463,7 @@ async fn get_tag(
     {
         let token_hash = crate::api::hex_encode(&Sha256::digest(auth_header.as_bytes()));
         let account_id: Option<(i64,)> = sqlx::query_as(
-            "SELECT account_id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
+            "SELECT persona_id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
         )
         .bind(&token_hash)
         .fetch_optional(&state.pool)
@@ -1507,7 +1471,7 @@ async fn get_tag(
 
         if let Some((aid,)) = account_id {
             let (count,): (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM followed_tags WHERE account_id = ? AND tag = ?",
+                "SELECT COUNT(*) FROM followed_tags WHERE user_id = ? AND tag = ?",
             )
             .bind(aid)
             .bind(&tag)

@@ -20,7 +20,7 @@ pub async fn import_mastodon_archive(
     username: &str,
     archive_path: &Path,
 ) -> Result<ImportStats> {
-    let account: (i64,) = sqlx::query_as("SELECT id FROM accounts WHERE username = ?")
+    let account: (i64,) = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
         .bind(username)
         .fetch_optional(pool)
         .await?
@@ -189,7 +189,7 @@ async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) ->
     };
 
     sqlx::query(
-        "UPDATE accounts SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
+        "UPDATE personas SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
     )
     .bind(&display_name)
     .bind(&bio)
@@ -334,9 +334,10 @@ async fn import_outbox(
 
         // Insert the post
         let result = sqlx::query(
-            "INSERT INTO posts (id, account_id, ap_id, in_reply_to_uri, context_url, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO posts (id, user_id, persona_id, ap_id, in_reply_to_uri, context_url, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
+        .bind(crate::db::DEFAULT_USER_ID)
         .bind(account_id)
         .bind(&ap_id)
         .bind(in_reply_to_uri.as_deref())
@@ -442,9 +443,10 @@ async fn import_outbox(
                             .unwrap_or(0);
 
                         let _ = sqlx::query(
-                            "INSERT INTO media (id, account_id, post_id, file_path, mime_type, file_size, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO media (id, user_id, persona_id, post_id, file_path, mime_type, file_size, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         )
                         .bind(media_id)
+                        .bind(crate::db::DEFAULT_USER_ID)
                         .bind(account_id)
                         .bind(id)
                         .bind(&dest_filename)

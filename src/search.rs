@@ -98,7 +98,7 @@ impl SearchIndex {
     /// Reindex all posts from the database
     pub async fn reindex_all(&self, pool: &sqlx::SqlitePool) -> Result<usize> {
         let posts: Vec<(i64, String, i64)> =
-            sqlx::query_as("SELECT id, content, account_id FROM posts ORDER BY id")
+            sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
                 .fetch_all(pool)
                 .await?;
 
