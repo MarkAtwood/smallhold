@@ -29,7 +29,8 @@ async fn fetch_public_posts(
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork::posts_db::posts_by_persona doesn't filter by
     // visibility or exclude boosts. Custom query needed for feed generation.
-    let rows: Vec<(i64, String, i64)> = sqlx::query_as(
+    let rows: Vec<(i64, String, i64)> = // REMAINING: query
+ sqlx::query_as(
         "SELECT id, content_html, created_at \
          FROM posts \
          WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \

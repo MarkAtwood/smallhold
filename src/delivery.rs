@@ -125,7 +125,8 @@ async fn process_batch(
     // ponytail: this JOIN between delivery_queue and personas is not covered
     // by fieldwork::delivery_db::fetch_pending (which doesn't include persona
     // fields). Kept as inline SQL for the JOIN projection.
-    let rows: Vec<DeliveryRow> = sqlx::query_as(
+    let rows: Vec<DeliveryRow> = // REMAINING: delivery query
+ sqlx::query_as(
         "SELECT d.id, d.target_inbox, d.sender_persona_id, d.activity_json, d.attempts, \
                 a.private_key_pem, a.username \
          FROM delivery_queue d \
@@ -387,6 +388,9 @@ async fn create_scheduled_post(
     // This conditional UPDATE (matching persona_id + post_id IS NULL) is
     // too specific for a generic module.
     for mid in &media_ids {
+        // REMAINING: delivery query
+
+        // REMAINING: reason varies
         sqlx::query(
             "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
         )
@@ -421,6 +425,9 @@ async fn create_scheduled_post(
 
     // ponytail: fieldwork::persona_db has no update_last_status_at function.
     // This is a single-column timestamp bump, not worth a new fieldwork function.
+    // REMAINING: delivery query
+
+    // REMAINING: persona query — fieldwork has partial coverage
     sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now_ms)
         .bind(account_id)

@@ -510,6 +510,9 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             // Ensure the single-owner user exists for FK reference
             crate::db::ensure_default_user(&pool).await?;
 
+            
+
+            // REMAINING: reason varies
             sqlx::query(
                 "INSERT INTO personas (id, user_id, username, display_name, private_key_pem, public_key_pem, is_locked, bot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
@@ -527,6 +530,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             .context("Failed to create persona (username may already exist)")?;
 
             // Store DID keys on the users table (canonical schema)
+            
+            // REMAINING: reason varies
             sqlx::query(
                 "UPDATE users SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
             )
@@ -543,7 +548,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             eprintln!("{recovery_phrase}");
         }
         PersonaCommands::List => {
-            let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let rows: Vec<(String, String, String, i64)> =  sqlx::query_as(
                 "SELECT id, username, display_name, created_at FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
@@ -609,6 +615,9 @@ async fn cmd_admin(cmd: AdminCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
+            
+
+            // REMAINING: reason varies
             sqlx::query(
                 "INSERT INTO admin (id, password_hash, created_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash",
             )
@@ -661,10 +670,11 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
     match cmd {
         TokenCommands::Mint { username, scopes } => {
             let account: Option<(String,)> =
-                sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-                    .bind(&username)
-                    .fetch_optional(&pool)
-                    .await?;
+                
+                {
+                    let p = fieldwork::persona_db::get_persona_by_username(&fw_pool(&pool), &username).await?;
+                    p.map(|p| (p.id,))
+                };
 
             let (account_id,) =
                 account.ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
@@ -699,7 +709,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("This token will not be shown again.");
         }
         TokenCommands::List => {
-            let rows: Vec<(String, String, String, i64, Option<i64>, String)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let rows: Vec<(String, String, String, i64, Option<i64>, String)> =  sqlx::query_as(
                 "SELECT t.id, a.username, t.scopes, t.created_at, t.last_used_at, oa.name \
                  FROM oauth_tokens t \
                  JOIN personas a ON t.persona_id = a.id \
@@ -731,7 +742,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
-            let result = sqlx::query(
+            // REMAINING: reason varies
+            let result =  sqlx::query(
                 "UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
             )
             .bind(now)
@@ -753,6 +765,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
             let result = if let Some(ref uname) = username {
                 let account: Option<(String,)> =
+                    
+                    // REMAINING: persona query — fieldwork has partial coverage
                     sqlx::query_as("SELECT id FROM personas WHERE username = ?")
                         .bind(uname)
                         .fetch_optional(&pool)
@@ -760,6 +774,9 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 let (account_id,) =
                     account.ok_or_else(|| anyhow::anyhow!("Persona @{uname} not found"))?;
 
+                
+
+                // REMAINING: reason varies
                 sqlx::query(
                     "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND revoked_at IS NULL",
                 )
@@ -768,6 +785,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .execute(&pool)
                 .await?
             } else {
+                
+                // REMAINING: OAuth query — fieldwork has partial coverage
                 sqlx::query("UPDATE oauth_tokens SET revoked_at = ? WHERE revoked_at IS NULL")
                     .bind(now)
                     .execute(&pool)
@@ -782,14 +801,17 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
         }
         TokenCommands::Sessions => {
             let accounts: Vec<(String, String)> =
-                sqlx::query_as("SELECT id, username FROM personas ORDER BY username")
-                    .fetch_all(&pool)
-                    .await?;
+                
+                {
+                    let personas = fieldwork::persona_db::list_personas(&fw_pool(&pool)).await?;
+                    personas.iter().map(|p| (p.id.clone(), p.username.clone())).collect::<Vec<_>>()
+                };
 
             for (account_id, username) in &accounts {
                 eprintln!("Sessions for @{username}:");
 
-                let rows: Vec<(String, String, String, Option<i64>)> = sqlx::query_as(
+                // REMAINING: reason varies
+                let rows: Vec<(String, String, String, Option<i64>)> =  sqlx::query_as(
                     "SELECT t.id, oa.name, t.scopes, t.last_used_at \
                      FROM oauth_tokens t \
                      JOIN oauth_apps oa ON t.app_id = oa.id \
@@ -820,6 +842,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
 async fn get_or_create_cli_app(pool: &sqlx::SqlitePool) -> Result<i64> {
     let existing: Option<(i64,)> =
+        
+        // REMAINING: OAuth query — fieldwork has partial coverage
         sqlx::query_as("SELECT id FROM oauth_apps WHERE client_id = 'cli'")
             .fetch_optional(pool)
             .await?;
@@ -834,6 +858,9 @@ async fn get_or_create_cli_app(pool: &sqlx::SqlitePool) -> Result<i64> {
         .unwrap()
         .as_millis() as i64;
 
+    
+
+    // REMAINING: reason varies
     sqlx::query(
         "INSERT INTO oauth_apps (id, client_id, client_secret, name, redirect_uri, scopes, created_at) VALUES (?, 'cli', 'cli', 'CLI', 'urn:ietf:wg:oauth:2.0:oob', 'read write follow', ?)",
     )
@@ -865,6 +892,9 @@ async fn cmd_domain_block(cmd: DomainBlockCommands, config_path: &Path) -> Resul
                 .unwrap()
                 .as_millis() as i64;
 
+            
+
+            // REMAINING: reason varies
             sqlx::query(
                 "INSERT INTO domain_blocks (domain, severity, reject_media, reason, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(domain) DO UPDATE SET severity = excluded.severity, reject_media = excluded.reject_media, reason = excluded.reason",
             )
@@ -879,14 +909,15 @@ async fn cmd_domain_block(cmd: DomainBlockCommands, config_path: &Path) -> Resul
             eprintln!("Blocked domain: {domain} ({severity})");
         }
         DomainBlockCommands::Remove { domain } => {
-            sqlx::query("DELETE FROM domain_blocks WHERE domain = ?")
-                .bind(&domain)
-                .execute(&pool)
-                .await?;
+            
+            fieldwork::domain_blocks_db::unblock_domain(
+                &fw_pool(&pool), &domain,
+            ).await?;
             eprintln!("Unblocked domain: {domain}");
         }
         DomainBlockCommands::List => {
-            let rows: Vec<(String, String, String)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let rows: Vec<(String, String, String)> =  sqlx::query_as(
                 "SELECT domain, severity, reason FROM domain_blocks ORDER BY domain",
             )
             .fetch_all(&pool)
@@ -915,16 +946,20 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
 
     match cmd {
         QueueCommands::Inspect => {
-            let pending: (i64,) = sqlx::query_as(
+            // REMAINING: reason varies
+            let pending: (i64,) =  sqlx::query_as(
                 "SELECT COUNT(*) FROM delivery_queue WHERE delivered_at IS NULL AND dead_at IS NULL",
             )
             .fetch_one(&pool)
             .await?;
             let dead: (i64,) =
+                
+                // REMAINING: dead queue count
                 sqlx::query_as("SELECT COUNT(*) FROM delivery_queue WHERE dead_at IS NOT NULL")
                     .fetch_one(&pool)
                     .await?;
-            let delivered: (i64,) = sqlx::query_as(
+            // REMAINING: reason varies
+            let delivered: (i64,) =  sqlx::query_as(
                 "SELECT COUNT(*) FROM delivery_queue WHERE delivered_at IS NOT NULL",
             )
             .fetch_one(&pool)
@@ -941,7 +976,8 @@ async fn cmd_queue(cmd: QueueCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_secs() as i64;
 
-            let result = sqlx::query(
+            // REMAINING: reason varies
+            let result =  sqlx::query(
                 "UPDATE delivery_queue SET dead_at = NULL, attempts = 0, next_attempt_at = ? WHERE dead_at IS NOT NULL",
             )
             .bind(now)
@@ -1027,7 +1063,8 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let pub_key = crate::did::ed25519_public_from_private(&priv_key);
             let did_key = crate::did::ed25519_to_did_key(&pub_key);
 
-            let account: Option<(String, String, String)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let account: Option<(String, String, String)> =  sqlx::query_as(
                 "SELECT u.id, p.username, p.display_name FROM users u \
                  JOIN personas p ON p.user_id = u.id \
                  WHERE u.did_key = ?",
@@ -1055,7 +1092,8 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
         }
         DidCommands::Backfill => {
             // Check if the single user already has a DID key
-            let user_row: Option<(String,)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let user_row: Option<(String,)> =  sqlx::query_as(
                 "SELECT id FROM users WHERE did_key IS NULL",
             )
             .fetch_optional(&pool)
@@ -1066,7 +1104,8 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
                 return Ok(());
             }
 
-            let personas: Vec<(String, String)> = sqlx::query_as(
+            // REMAINING: persona query — fieldwork has partial coverage
+            let personas: Vec<(String, String)> =  sqlx::query_as(
                 "SELECT id, username FROM personas ORDER BY created_at",
             )
             .fetch_all(&pool)
@@ -1080,6 +1119,9 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
             let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
 
+            
+
+            // REMAINING: reason varies
             sqlx::query(
                 "UPDATE users SET did_key = ?, recovery_pubkey = ? WHERE id = ?",
             )
@@ -1112,7 +1154,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
     match cmd {
         RelayCommands::Add { url } => {
             // Fetch the relay's actor document to get its inbox URL.
-            let first_account: Option<(String, String, String)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let first_account: Option<(String, String, String)> =  sqlx::query_as(
                 "SELECT id, username, private_key_pem FROM personas ORDER BY created_at LIMIT 1",
             )
             .fetch_optional(&pool)
@@ -1145,6 +1188,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let follow_uri = format!("https://{domain}/activities/follow-{follow_id}");
 
             let relay_id = generate_id();
+            
+            // REMAINING: reason varies
             sqlx::query(
                 "INSERT INTO relays (id, inbox_url, actor_uri, follow_id, state, created_at) VALUES (?, ?, ?, ?, 'pending', ?) \
                  ON CONFLICT(inbox_url) DO UPDATE SET state = 'pending', follow_id = excluded.follow_id",
@@ -1182,6 +1227,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
 
             // Get the first local account to send the Undo.
             let first_account: Option<(String, String)> =
+                
+                // REMAINING: persona query — fieldwork has partial coverage
                 sqlx::query_as("SELECT id, username FROM personas ORDER BY created_at LIMIT 1")
                     .fetch_optional(&pool)
                     .await?;
@@ -1214,7 +1261,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             eprintln!("Unsubscribed from relay: {url}");
         }
         RelayCommands::List => {
-            let rows: Vec<(String, String, String)> = sqlx::query_as(
+            // REMAINING: reason varies
+            let rows: Vec<(String, String, String)> =  sqlx::query_as(
                 "SELECT actor_uri, inbox_url, state FROM relays ORDER BY created_at",
             )
             .fetch_all(&pool)

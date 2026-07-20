@@ -363,6 +363,9 @@ async fn update_media(
 
     // ponytail: fieldwork::media_db has no update_description function.
     // This is a single-column update not worth a new fieldwork function.
+    // REMAINING: query
+
+    // REMAINING: media query
     sqlx::query("UPDATE media SET description = ? WHERE id = ?")
         .bind(&description)
         .bind(media_id)

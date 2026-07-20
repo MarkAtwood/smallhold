@@ -83,7 +83,8 @@ struct AccountRow {
 
 /// Looks up a local persona by username (with DID data from users table).
 async fn fetch_account(pool: &sqlx::SqlitePool, username: &str) -> Result<AccountRow, AppError> {
-    let row: AccountRow = sqlx::query_as(
+    let row: AccountRow = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT p.username, p.display_name, p.bio_html, p.public_key_pem,
                 p.is_locked, p.discoverable, p.bot, p.fields_json, p.created_at,
                 u.did_key, u.recovery_pubkey
@@ -251,6 +252,9 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
     let custom_css = load_extra_css(&state.config);
 
     let accounts: Vec<(String, String)> =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: persona query — fieldwork has partial coverage
         sqlx::query_as("SELECT username, display_name FROM personas ORDER BY created_at")
             .fetch_all(&state.pool)
             .await?;
@@ -304,7 +308,8 @@ async fn profile_page(
     ).await?;
     let aid = persona.as_ref().map(|p| p.id.as_str()).unwrap_or("");
 
-    let (post_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
+    let (post_count,): (i64,) = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
         .bind(aid)
         .fetch_one(&state.pool)
         .await
@@ -329,7 +334,8 @@ async fn profile_page(
     }
 
     // Recent posts
-    let posts: Vec<PostRow> = sqlx::query_as(
+    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT id, content_html, created_at FROM posts WHERE persona_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 20",
     )
     .bind(aid)
@@ -412,7 +418,8 @@ async fn post_page(
         .parse()
         .map_err(|_| AppError::not_found("Post not found"))?;
 
-    let post: PostRow = sqlx::query_as(
+    let post: PostRow = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT p.id, p.content_html, p.created_at FROM posts p \
          JOIN personas a ON p.persona_id = a.id \
          WHERE p.id = ? AND a.username = ? AND p.visibility IN ('public', 'unlisted')",
@@ -495,6 +502,9 @@ async fn outbox(
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
     let account_row: Option<(i64,)> =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: persona query — fieldwork has partial coverage
         sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
@@ -506,12 +516,16 @@ async fn outbox(
     let actor_uri = format!("https://{domain}/users/{username}");
 
     let (total,): (i64,) =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: post query — dynamic SQL or transaction
         sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND visibility = 'public'")
             .bind(account_id)
             .fetch_one(&state.pool)
             .await?;
 
-    let posts: Vec<PostRow> = sqlx::query_as(
+    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT id, content_html, context_url, created_at \
          FROM posts \
          WHERE persona_id = ? AND visibility = 'public' \
@@ -614,6 +628,9 @@ async fn featured(
     let domain = &state.config.server.domain;
 
     let account_row: Option<(i64,)> =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: persona query — fieldwork has partial coverage
         sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
@@ -622,7 +639,8 @@ async fn featured(
 
     let actor_uri = format!("https://{domain}/users/{username}");
 
-    let posts: Vec<PostRow> = sqlx::query_as(
+    let posts: Vec<PostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
          WHERE pp.persona_id = ? AND p.visibility = 'public' \
@@ -692,6 +710,9 @@ async fn ap_context_collection(
 ) -> Result<Response, AppError> {
     // Verify account exists.
     let account_row: Option<(i64,)> =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: persona query — fieldwork has partial coverage
         sqlx::query_as("SELECT id FROM personas WHERE username = ? LIMIT 1")
             .bind(&username)
             .fetch_optional(&state.pool)
@@ -713,6 +734,9 @@ async fn ap_context_collection(
 
     // Verify the post exists and belongs to this account.
     let post_exists: Option<(i64,)> =
+        // REMAINING: ActivityPub query — can be converted to fieldwork
+
+        // REMAINING: post query — dynamic SQL or transaction
         sqlx::query_as("SELECT id FROM posts WHERE id = ? AND user_id = ?")
             .bind(post_id)
             .bind(account_id)
@@ -733,7 +757,8 @@ async fn ap_context_collection(
         username: String,
     }
 
-    let posts: Vec<ContextPostRow> = sqlx::query_as(
+    let posts: Vec<ContextPostRow> = // REMAINING: ActivityPub query — can be converted to fieldwork
+ sqlx::query_as(
         "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
          FROM posts p \
          JOIN personas a ON p.persona_id = a.id \

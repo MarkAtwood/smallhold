@@ -73,6 +73,7 @@ mod tests {
         let pool = create_pool("sqlite::memory:").await.unwrap();
         // Verify tables exist
         let result: (i64,) =
+            // REMAINING: transaction or DDL query
             sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
                 .fetch_one(&pool)
                 .await

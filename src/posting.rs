@@ -96,39 +96,35 @@ async fn load_active_filters(
     // and the filter has not expired.
     // ponytail: LIKE on JSON array is fine for small cardinality contexts
     // (home, notifications, public, thread, account). Upgrade: json_each().
-    let pattern = format!("%\"{context}\"%");
-    let rows: Vec<(i64, String, String, String)> = sqlx::query_as(
-        "SELECT id, title, context, filter_action FROM filters \
-         WHERE user_id = ? AND context LIKE ? \
-         AND (expires_at IS NULL OR expires_at > ?)",
-    )
-    .bind(account_id)
-    .bind(&pattern)
-    .bind(now)
-    .fetch_all(pool)
-    .await?;
+    let fwp = crate::server::fw_pool(pool);
+    let all_filters = fieldwork::filters_db::get_filters(&fwp, account_id).await?;
 
-    let mut filters = Vec::with_capacity(rows.len());
-    for (fid, title, ctx, action) in rows {
-        let kw_rows: Vec<(String, bool)> =
-            sqlx::query_as("SELECT keyword, whole_word FROM filter_keywords WHERE filter_id = ?")
-                .bind(fid)
-                .fetch_all(pool)
-                .await?;
+    let mut filters = Vec::new();
+    for f in all_filters {
+        // Check context match and expiry
+        if !f.context.contains(&format!("\"{context}\"")) {
+            continue;
+        }
+        if let Some(exp) = f.expires_at {
+            if exp <= now {
+                continue;
+            }
+        }
 
+        let kw_rows = fieldwork::filters_db::get_keywords(&fwp, f.id).await?;
         let keywords = kw_rows
             .into_iter()
-            .map(|(keyword, whole_word)| ActiveKeyword {
-                keyword,
-                whole_word,
+            .map(|kw| ActiveKeyword {
+                keyword: kw.keyword,
+                whole_word: kw.whole_word,
             })
             .collect();
 
         filters.push(ActiveFilter {
-            id: fid,
-            title,
-            context_json: ctx,
-            filter_action: action,
+            id: f.id,
+            title: f.title,
+            context_json: f.context,
+            filter_action: f.filter_action,
             keywords,
         });
     }
@@ -510,27 +506,94 @@ fn linkify_segment(segment: &str, url_re: &regex::Regex) -> String {
 // Status serialization
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, sqlx::FromRow)]
+/// Local view of a post row used for API serialization.
+/// Populated from `fieldwork::posts_db::PostRow` via `fw_to_local_post`.
+#[derive(Debug)]
 pub struct PostRow {
-    id: i64,
-    persona_id: String,
-    in_reply_to_id: Option<i64>,
-    boost_of_id: Option<i64>,
-    context_url: Option<String>,
-    #[allow(dead_code)]
-    content: String,
-    content_html: String,
-    spoiler_text: String,
-    visibility: String,
-    sensitive: bool,
-    language: Option<String>,
-    created_at: i64,
-    edited_at: Option<i64>,
+    pub id: i64,
+    pub persona_id: String,
+    pub ap_id: String,
+    pub in_reply_to_id: Option<i64>,
+    pub in_reply_to_uri: Option<String>,
+    pub boost_of_id: Option<i64>,
+    pub context_url: Option<String>,
+    pub content: String,
+    pub content_html: String,
+    pub spoiler_text: String,
+    pub visibility: String,
+    pub sensitive: bool,
+    pub language: Option<String>,
+    pub created_at: i64,
+    pub edited_at: Option<i64>,
 }
 
+/// Convert a fieldwork PostRow to our local PostRow.
+pub fn fw_to_local_post(p: &fieldwork::posts_db::PostRow) -> PostRow {
+    PostRow {
+        id: p.id,
+        persona_id: p.persona_id.clone(),
+        ap_id: p.ap_id.clone(),
+        in_reply_to_id: p.in_reply_to_id,
+        in_reply_to_uri: p.in_reply_to_uri.clone(),
+        boost_of_id: p.boost_of_id,
+        context_url: p.context_url.clone(),
+        content: p.content.clone(),
+        content_html: p.content_html.clone(),
+        spoiler_text: p.spoiler_text.clone(),
+        visibility: p.visibility.clone(),
+        sensitive: p.sensitive,
+        language: p.language.clone(),
+        created_at: p.created_at,
+        edited_at: p.edited_at,
+    }
+}
+
+/// Fetch a local post by ID using fieldwork, returning our local PostRow.
+pub async fn get_local_post(pool: &SqlitePool, id: i64) -> Result<Option<PostRow>, AppError> {
+    let fwp = crate::server::fw_pool(pool);
+    let fw_post = fieldwork::posts_db::get_post(&fwp, id).await?;
+    Ok(fw_post.map(|p| fw_to_local_post(&p)))
+}
+
+/// Fetch a local post by AP ID using fieldwork.
+pub async fn get_local_post_by_ap_id(pool: &SqlitePool, ap_id: &str) -> Result<Option<PostRow>, AppError> {
+    let fwp = crate::server::fw_pool(pool);
+    let fw_post = fieldwork::posts_db::get_post_by_ap_id(&fwp, ap_id).await?;
+    Ok(fw_post.map(|p| fw_to_local_post(&p)))
+}
+
+// REMAINING: POST_COLUMNS and sqlx_row_to_post are needed for dynamic SQL queries
+// (paginated timelines, CTEs, conversation queries) that fieldwork doesn't support.
+// These use complex WHERE clauses, JOINs, and dynamic pagination that can't be
+// expressed through fieldwork's fixed query functions.
 pub const POST_COLUMNS: &str =
-    "id, persona_id, in_reply_to_id, boost_of_id, context_url, content, content_html, \
+    "id, persona_id, ap_id, in_reply_to_id, in_reply_to_uri, boost_of_id, context_url, content, content_html, \
      spoiler_text, visibility, sensitive, language, created_at, edited_at";
+
+pub fn sqlx_row_to_post_pub(row: sqlx::sqlite::SqliteRow) -> PostRow {
+    sqlx_row_to_post(row)
+}
+
+fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow) -> PostRow {
+    use sqlx::Row;
+    PostRow {
+        id: row.get(0),
+        persona_id: row.get(1),
+        ap_id: row.get(2),
+        in_reply_to_id: row.get(3),
+        in_reply_to_uri: row.get(4),
+        boost_of_id: row.get(5),
+        context_url: row.get(6),
+        content: row.get(7),
+        content_html: row.get(8),
+        spoiler_text: row.get(9),
+        visibility: row.get(10),
+        sensitive: row.get(11),
+        language: row.get(12),
+        created_at: row.get(13),
+        edited_at: row.get(14),
+    }
+}
 
 /// Build the Mastodon Status JSON for a local post.
 #[allow(clippy::too_many_arguments)]
@@ -686,60 +749,42 @@ pub async fn load_status(
     let account_json = account_to_json(&account, domain);
 
     // Fetch media attachments
-    let media: Vec<(
-        i64,
-        String,
-        String,
-        Option<i32>,
-        Option<i32>,
-        Option<String>,
-        String,
-    )> = sqlx::query_as(
-        "SELECT id, file_path, mime_type, width, height, blurhash, description
-             FROM media WHERE post_id = ? ORDER BY id",
-    )
-    .bind(post.id)
-    .fetch_all(pool)
-    .await?;
+    let fwp_media = crate::server::fw_pool(pool);
+    let media = fieldwork::media_db::attachments_for_post(&fwp_media, post.id).await?;
 
     let media_values: Vec<Value> = media
         .iter()
-        .map(
-            |(id, file_path, mime_type, width, height, blurhash, description)| {
+        .map(|m| {
                 json!({
-                    "id": id.to_string(),
-                    "type": media_type_from_mime(mime_type),
-                    "url": format!("https://{domain}/media/{file_path}"),
-                    "preview_url": format!("https://{domain}/media/{file_path}"),
+                    "id": m.id.to_string(),
+                    "type": media_type_from_mime(&m.mime_type),
+                    "url": format!("https://{domain}/media/{}", m.file_path),
+                    "preview_url": format!("https://{domain}/media/{}", m.file_path),
                     "remote_url": null,
                     "meta": {
                         "original": {
-                            "width": width,
-                            "height": height
+                            "width": m.width,
+                            "height": m.height
                         }
                     },
-                    "description": description,
-                    "blurhash": blurhash
+                    "description": m.description,
+                    "blurhash": m.blurhash
                 })
-            },
-        )
+        })
         .collect();
 
     // Fetch tags
-    let tags: Vec<(String,)> = sqlx::query_as("SELECT tag FROM post_tags WHERE post_id = ?")
-        .bind(post.id)
-        .fetch_all(pool)
-        .await?;
-    let tag_strings: Vec<String> = tags.into_iter().map(|(t,)| t).collect();
+    let fwp_tags = crate::server::fw_pool(pool);
+    let tag_strings = fieldwork::post_tags_db::get_tags(&fwp_tags, post.id).await?;
     let tag_vals = tag_values_for_post(&tag_strings, domain);
 
     // Fetch mentions for display
-    let mention_rows: Vec<(Option<String>, Option<i64>)> = sqlx::query_as(
-        "SELECT mentioned_persona_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
-    )
-    .bind(post.id)
-    .fetch_all(pool)
-    .await?;
+    let fwp_mentions = crate::server::fw_pool(pool);
+    let fw_mentions = fieldwork::mentions_db::get_mentions(&fwp_mentions, post.id).await?;
+    let mention_rows: Vec<(Option<String>, Option<i64>)> = fw_mentions
+        .into_iter()
+        .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
+        .collect();
 
     let mut mention_vals = Vec::new();
     for (local_id, remote_id) in &mention_rows {
@@ -754,6 +799,7 @@ pub async fn load_status(
             }
         } else if let Some(rid) = remote_id {
             let remote: Option<(i64, String, String)> =
+                // REMAINING: remote account by ID — actor_cache has no get_by_id
                 sqlx::query_as("SELECT id, username, domain FROM remote_accounts WHERE id = ?")
                     .bind(rid)
                     .fetch_optional(pool)
@@ -776,6 +822,7 @@ pub async fn load_status(
         ).await?;
 
         let boost: (i64,) =
+            // REMAINING: post query — dynamic SQL or transaction
             sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ? AND boost_of_id = ?")
                 .bind(viewer)
                 .bind(post.id)
@@ -783,6 +830,7 @@ pub async fn load_status(
                 .await?;
 
         let bmark: (i64,) =
+            // REMAINING: bookmark query
             sqlx::query_as("SELECT COUNT(*) FROM bookmarks WHERE persona_id = ? AND post_id = ?")
                 .bind(viewer)
                 .bind(post.id)
@@ -797,10 +845,7 @@ pub async fn load_status(
     // Handle reblog (boost_of_id)
     let reblog_value = if let Some(boost_id) = post.boost_of_id {
         let boosted: Option<PostRow> =
-            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-                .bind(boost_id)
-                .fetch_optional(pool)
-                .await?;
+            get_local_post(pool, boost_id).await?;
         if let Some(bp) = &boosted {
             Some(Box::pin(load_status(pool, bp, domain, viewer_account_id)).await?)
         } else {
@@ -829,6 +874,7 @@ pub async fn load_status(
         false, // muted
         bookmarked,
         {
+            // REMAINING: pinned check — no fieldwork is_pinned function
             let pinned: (i64,) = sqlx::query_as(
                 "SELECT COUNT(*) FROM pinned_posts WHERE persona_id = ? AND post_id = ?",
             )
@@ -911,7 +957,8 @@ async fn fetch_paginated_statuses(
          ORDER BY id {order} LIMIT ?",
     );
 
-    let mut query = sqlx::query_as::<_, PostRow>(&sql);
+    // REMAINING: dynamic SQL pagination — fieldwork has no paginated timeline function
+    let mut query = sqlx::query(&sql);
     for b in base_binds {
         query = query.bind(b);
     }
@@ -920,7 +967,8 @@ async fn fetch_paginated_statuses(
     }
     query = query.bind(limit);
 
-    let posts: Vec<PostRow> = query.fetch_all(pool).await?;
+    let rows = query.fetch_all(pool).await?;
+    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
@@ -959,13 +1007,8 @@ async fn create_status(
         .await?;
 
         if let Some(post_id) = existing {
-            let post = sqlx::query_as::<_, PostRow>(&format!(
-                "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-            ))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
-            .ok_or_else(|| AppError::not_found("Post not found"))?;
+            let post = get_local_post(&state.pool, post_id).await?
+                .ok_or_else(|| AppError::not_found("Post not found"))?;
 
             let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
             return Ok((StatusCode::OK, Json(status)).into_response());
@@ -1038,19 +1081,17 @@ async fn create_status(
             let params_json =
                 serde_json::to_string(&body).map_err(|e| AppError::internal(e.to_string()))?;
 
-            sqlx::query(
-                "INSERT INTO scheduled_statuses \
-                 (id, user_id, persona_id, scheduled_at, params_json, created_at) \
-                 VALUES (?, ?, ?, ?, ?, ?)",
-            )
-            .bind(sched_id)
-            .bind(crate::db::DEFAULT_USER_ID)
-            .bind(&auth.account_id)
-            .bind(scheduled_ms)
-            .bind(&params_json)
-            .bind(now)
-            .execute(&state.pool)
-            .await?;
+            fieldwork::scheduled_db::create_scheduled(
+                &crate::server::fw_pool(&state.pool),
+                &fieldwork::scheduled_db::ScheduledRow {
+                    id: sched_id,
+                    user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                    persona_id: auth.account_id.clone(),
+                    scheduled_at: scheduled_ms,
+                    params_json: params_json.clone(),
+                    created_at: now,
+                },
+            ).await?;
 
             let scheduled_json = scheduled_status_to_json(
                 sched_id,
@@ -1081,11 +1122,8 @@ async fn create_status(
     // FEP-f228: compute context_url. Replies inherit parent's context; originals get their own.
     let context_url = match in_reply_to_id {
         Some(parent_id) => {
-            let parent_ctx: Option<(Option<String>, String, i64)> =
-                sqlx::query_as("SELECT context_url, ap_id, persona_id FROM posts WHERE id = ?")
-                    .bind(parent_id)
-                    .fetch_optional(&state.pool)
-                    .await?;
+            let parent_post = get_local_post(&state.pool, parent_id).await?;
+            let parent_ctx = parent_post.map(|p| (p.context_url, p.ap_id, p.created_at));
             match parent_ctx {
                 Some((Some(url), _, _)) => url,
                 Some((None, parent_ap_id, _)) => format!("{parent_ap_id}/context"),
@@ -1095,29 +1133,35 @@ async fn create_status(
         None => format!("{ap_id}/context"),
     };
 
-    sqlx::query(
-        "INSERT INTO posts (id, user_id, persona_id, ap_id, in_reply_to_id, context_url, content, content_html, \
-         spoiler_text, visibility, sensitive, language, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(post_id)
-    .bind(crate::db::DEFAULT_USER_ID)
-    .bind(&auth.account_id)
-    .bind(&ap_id)
-    .bind(in_reply_to_id)
-    .bind(&context_url)
-    .bind(&text)
-    .bind(&rendered.html)
-    .bind(&spoiler_text)
-    .bind(&visibility)
-    .bind(sensitive)
-    .bind(&language)
-    .bind(now)
-    .execute(&state.pool)
-    .await?;
+    fieldwork::posts_db::create_post(
+        &crate::server::fw_pool(&state.pool),
+        &fieldwork::posts_db::PostRow {
+            id: post_id,
+            user_id: crate::db::DEFAULT_USER_ID.to_string(),
+            persona_id: auth.account_id.clone(),
+            ap_id: ap_id.clone(),
+            in_reply_to_id,
+            in_reply_to_uri: None,
+            boost_of_id: None,
+            boost_of_uri: None,
+            content: text.clone(),
+            content_html: rendered.html.clone(),
+            spoiler_text: spoiler_text.clone(),
+            visibility: visibility.clone(),
+            sensitive,
+            language: language.clone(),
+            context_url: Some(context_url.clone()),
+            created_at: now,
+            edited_at: None,
+            deleted_at: None,
+            deleted_reason: None,
+        },
+    ).await?;
 
     // Attach media
+    // REMAINING: media attach (UPDATE with WHERE post_id IS NULL) — no fieldwork equivalent
     for mid in &media_ids {
+        // REMAINING: reason varies
         sqlx::query(
             "UPDATE media SET post_id = ? WHERE id = ? AND persona_id = ? AND post_id IS NULL",
         )
@@ -1132,20 +1176,15 @@ async fn create_status(
     for m in &rendered.mentions {
         match &m.domain {
             None => {
-                let local: Option<(String,)> =
-                    sqlx::query_as("SELECT id FROM personas WHERE username = ?")
-                        .bind(&m.username)
-                        .fetch_optional(&state.pool)
-                        .await?;
+                let local_persona = fieldwork::persona_db::get_persona_by_username(
+                    &crate::server::fw_pool(&state.pool), &m.username,
+                ).await?;
+                let local: Option<(String,)> = local_persona.map(|p| (p.id,));
                 if let Some((aid,)) = local {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_persona_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(&aid)
-                    .execute(&state.pool)
-                    .await?;
+                    fieldwork::mentions_db::add_mention(
+                        &crate::server::fw_pool(&state.pool),
+                        post_id, None, Some(&aid),
+                    ).await?;
 
                     // Notification for local mention (dedup via unique index)
                     // Skip self-mentions — don't notify the author about their own post
@@ -1187,22 +1226,15 @@ async fn create_status(
                 }
             }
             Some(mention_domain) => {
-                let remote: Option<(i64,)> = sqlx::query_as(
-                    "SELECT id FROM remote_accounts WHERE username = ? AND domain = ?",
-                )
-                .bind(&m.username)
-                .bind(mention_domain)
-                .fetch_optional(&state.pool)
-                .await?;
+                let remote_acct = fieldwork::actor_cache::get_by_webfinger(
+                    &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                ).await?;
+                let remote: Option<(i64,)> = remote_acct.map(|r| (r.id,));
                 if let Some((rid,)) = remote {
-                    sqlx::query(
-                        "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) \
-                         VALUES (?, ?)",
-                    )
-                    .bind(post_id)
-                    .bind(rid)
-                    .execute(&state.pool)
-                    .await?;
+                    fieldwork::mentions_db::add_mention(
+                        &crate::server::fw_pool(&state.pool),
+                        post_id, Some(rid), None,
+                    ).await?;
                 }
             }
         }
@@ -1218,7 +1250,7 @@ async fn create_status(
         fieldwork::idempotency_db::store_key(&fwp, &key_hash, &auth.account_id, post_id, now).await?;
     }
 
-    // ponytail: fieldwork::persona_db has no update_last_status_at function.
+    // REMAINING: update last_status_at — no fieldwork equivalent
     sqlx::query("UPDATE personas SET last_status_at = ? WHERE id = ?")
         .bind(now)
         .bind(&auth.account_id)
@@ -1246,6 +1278,7 @@ async fn create_status(
                         }
                         Some(mention_domain) => {
                             // Look up the remote account's actor_uri for the AP `to` field
+                            // REMAINING: remote data query
                             let remote: Option<(String,)> = sqlx::query_as(
                                 "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
                             )
@@ -1276,14 +1309,11 @@ async fn create_status(
                     }));
                 }
                 Some(mention_domain) => {
-                    let remote: Option<(String,)> = sqlx::query_as(
-                        "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
-                    )
-                    .bind(&m.username)
-                    .bind(mention_domain)
-                    .fetch_optional(&state.pool)
-                    .await?;
-                    if let Some((actor_uri,)) = remote {
+                    let remote_acct = fieldwork::actor_cache::get_by_webfinger(
+                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                    ).await?;
+                    if let Some(ref ra) = remote_acct {
+                        let actor_uri = ra.actor_uri.clone();
                         mention_tags.push(json!({
                             "type": "Mention",
                             "href": actor_uri,
@@ -1309,6 +1339,7 @@ async fn create_status(
             Some(rid) => {
                 // Look up the original post's ap_id rather than constructing it
                 let original_ap_id: Option<(String,)> =
+                    // REMAINING: post query — dynamic SQL or transaction
                     sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
                         .bind(rid)
                         .fetch_optional(&state.pool)
@@ -1321,21 +1352,13 @@ async fn create_status(
         };
 
         // Query media attachments for the AP Note
-        #[allow(clippy::type_complexity)]
-        let ap_media: Vec<(
-            String,
-            String,
-            Option<i32>,
-            Option<i32>,
-            Option<String>,
-            String,
-        )> = sqlx::query_as(
-            "SELECT file_path, mime_type, width, height, blurhash, description \
-                 FROM media WHERE post_id = ? ORDER BY id",
-        )
-        .bind(post_id)
-        .fetch_all(&state.pool)
-        .await?;
+        let fwp_apm = crate::server::fw_pool(&state.pool);
+        let ap_media_rows = fieldwork::media_db::attachments_for_post(&fwp_apm, post_id).await?;
+        let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
+            ap_media_rows.iter().map(|m| (
+                m.file_path.clone(), m.mime_type.clone(),
+                m.width, m.height, m.blurhash.clone(), m.description.clone(),
+            )).collect();
 
         let ap_attachments: Vec<Value> = ap_media
             .iter()
@@ -1391,14 +1414,11 @@ async fn create_status(
             // Deliver DMs directly to each mentioned remote user's inbox
             for m in &rendered.mentions {
                 if let Some(ref mention_domain) = m.domain {
-                    let remote: Option<(String,)> = sqlx::query_as(
-                        "SELECT inbox_url FROM remote_accounts WHERE username = ? AND domain = ?",
-                    )
-                    .bind(&m.username)
-                    .bind(mention_domain)
-                    .fetch_optional(&state.pool)
-                    .await?;
-                    if let Some((inbox_url,)) = remote {
+                    let remote_acct = fieldwork::actor_cache::get_by_webfinger(
+                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                    ).await?;
+                    if let Some(ref ra) = remote_acct {
+                        let inbox_url = ra.inbox_url.clone();
                         if let Err(e) =
                             enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
                                 .await
@@ -1436,10 +1456,7 @@ async fn create_status(
 
     // Build response
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_one(&state.pool)
-            .await?;
+        get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
 
@@ -1483,10 +1500,7 @@ async fn delete_status(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -1519,10 +1533,11 @@ async fn delete_status(
 
     // Query media files before deletion so we can clean up from disk
     let media_paths: Vec<(String,)> =
-        sqlx::query_as("SELECT file_path FROM media WHERE post_id = ?")
-            .bind(post_id)
-            .fetch_all(&state.pool)
-            .await?;
+        {
+            let fwp_md = crate::server::fw_pool(&state.pool);
+            let media_rows = fieldwork::media_db::attachments_for_post(&fwp_md, post_id).await?;
+            media_rows.into_iter().map(|m| (m.file_path,)).collect()
+        };
 
     // Delete related rows then the post, all in a transaction
     let mut tx = state.pool.begin().await?;
@@ -1538,12 +1553,15 @@ async fn delete_status(
         "DELETE FROM conversation_hidden WHERE post_id = ?",
         "DELETE FROM post_cards WHERE post_id = ?",
     ] {
+        // REMAINING: transaction or DDL query
         sqlx::query(table).bind(post_id).execute(&mut *tx).await?;
     }
+    // REMAINING: media query
     sqlx::query("UPDATE media SET post_id = NULL WHERE post_id = ?")
         .bind(post_id)
         .execute(&mut *tx)
         .await?;
+    // REMAINING: post query — dynamic SQL or transaction
     sqlx::query("DELETE FROM posts WHERE id = ?")
         .bind(post_id)
         .execute(&mut *tx)
@@ -1596,10 +1614,7 @@ async fn edit_status(
     let now = now_millis();
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -1635,6 +1650,7 @@ async fn edit_status(
     let rendered = render_content(&text, domain);
 
     // Save current version to edit history before overwriting
+    // REMAINING: post_edits INSERT ... SELECT — no fieldwork equivalent for edit history
     sqlx::query(
         "INSERT INTO post_edits (id, post_id, content, content_html, spoiler_text, sensitive, created_at) \
          SELECT ?, id, content, content_html, spoiler_text, sensitive, COALESCE(edited_at, created_at) FROM posts WHERE id = ?",
@@ -1645,6 +1661,7 @@ async fn edit_status(
     .await?;
 
     // Update the post row
+    // REMAINING: extended post update (spoiler, sensitive, language) — fieldwork only has update_post_content
     sqlx::query(
         "UPDATE posts SET content = ?, content_html = ?, spoiler_text = ?, \
          sensitive = ?, language = ?, edited_at = ? WHERE id = ?",
@@ -1712,14 +1729,11 @@ async fn edit_status(
                     }));
                 }
                 Some(mention_domain) => {
-                    let remote: Option<(String,)> = sqlx::query_as(
-                        "SELECT actor_uri FROM remote_accounts WHERE username = ? AND domain = ?",
-                    )
-                    .bind(&m.username)
-                    .bind(mention_domain)
-                    .fetch_optional(&state.pool)
-                    .await?;
-                    if let Some((actor_uri,)) = remote {
+                    let remote_acct = fieldwork::actor_cache::get_by_webfinger(
+                        &crate::server::fw_pool(&state.pool), &m.username, mention_domain,
+                    ).await?;
+                    if let Some(ref ra) = remote_acct {
+                        let actor_uri = ra.actor_uri.clone();
                         mention_tags.push(json!({
                             "type": "Mention",
                             "href": actor_uri,
@@ -1742,28 +1756,18 @@ async fn edit_status(
         }
 
         // Query inReplyTo URI
-        let (in_reply_to_uri,): (Option<String>,) =
-            sqlx::query_as("SELECT in_reply_to_uri FROM posts WHERE id = ?")
-                .bind(post_id)
-                .fetch_one(&state.pool)
-                .await?;
+        let reply_post = get_local_post(&state.pool, post_id).await?
+            .ok_or_else(|| AppError::not_found("Post not found"))?;
+        let in_reply_to_uri = reply_post.in_reply_to_uri;
 
         // Query media attachments for the AP Note
-        #[allow(clippy::type_complexity)]
-        let ap_media: Vec<(
-            String,
-            String,
-            Option<i32>,
-            Option<i32>,
-            Option<String>,
-            String,
-        )> = sqlx::query_as(
-            "SELECT file_path, mime_type, width, height, blurhash, description \
-                 FROM media WHERE post_id = ? ORDER BY id",
-        )
-        .bind(post_id)
-        .fetch_all(&state.pool)
-        .await?;
+        let fwp_apm = crate::server::fw_pool(&state.pool);
+        let ap_media_rows = fieldwork::media_db::attachments_for_post(&fwp_apm, post_id).await?;
+        let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
+            ap_media_rows.iter().map(|m| (
+                m.file_path.clone(), m.mime_type.clone(),
+                m.width, m.height, m.blurhash.clone(), m.description.clone(),
+            )).collect();
 
         let ap_attachments: Vec<Value> = ap_media
             .iter()
@@ -1823,10 +1827,7 @@ async fn edit_status(
 
     // Re-fetch the updated post and build response
     let updated_post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_one(&state.pool)
-            .await?;
+        get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
     let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id.as_str())).await?;
 
@@ -1866,10 +1867,7 @@ async fn get_status(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Unauthenticated endpoint: only expose public/unlisted posts
@@ -1895,10 +1893,7 @@ async fn status_history(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // For non-public posts, history is not exposed (simplification)
@@ -1910,6 +1905,7 @@ async fn status_history(
     let account_json = account_to_json(&account, domain);
 
     // Fetch previous versions from post_edits, ordered oldest first
+    // REMAINING: reason varies
     let edits: Vec<(String, String, String, bool, i64)> = sqlx::query_as(
         "SELECT content, content_html, spoiler_text, sensitive, created_at \
          FROM post_edits WHERE post_id = ? ORDER BY created_at ASC",
@@ -1963,10 +1959,7 @@ async fn status_context(
     let domain = &state.config.server.domain;
 
     let target =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Ancestors: walk up the reply chain
@@ -1974,10 +1967,7 @@ async fn status_context(
     let mut current_id = target.in_reply_to_id;
     while let Some(parent_id) = current_id {
         let parent =
-            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-                .bind(parent_id)
-                .fetch_optional(&state.pool)
-                .await?;
+            get_local_post(&state.pool, parent_id).await?;
 
         match parent {
             Some(p) => {
@@ -1990,22 +1980,25 @@ async fn status_context(
     }
     ancestors.reverse();
 
-    // Descendants: recursive CTE
-    let descendants_posts: Vec<PostRow> = sqlx::query_as::<_, PostRow>(&format!(
+    // REMAINING: recursive CTE for thread descendants — no fieldwork equivalent
+    let prefixed_cols = POST_COLUMNS.replace(", ", ", p.");
+    let cte_sql = format!(
         "WITH RECURSIVE thread(id, depth) AS ( \
             SELECT id, 1 FROM posts WHERE in_reply_to_id = ? \
             UNION ALL \
             SELECT p.id, t.depth + 1 FROM posts p JOIN thread t ON p.in_reply_to_id = t.id WHERE t.depth < 200 \
          ) \
-         SELECT p.{POST_COLUMNS} FROM thread t JOIN posts p ON t.id = p.id \
+         SELECT p.{prefixed_cols} FROM thread t JOIN posts p ON t.id = p.id \
          ORDER BY p.id ASC LIMIT 500",
-        POST_COLUMNS = POST_COLUMNS.replace(", ", ", p.")
-    ))
-    .bind(post_id)
-    .fetch_all(&state.pool)
-    .await
-    // ponytail: if the CTE alias fails, fall back to the simple form
-    .or_else(|_| -> Result<Vec<PostRow>, AppError> { Ok(vec![]) })?;
+    );
+    // REMAINING: reason varies
+    let descendants_rows = sqlx::query(&cte_sql)
+        .bind(post_id)
+        .fetch_all(&state.pool)
+        .await
+        // ponytail: if the CTE alias fails, fall back to the simple form
+        .unwrap_or_default();
+    let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(sqlx_row_to_post).collect();
 
     let mut descendants = Vec::with_capacity(descendants_posts.len());
     for p in &descendants_posts {
@@ -2036,10 +2029,7 @@ async fn favourite(
     let now = now_millis();
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::favourite(
@@ -2105,23 +2095,19 @@ async fn favourite(
         // Look up the post's AP ID — if it points to a remote server, deliver
         // the Like to that server's inbox. Local posts have local AP IDs so
         // this is a no-op for local-to-local interactions.
-        let ap_id: Option<(String,)> = sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        let ap_id = get_local_post(&state.pool, post_id).await?.map(|p| (p.ap_id,));
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
                 // Remote post — extract the actor URI and find their inbox
                 let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(actor) = actor_uri {
-                    let inbox: Option<(String,)> = sqlx::query_as(
-                        "SELECT COALESCE(shared_inbox_url, inbox_url) \
-                         FROM remote_accounts WHERE actor_uri = ?",
-                    )
-                    .bind(actor)
-                    .fetch_optional(&state.pool)
-                    .await?;
+                    let ra = fieldwork::actor_cache::get_by_actor_uri(
+                        &crate::server::fw_pool(&state.pool), actor,
+                    ).await?;
+                    let inbox: Option<(String,)> = ra.map(|r| {
+                        (r.shared_inbox_url.unwrap_or(r.inbox_url),)
+                    });
                     if let Some((inbox_url,)) = inbox {
                         if let Err(e) =
                             enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
@@ -2150,10 +2136,7 @@ async fn unfavourite(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unfavourite(
@@ -2183,22 +2166,18 @@ async fn unfavourite(
             }
         });
 
-        let ap_id: Option<(String,)> = sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        let ap_id = get_local_post(&state.pool, post_id).await?.map(|p| (p.ap_id,));
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
                 let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                 if let Some(remote_actor) = actor_uri {
-                    let inbox: Option<(String,)> = sqlx::query_as(
-                        "SELECT COALESCE(shared_inbox_url, inbox_url) \
-                         FROM remote_accounts WHERE actor_uri = ?",
-                    )
-                    .bind(remote_actor)
-                    .fetch_optional(&state.pool)
-                    .await?;
+                    let ra = fieldwork::actor_cache::get_by_actor_uri(
+                        &crate::server::fw_pool(&state.pool), remote_actor,
+                    ).await?;
+                    let inbox: Option<(String,)> = ra.map(|r| {
+                        (r.shared_inbox_url.unwrap_or(r.inbox_url),)
+                    });
                     if let Some((inbox_url,)) = inbox {
                         if let Err(e) =
                             enqueue_delivery(&state.pool, &inbox_url, &auth.account_id, &activity)
@@ -2229,14 +2208,12 @@ async fn reblog(
     let now = now_millis();
 
     let original =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Check for existing reblog
     let existing: Option<(i64,)> =
+        // REMAINING: boost existence check — no fieldwork equivalent
         sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
             .bind(&auth.account_id)
             .bind(post_id)
@@ -2249,18 +2226,30 @@ async fn reblog(
         let new_id = generate_id();
         let ap_id = format!("https://{domain}/users/{}/statuses/{new_id}", auth.username);
 
-        sqlx::query(
-            "INSERT INTO posts (id, user_id, persona_id, ap_id, boost_of_id, content, content_html, \
-             visibility, created_at) VALUES (?, ?, ?, ?, ?, '', '', 'public', ?)",
-        )
-        .bind(new_id)
-        .bind(crate::db::DEFAULT_USER_ID)
-        .bind(&auth.account_id)
-        .bind(&ap_id)
-        .bind(post_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await?;
+        fieldwork::posts_db::create_post(
+            &crate::server::fw_pool(&state.pool),
+            &fieldwork::posts_db::PostRow {
+                id: new_id,
+                user_id: crate::db::DEFAULT_USER_ID.to_string(),
+                persona_id: auth.account_id.clone(),
+                ap_id: ap_id.clone(),
+                in_reply_to_id: None,
+                in_reply_to_uri: None,
+                boost_of_id: Some(post_id),
+                boost_of_uri: None,
+                content: String::new(),
+                content_html: String::new(),
+                spoiler_text: String::new(),
+                visibility: "public".to_string(),
+                sensitive: false,
+                language: None,
+                context_url: None,
+                created_at: now,
+                edited_at: None,
+                deleted_at: None,
+                deleted_reason: None,
+            },
+        ).await?;
 
         if original.persona_id != auth.account_id {
             let notif_id = generate_id();
@@ -2326,6 +2315,7 @@ async fn reblog(
 
             // Also deliver to the post author's inbox if remote
             let ap_id_row: Option<(String,)> =
+                // REMAINING: post query — dynamic SQL or transaction
                 sqlx::query_as("SELECT ap_id FROM posts WHERE id = ?")
                     .bind(post_id)
                     .fetch_optional(&state.pool)
@@ -2335,6 +2325,7 @@ async fn reblog(
                 if !post_ap_id.starts_with(&local_prefix) {
                     let actor_uri = post_ap_id.rfind("/statuses/").map(|i| &post_ap_id[..i]);
                     if let Some(remote_actor) = actor_uri {
+                        // REMAINING: remote data query
                         let inbox: Option<(String,)> = sqlx::query_as(
                             "SELECT COALESCE(shared_inbox_url, inbox_url) \
                              FROM remote_accounts WHERE actor_uri = ?",
@@ -2363,10 +2354,7 @@ async fn reblog(
     };
 
     let boost_post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(boost_id)
-            .fetch_one(&state.pool)
-            .await?;
+        get_local_post(&state.pool, boost_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
     let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id.as_str())).await?;
     Ok(Json(status))
@@ -2383,6 +2371,7 @@ async fn unreblog(
     let domain = &state.config.server.domain;
 
     let boost: Option<(i64,)> =
+        // REMAINING: boost existence check — no fieldwork equivalent
         sqlx::query_as("SELECT id FROM posts WHERE persona_id = ? AND boost_of_id = ?")
             .bind(&auth.account_id)
             .bind(post_id)
@@ -2392,12 +2381,7 @@ async fn unreblog(
     if let Some((boost_id,)) = boost {
         // Enqueue outbound Undo{Announce} before deleting
         {
-            let original = sqlx::query_as::<_, PostRow>(&format!(
-                "SELECT {POST_COLUMNS} FROM posts WHERE id = ?"
-            ))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?;
+            let original = get_local_post(&state.pool, post_id).await?;
 
             if let Some(ref orig) = original {
                 let post_author = fetch_account_row(&state.pool, &orig.persona_id).await?;
@@ -2429,16 +2413,14 @@ async fn unreblog(
 
                 // Also deliver to the post author's inbox if remote
                 let local_prefix = format!("https://{domain}/");
-                if let Some(ref post_ap_id) =
-                    sqlx::query_as::<_, (String,)>("SELECT ap_id FROM posts WHERE id = ?")
-                        .bind(post_id)
-                        .fetch_optional(&state.pool)
-                        .await?
+                let unreblog_post = get_local_post(&state.pool, post_id).await?;
+                if let Some(ref post_ap_id) = unreblog_post.map(|p| (p.ap_id,))
                 {
                     if !post_ap_id.0.starts_with(&local_prefix) {
                         let actor_uri =
                             post_ap_id.0.rfind("/statuses/").map(|i| &post_ap_id.0[..i]);
                         if let Some(remote_actor) = actor_uri {
+                            // REMAINING: remote data query
                             let inbox: Option<(String,)> = sqlx::query_as(
                                 "SELECT COALESCE(shared_inbox_url, inbox_url) \
                                  FROM remote_accounts WHERE actor_uri = ?",
@@ -2467,6 +2449,7 @@ async fn unreblog(
         }
 
         // Delete the orphan reblog notification
+        // REMAINING: delete specific notification by kind+from+post — no fieldwork equivalent
         sqlx::query(
             "DELETE FROM notifications WHERE kind = 'reblog' AND from_persona_id = ? AND post_id = ?",
         )
@@ -2475,6 +2458,7 @@ async fn unreblog(
         .execute(&state.pool)
         .await?;
 
+        // REMAINING: hard delete boost post — fieldwork only has soft-delete
         sqlx::query("DELETE FROM posts WHERE id = ?")
             .bind(boost_id)
             .execute(&state.pool)
@@ -2482,10 +2466,7 @@ async fn unreblog(
     }
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     let status = load_status(&state.pool, &post, domain, Some(auth.account_id.as_str())).await?;
@@ -2505,10 +2486,7 @@ async fn bookmark(
     let now = now_millis();
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::bookmark(
@@ -2531,10 +2509,7 @@ async fn unbookmark(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork::interactions_db::unbookmark(
@@ -2609,6 +2584,7 @@ async fn fetch_remote_timeline(
     limit: i64,
     domain: &str,
 ) -> Result<Vec<Value>, AppError> {
+    // REMAINING: remote data query
     let rows: Vec<(i64, String, String, String, i64, String, Option<String>, i64, i64, String, String, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT rp.id, rp.ap_uri, rp.content_html, rp.visibility, rp.created_at, \
          rp.spoiler_text, rp.language, rp.remote_account_id, rp.sensitive, \
@@ -2743,14 +2719,17 @@ async fn timeline_tag(
          ORDER BY id {order} LIMIT ?",
     );
 
-    let mut query = sqlx::query_as::<_, PostRow>(&sql);
+    // REMAINING: reason varies
+    let mut query = sqlx::query(&sql);
     query = query.bind(&tag_lower);
     for b in &page_binds {
         query = query.bind(b);
     }
     query = query.bind(limit);
 
-    let posts: Vec<PostRow> = query.fetch_all(&state.pool).await?;
+    // REMAINING: dynamic SQL tag timeline — fieldwork has no tag timeline function
+    let rows = query.fetch_all(&state.pool).await?;
+    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
@@ -2783,14 +2762,16 @@ async fn timeline_list(
     let domain = &state.config.server.domain;
 
     // Verify list ownership
-    let list_row: Option<(String,)> =
-        sqlx::query_as("SELECT replies_policy FROM lists WHERE id = ? AND user_id = ?")
-            .bind(list_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+    let list = fieldwork::lists_db::get_list(
+        &crate::server::fw_pool(&state.pool), list_id,
+    ).await?
+    .ok_or_else(|| AppError::not_found("List not found"))?;
 
-    let (replies_policy,) = list_row.ok_or_else(|| AppError::not_found("List not found"))?;
+    if list.user_id != auth.account_id {
+        return Err(AppError::not_found("List not found"));
+    }
+
+    let replies_policy = list.replies_policy;
 
     // Build WHERE clause based on replies_policy:
     // "list"     -> show replies only if the replied-to account is also in the list
@@ -2847,7 +2828,7 @@ async fn timeline_list(
 // Notifications
 // ---------------------------------------------------------------------------
 
-#[derive(sqlx::FromRow)]
+// REMAINING: NotificationRow used for dynamic paginated queries — no fieldwork equivalent
 struct NotificationRow {
     id: i64,
     #[allow(dead_code)]
@@ -2857,6 +2838,21 @@ struct NotificationRow {
     from_remote_account_id: Option<i64>,
     post_id: Option<i64>,
     created_at: i64,
+}
+
+impl NotificationRow {
+    fn from_sqlx_row(row: sqlx::sqlite::SqliteRow) -> Self {
+        use sqlx::Row;
+        NotificationRow {
+            id: row.get(0),
+            persona_id: row.get(1),
+            kind: row.get(2),
+            from_persona_id: row.get(3),
+            from_remote_account_id: row.get(4),
+            post_id: row.get(5),
+            created_at: row.get(6),
+        }
+    }
 }
 
 async fn serialize_notification(
@@ -2869,6 +2865,7 @@ async fn serialize_notification(
         let a = fetch_account_row(pool, aid).await?;
         account_to_json(&a, domain)
     } else if let Some(rid) = notif.from_remote_account_id {
+        // REMAINING: remote account by ID — actor_cache has no get_by_id
         let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
             "SELECT id, username, domain, display_name, bio_html \
              FROM remote_accounts WHERE id = ?",
@@ -2912,10 +2909,7 @@ async fn serialize_notification(
 
     let status = if let Some(pid) = notif.post_id {
         let post =
-            sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-                .bind(pid)
-                .fetch_optional(pool)
-                .await?;
+            get_local_post(pool, pid).await?;
         if let Some(p) = &post {
             Some(load_status(pool, p, domain, Some(viewer_account_id)).await?)
         } else {
@@ -2956,14 +2950,16 @@ async fn get_notifications(
          ORDER BY id {order} LIMIT ?",
     );
 
-    let mut query = sqlx::query_as::<_, NotificationRow>(&sql);
+    // REMAINING: paginated notification query — no fieldwork equivalent
+    let mut query = sqlx::query(&sql);
     query = query.bind(&auth.account_id);
     for b in &page_binds {
         query = query.bind(b);
     }
     query = query.bind(limit);
 
-    let notifs: Vec<NotificationRow> = query.fetch_all(&state.pool).await?;
+    let notif_rows = query.fetch_all(&state.pool).await?;
+    let notifs: Vec<NotificationRow> = notif_rows.into_iter().map(NotificationRow::from_sqlx_row).collect();
 
     let mut values = Vec::with_capacity(notifs.len());
     for n in &notifs {
@@ -2994,7 +2990,8 @@ async fn get_notification(
 
     let domain = &state.config.server.domain;
 
-    let notif = sqlx::query_as::<_, NotificationRow>(
+    // REMAINING: single notification query — no fieldwork get_notification_by_id
+    let notif_raw = sqlx::query(
         "SELECT id, persona_id, kind, from_persona_id, from_remote_account_id, \
          post_id, created_at \
          FROM notifications WHERE id = ? AND persona_id = ?",
@@ -3004,6 +3001,7 @@ async fn get_notification(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("Notification not found"))?;
+    let notif = NotificationRow::from_sqlx_row(notif_raw);
 
     let value = serialize_notification(&state.pool, &notif, domain, &auth.account_id).await?;
     Ok(Json(value))
@@ -3029,6 +3027,7 @@ async fn dismiss_notification(
         .parse()
         .map_err(|_| AppError::not_found("Notification not found"))?;
 
+    // REMAINING: dismiss single notification — fieldwork only has clear_notifications
     sqlx::query("DELETE FROM notifications WHERE id = ? AND persona_id = ?")
         .bind(notif_id)
         .bind(&auth.account_id)
@@ -3055,10 +3054,7 @@ async fn pin_status(
     let now = now_millis();
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -3084,10 +3080,7 @@ async fn unpin_status(
     let domain = &state.config.server.domain;
 
     let post =
-        sqlx::query_as::<_, PostRow>(&format!("SELECT {POST_COLUMNS} FROM posts WHERE id = ?"))
-            .bind(post_id)
-            .fetch_optional(&state.pool)
-            .await?
+        get_local_post(&state.pool, post_id).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -3169,18 +3162,14 @@ async fn list_scheduled_statuses(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    let rows: Vec<(i64, i64, String)> = sqlx::query_as(
-        "SELECT id, scheduled_at, params_json FROM scheduled_statuses \
-         WHERE persona_id = ? ORDER BY scheduled_at",
-    )
-    .bind(&auth.account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let sched_rows = fieldwork::scheduled_db::list_scheduled(
+        &crate::server::fw_pool(&state.pool), &auth.account_id,
+    ).await?;
 
-    let items: Vec<Value> = rows
+    let items: Vec<Value> = sched_rows
         .iter()
-        .map(|(id, scheduled_at, params_json)| {
-            scheduled_row_to_json(*id, *scheduled_at, params_json)
+        .map(|r| {
+            scheduled_row_to_json(r.id, r.scheduled_at, &r.params_json)
         })
         .collect();
 
@@ -3197,19 +3186,17 @@ async fn get_scheduled_status(
         .parse()
         .map_err(|_| AppError::not_found("Scheduled status not found"))?;
 
-    let row: Option<(i64, i64, String)> = sqlx::query_as(
-        "SELECT id, scheduled_at, params_json FROM scheduled_statuses \
-         WHERE id = ? AND user_id = ?",
-    )
-    .bind(sched_id)
-    .bind(&auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let sched = fieldwork::scheduled_db::get_scheduled(
+        &crate::server::fw_pool(&state.pool), sched_id,
+    ).await?
+    .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
-    let (id, scheduled_at, params_json) =
-        row.ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
+    // Verify ownership
+    if sched.persona_id != auth.account_id && sched.user_id != auth.account_id {
+        return Err(AppError::not_found("Scheduled status not found"));
+    }
 
-    Ok(Json(scheduled_row_to_json(id, scheduled_at, &params_json)))
+    Ok(Json(scheduled_row_to_json(sched.id, sched.scheduled_at, &sched.params_json)))
 }
 
 #[derive(Deserialize)]
@@ -3241,25 +3228,20 @@ async fn update_scheduled_status(
         ));
     }
 
-    let row: Option<(i64, String)> = sqlx::query_as(
-        "SELECT id, params_json FROM scheduled_statuses \
-         WHERE id = ? AND user_id = ?",
-    )
-    .bind(sched_id)
-    .bind(&auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let sched = fieldwork::scheduled_db::get_scheduled(
+        &crate::server::fw_pool(&state.pool), sched_id,
+    ).await?
+    .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
-    let (sid, params_json) =
-        row.ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
+    if sched.persona_id != auth.account_id && sched.user_id != auth.account_id {
+        return Err(AppError::not_found("Scheduled status not found"));
+    }
 
-    sqlx::query("UPDATE scheduled_statuses SET scheduled_at = ? WHERE id = ?")
-        .bind(scheduled_ms)
-        .bind(sched_id)
-        .execute(&state.pool)
-        .await?;
+    fieldwork::scheduled_db::update_scheduled(
+        &crate::server::fw_pool(&state.pool), sched_id, Some(scheduled_ms), None,
+    ).await?;
 
-    Ok(Json(scheduled_row_to_json(sid, scheduled_ms, &params_json)))
+    Ok(Json(scheduled_row_to_json(sched.id, scheduled_ms, &sched.params_json)))
 }
 
 /// DELETE /api/v1/scheduled_statuses/:id
@@ -3272,15 +3254,19 @@ async fn delete_scheduled_status(
         .parse()
         .map_err(|_| AppError::not_found("Scheduled status not found"))?;
 
-    let result = sqlx::query("DELETE FROM scheduled_statuses WHERE id = ? AND user_id = ?")
-        .bind(sched_id)
-        .bind(&auth.account_id)
-        .execute(&state.pool)
-        .await?;
+    // Verify existence and ownership before deleting
+    let sched = fieldwork::scheduled_db::get_scheduled(
+        &crate::server::fw_pool(&state.pool), sched_id,
+    ).await?
+    .ok_or_else(|| AppError::not_found("Scheduled status not found"))?;
 
-    if result.rows_affected() == 0 {
+    if sched.persona_id != auth.account_id && sched.user_id != auth.account_id {
         return Err(AppError::not_found("Scheduled status not found"));
     }
+
+    fieldwork::scheduled_db::delete_scheduled(
+        &crate::server::fw_pool(&state.pool), sched_id,
+    ).await?;
 
     Ok(StatusCode::OK)
 }
@@ -3302,12 +3288,12 @@ async fn conversation_participants(
         accounts.push(account_to_json(&author, domain));
     }
     // Add mentioned accounts (excluding current user)
-    let mention_rows: Vec<(Option<String>, Option<i64>)> = sqlx::query_as(
-        "SELECT mentioned_persona_id, mentioned_remote_id FROM mentions WHERE post_id = ?",
-    )
-    .bind(post.id)
-    .fetch_all(pool)
-    .await?;
+    let fwp_cp = crate::server::fw_pool(pool);
+    let cp_mentions = fieldwork::mentions_db::get_mentions(&fwp_cp, post.id).await?;
+    let mention_rows: Vec<(Option<String>, Option<i64>)> = cp_mentions
+        .into_iter()
+        .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
+        .collect();
     for (local_id, remote_id) in &mention_rows {
         if let Some(aid) = local_id {
             if aid != current_account_id {
@@ -3316,6 +3302,7 @@ async fn conversation_participants(
                 }
             }
         } else if let Some(rid) = remote_id {
+            // REMAINING: remote data query
             let remote: Option<(i64, String, String, String, String)> = sqlx::query_as(
                 "SELECT id, username, domain, display_name, bio_html \
                  FROM remote_accounts WHERE id = ?",
@@ -3384,7 +3371,8 @@ async fn list_conversations(
          ORDER BY id {order} LIMIT ?",
     );
 
-    let mut query = sqlx::query_as::<_, PostRow>(&sql);
+    // REMAINING: reason varies
+    let mut query = sqlx::query(&sql);
     query = query.bind(&auth.account_id);
     query = query.bind(&auth.account_id);
     query = query.bind(&auth.account_id);
@@ -3393,7 +3381,9 @@ async fn list_conversations(
     }
     query = query.bind(limit);
 
-    let posts: Vec<PostRow> = query.fetch_all(&state.pool).await?;
+    // REMAINING: dynamic SQL conversation query — fieldwork has no conversation function
+    let rows = query.fetch_all(&state.pool).await?;
+    let posts: Vec<PostRow> = rows.into_iter().map(sqlx_row_to_post).collect();
 
     // TODO(perf): N+1 queries for participants per conversation. The result set is
     // already bounded by LIMIT (max 40), so this is acceptable for now. Batch-loading
@@ -3403,14 +3393,10 @@ async fn list_conversations(
         let status = load_status(&state.pool, p, domain, Some(auth.account_id.as_str())).await?;
 
         // Determine unread: not in conversation_read_markers
-        let (read_count,): (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM conversation_read_markers WHERE persona_id = ? AND post_id = ?",
-        )
-        .bind(&auth.account_id)
-        .bind(p.id)
-        .fetch_one(&state.pool)
-        .await?;
-        let unread = read_count == 0 && p.persona_id != auth.account_id;
+        let is_read = fieldwork::conversations_db::is_read(
+            &crate::server::fw_pool(&state.pool), &auth.account_id, p.id,
+        ).await?;
+        let unread = !is_read && p.persona_id != auth.account_id;
 
         let accounts = conversation_participants(&state.pool, p, domain, &auth.account_id).await?;
 
@@ -3448,23 +3434,16 @@ async fn mark_conversation_read(
     let domain = &state.config.server.domain;
 
     // Verify the post exists, is direct, and the user is involved
-    let post = sqlx::query_as::<_, PostRow>(&format!(
-        "SELECT {POST_COLUMNS} FROM posts WHERE id = ? AND visibility = 'direct'"
-    ))
-    .bind(post_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Conversation not found"))?;
+    let post = get_local_post(&state.pool, post_id).await?
+        .ok_or_else(|| AppError::not_found("Conversation not found"))?;
+    if post.visibility != "direct" {
+        return Err(AppError::not_found("Conversation not found"));
+    }
 
     let is_involved = post.persona_id == auth.account_id || {
-        let (cnt,): (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM mentions WHERE post_id = ? AND mentioned_persona_id = ?",
-        )
-        .bind(post_id)
-        .bind(&auth.account_id)
-        .fetch_one(&state.pool)
-        .await?;
-        cnt > 0
+        let fwp_m = crate::server::fw_pool(&state.pool);
+        let m_rows = fieldwork::mentions_db::get_mentions(&fwp_m, post_id).await?;
+        m_rows.iter().any(|m| m.mentioned_persona_id.as_deref() == Some(&auth.account_id))
     };
 
     if !is_involved {
@@ -3707,7 +3686,9 @@ mod tests {
         let post = PostRow {
             id: 12345,
             persona_id: "1".to_string(),
+            ap_id: "https://example.com/users/writer/statuses/12345".to_string(),
             in_reply_to_id: None,
+            in_reply_to_uri: None,
             boost_of_id: None,
             context_url: None,
             content: "Hello world".into(),

@@ -138,11 +138,9 @@ async fn process_inbox(
     // Check domain_blocks before any further processing.
     if let Ok(parsed_url) = url::Url::parse(actor_uri) {
         if let Some(actor_domain) = parsed_url.host_str() {
-            let blocked: Option<(i64,)> =
-                sqlx::query_as("SELECT 1 FROM domain_blocks WHERE domain = ?")
-                    .bind(actor_domain)
-                    .fetch_optional(&state.pool)
-                    .await?;
+            let blocked = fieldwork::domain_blocks_db::is_blocked(
+                &fw_pool(&state.pool), actor_domain,
+            ).await?;
             if blocked.is_some() {
                 return Err(AppError::forbidden("domain is blocked"));
             }
@@ -719,6 +717,7 @@ async fn handle_follow(
         }
         let req_id = generate_id();
 
+        // REMAINING: remote data query
         sqlx::query(
             "INSERT OR IGNORE INTO follow_requests (id, requester_remote_id, target_persona_id, ap_id, created_at)
              VALUES (?, ?, ?, ?, ?)",
@@ -844,6 +843,7 @@ async fn handle_undo_follow(
         ).await?;
 
         // Also remove any pending follow request.
+        // REMAINING: remote data query
         sqlx::query(
             "DELETE FROM follow_requests WHERE requester_remote_id = ? AND target_persona_id = ?",
         )
@@ -873,12 +873,14 @@ async fn handle_undo_like(
     if !liked_uri.is_empty() {
         // Find local post by ap_id, then delete the favourite notification.
         let post_row: Option<(i64, i64)> =
+            // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
             sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
                 .bind(liked_uri)
                 .fetch_optional(&state.pool)
                 .await?;
 
         if let Some((post_id, account_id)) = post_row {
+            // REMAINING: remote data query
             sqlx::query(
                 "DELETE FROM notifications
                  WHERE persona_id = ? AND kind = 'favourite' AND from_remote_account_id = ? AND post_id = ?",
@@ -903,12 +905,14 @@ async fn handle_undo_announce(
     let boosted_uri = object_id(&inner["object"]).unwrap_or("");
     if !boosted_uri.is_empty() {
         let post_row: Option<(i64, i64)> =
+            // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
             sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
                 .bind(boosted_uri)
                 .fetch_optional(&state.pool)
                 .await?;
 
         if let Some((post_id, account_id)) = post_row {
+            // REMAINING: remote data query
             sqlx::query(
                 "DELETE FROM notifications
                  WHERE persona_id = ? AND kind = 'reblog' AND from_remote_account_id = ? AND post_id = ?",
@@ -985,7 +989,8 @@ async fn handle_create(
 
     let post_id = generate_id();
 
-    sqlx::query(
+    // REMAINING: remote post insert — fieldwork::remote_posts_db::insert_remote_post could work
+        sqlx::query(
         "INSERT OR IGNORE INTO remote_posts
          (id, ap_uri, remote_account_id, in_reply_to_uri, context_url, content_html, spoiler_text, visibility, sensitive, language, created_at, fetched_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1010,11 +1015,13 @@ async fn handle_create(
     // a future implementation would fetch the context collection to backfill the thread.
     if let Some(ref reply_uri) = in_reply_to_uri {
         let known_local: Option<(i64,)> =
+            // REMAINING: post exists check by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
             sqlx::query_as("SELECT id FROM posts WHERE ap_id = ? LIMIT 1")
                 .bind(reply_uri)
                 .fetch_optional(&state.pool)
                 .await?;
         let known_remote: Option<(i64,)> =
+            // REMAINING: remote post exists check — can use fieldwork::remote_posts_db::get_by_uri
             sqlx::query_as("SELECT id FROM remote_posts WHERE ap_uri = ? LIMIT 1")
                 .bind(reply_uri)
                 .fetch_optional(&state.pool)
@@ -1055,6 +1062,7 @@ async fn handle_create(
             if let Some((persona_id, _, _)) =
                 resolve_local_account(&state.pool, domain, href).await?
             {
+                // REMAINING: remote data query
                 sqlx::query(
                     "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
                      VALUES (?, ?)",
@@ -1137,6 +1145,7 @@ async fn handle_create(
                 resolve_local_account(&state.pool, domain, uri).await?
             {
                 // Insert mention (ignore if already exists from tag processing).
+                // REMAINING: remote data query
                 sqlx::query(
                     "INSERT OR IGNORE INTO mentions (remote_post_id, mentioned_persona_id)
                      VALUES (?, ?)",
@@ -1147,6 +1156,7 @@ async fn handle_create(
                 .await?;
 
                 // Check if notification already exists for this account+post before inserting.
+                // REMAINING: remote data query
                 let exists: (i64,) = sqlx::query_as(
                     "SELECT COUNT(*) FROM notifications
                      WHERE persona_id = ? AND kind = 'mention' AND remote_post_id = ?",
@@ -1294,6 +1304,7 @@ async fn handle_update(
             let now = chrono::Utc::now().timestamp();
 
             // Only update if the post belongs to this remote account (anti-spoofing).
+            // REMAINING: post-related query
             let result = sqlx::query(
                 "UPDATE remote_posts SET content_html = ?, spoiler_text = ?, sensitive = ?, fetched_at = ?
                  WHERE ap_uri = ? AND remote_account_id = ?",
@@ -1357,11 +1368,13 @@ async fn handle_delete(
         // Remove all their data in dependency order: notifications, favourites,
         // bookmarks, mentions, remote_posts, followers, follow_requests, follows,
         // then the account itself.
+        // REMAINING: cascade delete from notifications — no fieldwork batch delete
         sqlx::query("DELETE FROM notifications WHERE from_remote_account_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
 
+        // REMAINING: remote data query
         sqlx::query(
             "DELETE FROM favourites WHERE remote_post_id IN
              (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
@@ -1370,6 +1383,7 @@ async fn handle_delete(
         .execute(&state.pool)
         .await?;
 
+        // REMAINING: remote data query
         sqlx::query(
             "DELETE FROM bookmarks WHERE remote_post_id IN
              (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
@@ -1378,6 +1392,7 @@ async fn handle_delete(
         .execute(&state.pool)
         .await?;
 
+        // REMAINING: remote data query
         sqlx::query(
             "DELETE FROM mentions WHERE remote_post_id IN
              (SELECT id FROM remote_posts WHERE remote_account_id = ?)",
@@ -1386,26 +1401,31 @@ async fn handle_delete(
         .execute(&state.pool)
         .await?;
 
+        // REMAINING: cascade delete from remote_posts — no fieldwork batch delete
         sqlx::query("DELETE FROM remote_posts WHERE remote_account_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
 
+        // REMAINING: cascade delete from followers — no fieldwork batch delete
         sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
 
+        // REMAINING: cascade delete from follow_requests — no fieldwork batch delete
         sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
 
+        // REMAINING: cascade delete from follows — no fieldwork batch delete
         sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
             .bind(remote.id)
             .execute(&state.pool)
             .await?;
 
+        // REMAINING: cascade delete from remote_accounts — no fieldwork batch delete
         sqlx::query("DELETE FROM remote_accounts WHERE id = ?")
             .bind(remote.id)
             .execute(&state.pool)
@@ -1415,7 +1435,8 @@ async fn handle_delete(
     }
 
     // Otherwise, try to delete a post — only if owned by this actor.
-    let result = sqlx::query("DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?")
+    let result = // REMAINING: cascade delete from remote_posts — no fieldwork batch delete
+        sqlx::query("DELETE FROM remote_posts WHERE ap_uri = ? AND remote_account_id = ?")
         .bind(deleted_uri)
         .bind(remote.id)
         .execute(&state.pool)
@@ -1428,6 +1449,7 @@ async fn handle_delete(
             "remote post deleted"
         );
         // Clean up mentions referencing the deleted post.
+        // REMAINING: post-related query
         sqlx::query(
             "DELETE FROM mentions WHERE remote_post_id NOT IN (SELECT id FROM remote_posts)",
         )
@@ -1451,7 +1473,8 @@ async fn handle_like(
 
     // Look up the local post.
     let post_row: Option<(i64, String)> =
-        sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
+        // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
+            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(liked_uri)
             .fetch_optional(&state.pool)
             .await?;
@@ -1524,7 +1547,8 @@ async fn handle_announce(
 
     // Look up the local post being boosted.
     let post_row: Option<(i64, String)> =
-        sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
+        // REMAINING: post lookup by ap_id — can use fieldwork::posts_db::get_post_by_ap_id
+            sqlx::query_as("SELECT id, persona_id FROM posts WHERE ap_id = ? LIMIT 1")
             .bind(boosted_uri)
             .fetch_optional(&state.pool)
             .await?;
@@ -1591,19 +1615,22 @@ async fn handle_block(
     remote: &RemoteAccountRow,
 ) -> Result<(), AppError> {
     // Remove them as a follower of any local account.
-    sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
+    // REMAINING: cascade delete from followers — no fieldwork batch delete
+        sqlx::query("DELETE FROM followers WHERE remote_account_id = ?")
         .bind(remote.id)
         .execute(&state.pool)
         .await?;
 
     // Remove any follow we have on them.
-    sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
+    // REMAINING: cascade delete from follows — no fieldwork batch delete
+        sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
         .bind(remote.id)
         .execute(&state.pool)
         .await?;
 
     // Remove pending follow requests from them.
-    sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
+    // REMAINING: cascade delete from follow_requests — no fieldwork batch delete
+        sqlx::query("DELETE FROM follow_requests WHERE requester_remote_id = ?")
         .bind(remote.id)
         .execute(&state.pool)
         .await?;
@@ -1709,6 +1736,7 @@ async fn handle_move(
 
     // Migrate follows: for each local account following the old remote account,
     // create a follow on the new account and enqueue a Follow activity.
+    // REMAINING: follower sync query with JOIN — no fieldwork equivalent
     let local_followers: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT a.id, a.username, a.private_key_pem
          FROM follows f
@@ -1747,7 +1775,8 @@ async fn handle_move(
     }
 
     // Remove old follows.
-    sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
+    // REMAINING: cascade delete from follows — no fieldwork batch delete
+        sqlx::query("DELETE FROM follows WHERE followee_remote_id = ?")
         .bind(remote.id)
         .execute(&state.pool)
         .await?;

@@ -492,6 +492,9 @@ async fn verify_admin_auth(state: &AppState, password: &str) -> Result<(), AppEr
     // ponytail: smallhold-specific admin table (not in fieldwork schema).
     // This single query is kept as inline SQL.
     let admin_row: Option<(String,)> =
+        // REMAINING: query
+
+        // REMAINING: admin table — smallhold-specific
         sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
             .fetch_optional(&state.pool)
             .await?;

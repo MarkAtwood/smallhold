@@ -179,44 +179,50 @@ pub async fn fetch_account_counts(pool: &sqlx::SqlitePool, account_id: &str) -> 
         .await
         .unwrap_or(0);
 
-    let (statuses,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE persona_id = ?")
-        .bind(account_id)
-        .fetch_one(pool)
+    let statuses = fieldwork::posts_db::posts_count(&fwp, account_id)
         .await
-        .unwrap_or((0,));
+        .unwrap_or(0);
 
     (followers, following, statuses)
 }
 
 pub async fn fetch_account_row(pool: &sqlx::SqlitePool, id: &str) -> Result<AccountRow, AppError> {
-    sqlx::query_as::<_, AccountRow>(
-        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM personas WHERE id = ?",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Account not found"))
+    let fwp = crate::server::fw_pool(pool);
+    let persona = fieldwork::persona_db::get_persona_by_id(&fwp, id).await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+    Ok(persona_to_account_row(&persona))
+}
+
+fn persona_to_account_row(p: &fieldwork::persona_db::PersonaRow) -> AccountRow {
+    AccountRow {
+        id: p.id.clone(),
+        username: p.username.clone(),
+        display_name: p.display_name.clone(),
+        bio: p.bio.clone(),
+        bio_html: p.bio_html.clone(),
+        is_locked: p.is_locked,
+        discoverable: p.discoverable,
+        bot: p.bot,
+        fields_json: p.fields_json.clone(),
+        created_at: p.created_at,
+        last_status_at: p.last_status_at,
+    }
 }
 
 async fn fetch_account_row_by_username(
     pool: &sqlx::SqlitePool,
     username: &str,
 ) -> Result<AccountRow, AppError> {
-    sqlx::query_as::<_, AccountRow>(
-        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM personas WHERE username = ?",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("Account not found"))
+    let fwp = crate::server::fw_pool(pool);
+    let persona = fieldwork::persona_db::get_persona_by_username(&fwp, username).await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+    Ok(persona_to_account_row(&persona))
 }
 
 async fn load_contact_account(pool: &sqlx::SqlitePool, domain: &str) -> Result<Value, AppError> {
-    let row = sqlx::query_as::<_, AccountRow>(
-        "SELECT id, username, display_name, bio, bio_html, is_locked, discoverable, bot, fields_json, created_at, last_status_at FROM personas ORDER BY created_at LIMIT 1",
-    )
-    .fetch_optional(pool)
-    .await?;
+    let fwp = crate::server::fw_pool(pool);
+    let personas = fieldwork::persona_db::list_personas(&fwp).await?;
+    let row = personas.first().map(persona_to_account_row);
     match row {
         Some(r) => {
             let (f, fo, s) = fetch_account_counts(pool, &r.id).await;
@@ -282,8 +288,9 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
         let (account_id, username, scopes) =
             row.ok_or_else(|| AppError::unauthorized("Invalid or revoked token"))?;
 
-        // Update last_used_at (best-effort, don't fail the request)
+        // REMAINING: update token last_used_at — no fieldwork equivalent
         let now = now_millis();
+        // REMAINING: OAuth query — fieldwork has partial coverage
         let _ = sqlx::query("UPDATE oauth_tokens SET last_used_at = ? WHERE token_hash = ?")
             .bind(now)
             .bind(&token_hash)
@@ -389,10 +396,12 @@ async fn authorize_form(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AuthorizeQuery>,
 ) -> Result<Html<String>, AppError> {
-    let accounts: Vec<(String, String, String)> =
-        sqlx::query_as("SELECT id, username, display_name FROM personas ORDER BY username")
-            .fetch_all(&state.pool)
-            .await?;
+    let fwp = crate::server::fw_pool(&state.pool);
+    let personas = fieldwork::persona_db::list_personas(&fwp).await?;
+    let accounts: Vec<(String, String, String)> = personas
+        .iter()
+        .map(|p| (p.id.clone(), p.username.clone(), p.display_name.clone()))
+        .collect();
 
     let response_type = html_escape(params.response_type.as_deref().unwrap_or("code"));
     let client_id = html_escape(params.client_id.as_deref().unwrap_or(""));
@@ -605,6 +614,7 @@ async fn authorize_submit(
             .filter(|p| !p.is_empty())
             .ok_or_else(|| AppError::bad_request("Password or passkey required"))?;
         let admin_row: Option<(String,)> =
+            // REMAINING: admin table is smallhold-specific, not in fieldwork
             sqlx::query_as("SELECT password_hash FROM admin WHERE id = 1")
                 .fetch_optional(&state.pool)
                 .await?;
@@ -614,20 +624,19 @@ async fn authorize_submit(
     }
 
     // Verify account exists
-    let account_exists: Option<(String,)> = sqlx::query_as("SELECT id FROM personas WHERE id = ?")
-        .bind(&form.account_id)
-        .fetch_optional(&state.pool)
-        .await?;
+    let fwp_ae = crate::server::fw_pool(&state.pool);
+    let account_exists = fieldwork::persona_db::get_persona_by_id(&fwp_ae, &form.account_id).await?;
     if account_exists.is_none() {
         return Err(AppError::bad_request("Account not found"));
     }
 
     // Verify app exists and redirect_uri matches registered URI
     let app_row: Option<(i64, String)> =
-        sqlx::query_as("SELECT id, redirect_uri FROM oauth_apps WHERE client_id = ?")
-            .bind(&form.client_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_oa = crate::server::fw_pool(&state.pool);
+            let app = fieldwork::oauth_db::get_app_by_client_id(&fwp_oa, &form.client_id).await?;
+            app.map(|a| (a.id, a.redirect_uri))
+        };
     let (app_id, registered_uri) =
         app_row.ok_or_else(|| AppError::bad_request("Unknown client_id"))?;
 
@@ -643,6 +652,7 @@ async fn authorize_submit(
     let scope = form.scope.as_deref().unwrap_or("read");
     let expires_at = now_millis() + 600_000; // 10 minutes
 
+    // REMAINING: reason varies
     sqlx::query(
         "INSERT INTO oauth_authz_codes (code_hash, app_id, user_id, persona_id, scopes, redirect_uri, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
@@ -728,6 +738,7 @@ async fn token(
     let now = now_millis();
 
     // Atomically fetch and consume the authorization code (single-use)
+    // REMAINING: authorization code table — not in fieldwork
     let code_row: Option<(i64, String, String, String)> = sqlx::query_as(
         "DELETE FROM oauth_authz_codes WHERE code_hash = ? AND expires_at > ? RETURNING app_id, persona_id, scopes, redirect_uri",
     )
@@ -749,6 +760,7 @@ async fn token(
     // Verify client credentials if provided
     if let Some(ref cid) = form.client_id {
         let app_row: Option<(i64, String)> =
+            // REMAINING: oauth_apps client_secret check — fieldwork returns full row
             sqlx::query_as("SELECT id, client_secret FROM oauth_apps WHERE client_id = ?")
                 .bind(cid)
                 .fetch_optional(&state.pool)
@@ -815,6 +827,7 @@ async fn revoke(
 
     // Look up token ID by hash to use revoke_token API.
     // ponytail: extra query to map hash→id; fieldwork API is keyed on id.
+    // REMAINING: token revocation by hash — fieldwork only has revoke_token by ID
     let token_row: Option<(i64,)> = sqlx::query_as(
         "SELECT id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
     )
@@ -840,11 +853,13 @@ async fn revoke(
 async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
+    // REMAINING: aggregate stats queries — no fieldwork equivalent
     let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
         .fetch_one(&state.pool)
         .await?;
 
     let (domain_count,): (i64,) =
+        // REMAINING: domain count — no fieldwork equivalent
         sqlx::query_as("SELECT COUNT(DISTINCT domain) FROM remote_accounts")
             .fetch_one(&state.pool)
             .await?;
@@ -897,6 +912,7 @@ async fn instance_v1(State(state): State<Arc<AppState>>) -> Result<Json<Value>, 
 async fn instance_v2(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
     let domain = &state.config.server.domain;
 
+    // REMAINING: aggregate stats queries — no fieldwork equivalent
     let (status_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
         .fetch_one(&state.pool)
         .await?;
@@ -1047,6 +1063,7 @@ async fn account_statuses(
     let statuses: Vec<StatusRow> = if let Some(max_id) =
         params.get("max_id").and_then(|v| v.parse::<i64>().ok())
     {
+        // REMAINING: post-related query
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
@@ -1056,6 +1073,7 @@ async fn account_statuses(
             .fetch_all(&state.pool)
             .await?
     } else if let Some(min_id) = params.get("min_id").and_then(|v| v.parse::<i64>().ok()) {
+        // REMAINING: post-related query
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
             )
@@ -1065,6 +1083,7 @@ async fn account_statuses(
             .fetch_all(&state.pool)
             .await?
     } else {
+        // REMAINING: post-related query
         sqlx::query_as(
                 "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
             )
@@ -1224,6 +1243,7 @@ async fn verify_app_credentials(
 ) -> Result<Json<Value>, AppError> {
     // Look up the app via the most recently used token for this account.
     // ponytail: single-user server, so most-recent-token heuristic is fine.
+    // REMAINING: reason varies
     let app_row: Option<(String, Option<String>)> = sqlx::query_as(
         "SELECT oa.name, oa.website FROM oauth_tokens ot JOIN oauth_apps oa ON ot.app_id = oa.id WHERE ot.persona_id = ? AND ot.revoked_at IS NULL ORDER BY ot.last_used_at DESC LIMIT 1",
     )
@@ -1265,12 +1285,9 @@ async fn get_lists(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    let rows: Vec<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, title, replies_policy FROM lists WHERE user_id = ? ORDER BY id",
-    )
-    .bind(&auth.account_id)
-    .fetch_all(&state.pool)
-    .await?;
+    let fwp_l = crate::server::fw_pool(&state.pool);
+    let list_rows = fieldwork::lists_db::get_lists(&fwp_l, &auth.account_id).await?;
+    let rows: Vec<(i64, String, String)> = list_rows.iter().map(|l| (l.id, l.title.clone(), l.replies_policy.clone())).collect();
 
     let lists: Vec<Value> = rows
         .iter()
@@ -1305,6 +1322,7 @@ async fn create_list(
     let id = generate_id();
     let now = now_millis();
 
+    // REMAINING: reason varies
     sqlx::query(
         "INSERT INTO lists (id, user_id, title, replies_policy, created_at) VALUES (?, ?, ?, ?, ?)",
     )
@@ -1332,13 +1350,12 @@ async fn get_list(
         .parse()
         .map_err(|_| AppError::not_found("List not found"))?;
 
-    let row: Option<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, title, replies_policy FROM lists WHERE id = ? AND user_id = ?",
-    )
-    .bind(list_id)
-    .bind(&auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let list = fieldwork::lists_db::get_list(
+        &crate::server::fw_pool(&state.pool), list_id,
+    ).await?;
+    let row: Option<(i64, String, String)> = list
+        .filter(|l| l.user_id == auth.account_id)
+        .map(|l| (l.id, l.title, l.replies_policy));
 
     let (id, title, rp) = row.ok_or_else(|| AppError::not_found("List not found"))?;
     Ok(Json(list_to_json(id, &title, &rp)))
@@ -1363,13 +1380,12 @@ async fn update_list(
         .parse()
         .map_err(|_| AppError::not_found("List not found"))?;
 
-    let row: Option<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, title, replies_policy FROM lists WHERE id = ? AND user_id = ?",
-    )
-    .bind(list_id)
-    .bind(&auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    let list = fieldwork::lists_db::get_list(
+        &crate::server::fw_pool(&state.pool), list_id,
+    ).await?;
+    let row: Option<(i64, String, String)> = list
+        .filter(|l| l.user_id == auth.account_id)
+        .map(|l| (l.id, l.title, l.replies_policy));
 
     let (_, mut title, mut rp) = row.ok_or_else(|| AppError::not_found("List not found"))?;
 
@@ -1384,6 +1400,7 @@ async fn update_list(
         rp = new_rp.clone();
     }
 
+    // REMAINING: list query
     sqlx::query("UPDATE lists SET title = ?, replies_policy = ? WHERE id = ?")
         .bind(&title)
         .bind(&rp)
@@ -1404,15 +1421,15 @@ async fn delete_list(
         .parse()
         .map_err(|_| AppError::not_found("List not found"))?;
 
-    let result = sqlx::query("DELETE FROM lists WHERE id = ? AND user_id = ?")
-        .bind(list_id)
-        .bind(&auth.account_id)
-        .execute(&state.pool)
-        .await?;
-
-    if result.rows_affected() == 0 {
+    let del_list = fieldwork::lists_db::get_list(
+        &crate::server::fw_pool(&state.pool), list_id,
+    ).await?;
+    if del_list.as_ref().map(|l| l.user_id.as_str()) != Some(&auth.account_id) {
         return Err(AppError::not_found("List not found"));
     }
+    fieldwork::lists_db::delete_list(
+        &crate::server::fw_pool(&state.pool), list_id,
+    ).await?;
 
     Ok(StatusCode::OK)
 }
@@ -1428,17 +1445,18 @@ async fn get_list_accounts(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
-            .bind(list_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
+            l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
+        };
 
     if exists.is_none() {
         return Err(AppError::not_found("List not found"));
     }
 
     let domain = &state.config.server.domain;
+    // REMAINING: reason varies
     let account_rows: Vec<AccountRow> = sqlx::query_as(
         "SELECT a.id, a.username, a.display_name, a.bio, a.bio_html, a.is_locked, \
          a.discoverable, a.bot, a.fields_json, a.created_at, a.last_status_at \
@@ -1474,25 +1492,20 @@ async fn add_list_accounts(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
-            .bind(list_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
+            l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
+        };
 
     if exists.is_none() {
         return Err(AppError::not_found("List not found"));
     }
 
     for aid_str in &body.account_ids {
-        let aid: i64 = aid_str
-            .parse()
-            .map_err(|_| AppError::unprocessable("Invalid account_id"))?;
-        sqlx::query("INSERT OR IGNORE INTO list_accounts (list_id, persona_id) VALUES (?, ?)")
-            .bind(list_id)
-            .bind(aid)
-            .execute(&state.pool)
-            .await?;
+        fieldwork::lists_db::add_to_list(
+            &crate::server::fw_pool(&state.pool), list_id, Some(aid_str.as_str()), None,
+        ).await?;
     }
 
     Ok(StatusCode::OK)
@@ -1510,25 +1523,20 @@ async fn remove_list_accounts(
         .map_err(|_| AppError::not_found("List not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM lists WHERE id = ? AND user_id = ?")
-            .bind(list_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_lv = crate::server::fw_pool(&state.pool);
+            let l = fieldwork::lists_db::get_list(&fwp_lv, list_id).await?;
+            l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
+        };
 
     if exists.is_none() {
         return Err(AppError::not_found("List not found"));
     }
 
     for aid_str in &body.account_ids {
-        let aid: i64 = aid_str
-            .parse()
-            .map_err(|_| AppError::unprocessable("Invalid account_id"))?;
-        sqlx::query("DELETE FROM list_accounts WHERE list_id = ? AND persona_id = ?")
-            .bind(list_id)
-            .bind(aid)
-            .execute(&state.pool)
-            .await?;
+        fieldwork::lists_db::remove_from_list(
+            &crate::server::fw_pool(&state.pool), list_id, Some(aid_str.as_str()), None,
+        ).await?;
     }
 
     Ok(StatusCode::OK)
@@ -1589,6 +1597,7 @@ fn default_true() -> bool {
 
 /// Build a v2 Filter JSON object with nested keywords.
 async fn filter_to_json(pool: &sqlx::SqlitePool, filter_id: i64) -> Result<Value, AppError> {
+    // REMAINING: reason varies
     let row: (i64, String, String, String, Option<i64>, i64) = sqlx::query_as(
         "SELECT id, title, context, filter_action, expires_at, created_at \
          FROM filters WHERE id = ?",
@@ -1597,6 +1606,7 @@ async fn filter_to_json(pool: &sqlx::SqlitePool, filter_id: i64) -> Result<Value
     .fetch_one(pool)
     .await?;
 
+    // REMAINING: filter query — fieldwork has partial coverage
     let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
         "SELECT id, keyword, whole_word FROM filter_keywords \
          WHERE filter_id = ? ORDER BY id",
@@ -1634,10 +1644,11 @@ async fn list_filters_v2(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let filter_ids: Vec<(i64,)> =
-        sqlx::query_as("SELECT id FROM filters WHERE user_id = ? ORDER BY id")
-            .bind(&auth.account_id)
-            .fetch_all(&state.pool)
-            .await?;
+        {
+            let fwp_fl = crate::server::fw_pool(&state.pool);
+            let filters = fieldwork::filters_db::get_filters(&fwp_fl, &auth.account_id).await?;
+            filters.into_iter().map(|f| (f.id,)).collect::<Vec<_>>()
+        };
 
     let mut results = Vec::with_capacity(filter_ids.len());
     for (fid,) in &filter_ids {
@@ -1658,6 +1669,7 @@ async fn create_filter_v2(
         serde_json::to_string(&body.context).map_err(|e| AppError::internal(e.to_string()))?;
     let expires_at = body.expires_in.map(|secs| now + secs * 1000);
 
+    // REMAINING: reason varies
     sqlx::query(
         "INSERT INTO filters \
          (id, user_id, title, context, filter_action, expires_at, created_at) \
@@ -1675,6 +1687,7 @@ async fn create_filter_v2(
 
     for kw in &body.keywords_attributes {
         let kw_id = generate_id();
+        // REMAINING: reason varies
         sqlx::query(
             "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
              VALUES (?, ?, ?, ?)",
@@ -1702,11 +1715,11 @@ async fn get_filter_v2(
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
-            .bind(filter_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
+        };
     if exists.is_none() {
         return Err(AppError::not_found("Filter not found"));
     }
@@ -1725,6 +1738,7 @@ async fn update_filter_v2(
         .parse()
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
+    // REMAINING: reason varies
     let row: Option<(i64, String, String, String, Option<i64>)> = sqlx::query_as(
         "SELECT id, title, context, filter_action, expires_at \
          FROM filters WHERE id = ? AND user_id = ?",
@@ -1748,6 +1762,7 @@ async fn update_filter_v2(
         None => cur_expires,
     };
 
+    // REMAINING: reason varies
     sqlx::query(
         "UPDATE filters SET title = ?, context = ?, filter_action = ?, expires_at = ? \
          WHERE id = ?",
@@ -1761,12 +1776,18 @@ async fn update_filter_v2(
     .await?;
 
     if let Some(kw_attrs) = &body.keywords_attributes {
-        sqlx::query("DELETE FROM filter_keywords WHERE filter_id = ?")
-            .bind(filter_id)
-            .execute(&state.pool)
-            .await?;
+        // Delete all existing keywords before re-adding
+        let existing_kws = fieldwork::filters_db::get_keywords(
+            &crate::server::fw_pool(&state.pool), filter_id,
+        ).await?;
+        for kw in &existing_kws {
+            fieldwork::filters_db::delete_keyword(
+                &crate::server::fw_pool(&state.pool), kw.id,
+            ).await?;
+        }
         for kw in kw_attrs {
             let kw_id = generate_id();
+            // REMAINING: reason varies
             sqlx::query(
                 "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
                  VALUES (?, ?, ?, ?)",
@@ -1793,15 +1814,16 @@ async fn delete_filter_v2(
         .parse()
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
-    let result = sqlx::query("DELETE FROM filters WHERE id = ? AND user_id = ?")
-        .bind(filter_id)
-        .bind(&auth.account_id)
-        .execute(&state.pool)
-        .await?;
-
-    if result.rows_affected() == 0 {
+    let del_filter = fieldwork::filters_db::get_filter(
+        &crate::server::fw_pool(&state.pool), filter_id,
+    ).await?;
+    if del_filter.as_ref().map(|f| f.user_id.as_str()) != Some(&auth.account_id) {
         return Err(AppError::not_found("Filter not found"));
     }
+    fieldwork::filters_db::delete_filter(
+        &crate::server::fw_pool(&state.pool), filter_id,
+    ).await?;
+    let _rows_affected = if del_filter.is_some() { 1u64 } else { 0u64 };
     Ok(StatusCode::OK)
 }
 
@@ -1816,15 +1838,16 @@ async fn list_filter_keywords(
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
-            .bind(filter_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
+        };
     if exists.is_none() {
         return Err(AppError::not_found("Filter not found"));
     }
 
+    // REMAINING: filter query — fieldwork has partial coverage
     let keywords: Vec<(i64, String, bool)> = sqlx::query_as(
         "SELECT id, keyword, whole_word FROM filter_keywords \
          WHERE filter_id = ? ORDER BY id",
@@ -1858,16 +1881,17 @@ async fn add_filter_keyword(
         .map_err(|_| AppError::not_found("Filter not found"))?;
 
     let exists: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM filters WHERE id = ? AND user_id = ?")
-            .bind(filter_id)
-            .bind(&auth.account_id)
-            .fetch_optional(&state.pool)
-            .await?;
+        {
+            let fwp_fc = crate::server::fw_pool(&state.pool);
+            let f = fieldwork::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
+        };
     if exists.is_none() {
         return Err(AppError::not_found("Filter not found"));
     }
 
     let kw_id = generate_id();
+    // REMAINING: reason varies
     sqlx::query(
         "INSERT INTO filter_keywords (id, filter_id, keyword, whole_word) \
          VALUES (?, ?, ?, ?)",
@@ -1896,6 +1920,7 @@ async fn delete_filter_keyword(
         .parse()
         .map_err(|_| AppError::not_found("Keyword not found"))?;
 
+    // REMAINING: reason varies
     let result = sqlx::query(
         "DELETE FROM filter_keywords WHERE id = ? AND filter_id IN \
          (SELECT id FROM filters WHERE user_id = ?)",
@@ -1916,6 +1941,7 @@ async fn list_filters_v1(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
+    // REMAINING: reason varies
     let rows: Vec<(i64, String, String, bool, Option<i64>)> = sqlx::query_as(
         "SELECT fk.id, fk.keyword, f.context, fk.whole_word, f.expires_at \
          FROM filter_keywords fk \
@@ -1953,6 +1979,7 @@ async fn list_sessions(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
+    // REMAINING: reason varies
     let rows: Vec<(i64, String, String, i64, Option<i64>)> = sqlx::query_as(
         "SELECT t.id, oa.name, t.scopes, t.created_at, t.last_used_at \
          FROM oauth_tokens t \
@@ -1991,6 +2018,7 @@ async fn revoke_session(
         .map_err(|_| AppError::not_found("Session not found"))?;
 
     let now = now_millis();
+    // REMAINING: reason varies
     let result = sqlx::query(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND persona_id = ? AND revoked_at IS NULL",
     )
@@ -2013,6 +2041,7 @@ async fn revoke_all_sessions(
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
     let now = now_millis();
+    // REMAINING: reason varies
     let result = sqlx::query(
         "UPDATE oauth_tokens SET revoked_at = ? WHERE persona_id = ? AND token_hash != ? AND revoked_at IS NULL",
     )

@@ -20,7 +20,8 @@ pub async fn import_mastodon_archive(
     username: &str,
     archive_path: &Path,
 ) -> Result<ImportStats> {
-    let account: (i64,) = sqlx::query_as("SELECT id FROM personas WHERE username = ?")
+    let account: (i64,) = // REMAINING: import query — can be converted to fieldwork
+ sqlx::query_as("SELECT id FROM personas WHERE username = ?")
         .bind(username)
         .fetch_optional(pool)
         .await?
@@ -188,6 +189,10 @@ async fn apply_actor_profile(pool: &SqlitePool, account_id: i64, path: &Path) ->
         "[]".into()
     };
 
+    // REMAINING: import query — can be converted to fieldwork
+
+
+    // REMAINING: reason varies
     sqlx::query(
         "UPDATE personas SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
     )
@@ -333,7 +338,8 @@ async fn import_outbox(
         let context_url = format!("{ap_id}/context");
 
         // Insert the post
-        let result = sqlx::query(
+        let result = // REMAINING: import query — can be converted to fieldwork
+ sqlx::query(
             "INSERT INTO posts (id, user_id, persona_id, ap_id, in_reply_to_uri, context_url, content, content_html, spoiler_text, visibility, sensitive, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
@@ -373,7 +379,8 @@ async fn import_outbox(
                         .collect::<String>()
                         .to_lowercase();
                     if !tag_name.is_empty() {
-                        let _ = sqlx::query(
+                        let _ = // REMAINING: import query — can be converted to fieldwork
+ sqlx::query(
                             "INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?, ?)",
                         )
                         .bind(id)
@@ -388,6 +395,9 @@ async fn import_outbox(
                     if let Some(href) = tag.get("href").and_then(|v| v.as_str()) {
                         // Try to find this account in our DB by actor URI
                         let remote: Option<(i64,)> =
+                            // REMAINING: import query — can be converted to fieldwork
+
+                            // REMAINING: remote account query — actor_cache has no get_by_id
                             sqlx::query_as("SELECT id FROM remote_accounts WHERE actor_uri = ?")
                                 .bind(href)
                                 .fetch_optional(&mut *tx)
@@ -395,7 +405,8 @@ async fn import_outbox(
                                 .unwrap_or(None);
 
                         if let Some((remote_id,)) = remote {
-                            let _ = sqlx::query(
+                            let _ = // REMAINING: import query — can be converted to fieldwork
+ sqlx::query(
                                 "INSERT OR IGNORE INTO mentions (post_id, mentioned_remote_id) VALUES (?, ?)",
                             )
                             .bind(id)
@@ -442,7 +453,8 @@ async fn import_outbox(
                             .map(|m| m.len() as i64)
                             .unwrap_or(0);
 
-                        let _ = sqlx::query(
+                        let _ = // REMAINING: import query — can be converted to fieldwork
+ sqlx::query(
                             "INSERT INTO media (id, user_id, persona_id, post_id, file_path, mime_type, file_size, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         )
                         .bind(media_id)
