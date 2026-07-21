@@ -900,10 +900,69 @@ async fn did_document(
         .into_response())
 }
 
+/// GET /users/{username}/photos -- Instagram-style photo grid page.
+async fn photo_gallery(
+    State(state): State<Arc<AppState>>,
+    Path(username): Path<String>,
+) -> Result<Html<String>, AppError> {
+    let account = fetch_account(&state.pool, &username).await?;
+    let persona = fieldwork_db::persona_db::get_persona_by_username(&state.pool, &username)
+        .await?
+        .ok_or_else(|| AppError::not_found("Account not found"))?;
+
+    let domain = &state.config.server.domain;
+    let custom_css = load_extra_css(&state.config);
+
+    let images = fieldwork_db::media_db::list_images_for_persona(&state.pool, persona.id, 100, 0)
+        .await
+        .map_err(|e| AppError::internal(format!("media query: {e}")))?;
+
+    let items: Vec<(String, String, String)> = images
+        .iter()
+        .map(|m| {
+            let file_url = format!("https://{domain}/{}", m.file_path);
+            let alt_text = m.description.clone();
+            let post_url = m.post_id
+                .map(|pid| format!("https://{domain}/@{username}/{pid}"))
+                .unwrap_or_else(|| format!("https://{domain}/@{username}"));
+            (file_url, alt_text, post_url)
+        })
+        .collect();
+
+    let grid_html = fieldwork::util::render_photo_grid(&items);
+    let display_name = ammonia::clean(&account.display_name);
+    let username_escaped = html_attr_escape(&username);
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@{username} photos</title>
+  <style>{PAGE_CSS}{grid_css}</style>
+  <style>{custom_css}</style>
+</head>
+<body>
+  <main>
+    <h1>{display_name}</h1>
+    <p class="handle">@{username}@{domain}</p>
+    <h2>Photos</h2>
+    {grid_html}
+  </main>
+</body>
+</html>"#,
+        grid_css = fieldwork::util::PHOTO_GRID_CSS,
+        username = username_escaped,
+    );
+    Ok(Html(html))
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(index_page))
         .route("/users/{username}", get(actor))
+        .route("/users/{username}/photos", get(photo_gallery))
         .route("/@{username}", get(profile_page))
         .route("/@{username}/{post_id}", get(post_page))
         .route("/users/{username}/outbox", get(outbox))
