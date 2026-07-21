@@ -44,9 +44,21 @@ struct CreateCollectionRequest {
 
 #[derive(Deserialize)]
 struct AddItemRequest {
+    #[serde(deserialize_with = "deserialize_string_or_int")]
     media_id: String,
     #[serde(default)]
     position: i32,
+}
+
+/// Accept both `"12345"` (string) and `12345` (integer) for ID fields.
+/// Pixelfed clients may send either form.
+fn deserialize_string_or_int<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let v: Value = Deserialize::deserialize(d)?;
+    match v {
+        Value::String(s) => Ok(s),
+        Value::Number(n) => Ok(n.to_string()),
+        _ => Err(serde::de::Error::custom("expected string or integer")),
+    }
 }
 
 fn default_limit() -> i64 {

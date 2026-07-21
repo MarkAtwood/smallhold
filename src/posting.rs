@@ -960,6 +960,16 @@ async fn create_status(
 
     let text = body.status.as_deref().unwrap_or("").to_string();
 
+    if let Some(ref media_ids) = body.media_ids {
+        if media_ids.len() > state.config.limits.max_attachments {
+            return Err(AppError::unprocessable(format!(
+                "Too many attachments: {} (max {})",
+                media_ids.len(),
+                state.config.limits.max_attachments
+            )));
+        }
+    }
+
     let media_ids: Vec<i64> = body
         .media_ids
         .as_deref()
