@@ -29,6 +29,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::push::routes())
         .merge(crate::webauthn::routes())
         .merge(crate::pixelfed_api::routes())
+        .merge(crate::lemmy_api::routes())
         .route("/health", get(health))
         .layer(cors)
         .with_state(state)

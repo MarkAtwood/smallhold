@@ -18,6 +18,7 @@ pub mod id;
 pub mod import;
 pub mod inbox;
 pub mod interactions;
+pub mod lemmy_api;
 pub mod media;
 pub mod pixelfed_api;
 pub mod posting;
