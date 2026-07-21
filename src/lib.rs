@@ -19,6 +19,7 @@ pub mod import;
 pub mod inbox;
 pub mod interactions;
 pub mod media;
+pub mod pixelfed_api;
 pub mod posting;
 pub mod push;
 pub mod search;
