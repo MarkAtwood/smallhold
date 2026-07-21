@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::id::generate_id;
 use crate::server::AppState;
-use axum::extract::{FromRequestParts, Path, Query, State};
+use axum::extract::{FromRequestParts, OptionalFromRequestParts, Path, Query, State};
 use axum::http::header::LOCATION;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
@@ -295,6 +295,21 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedAccount {
             scopes,
             token_hash,
         })
+    }
+}
+
+impl OptionalFromRequestParts<Arc<AppState>> for AuthenticatedAccount {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(
+            <Self as FromRequestParts<Arc<AppState>>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 
