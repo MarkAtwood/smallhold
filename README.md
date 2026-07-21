@@ -25,6 +25,8 @@ Smallhold speaks eight fediverse client APIs simultaneously. Use your preferred 
 
 All served from the same binary, same database, same personas. One account works with every client.
 
+Smallhold does not ship a web frontend. It is a pure API server — bring whichever client you prefer. This is a deliberate choice: existing clients (Phanpy, Elk, Ivory, Tusky, etc.) are mature, well-maintained, and better than anything we'd build. We focus on the protocol layer.
+
 ---
 
 ## What this is not
