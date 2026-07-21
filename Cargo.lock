@@ -1210,6 +1210,7 @@ dependencies = [
  "blurhash",
  "bytes",
  "cavage-httpsig",
+ "chrono",
  "hex",
  "image",
  "pulldown-cmark",

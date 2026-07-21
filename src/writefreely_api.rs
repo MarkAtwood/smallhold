@@ -6,7 +6,7 @@ use crate::server::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use fieldwork::util::{now_secs, render_markdown_simple, slugify};
+use fieldwork::util::{now_secs, render_markdown, slugify};
 use fieldwork::writefreely_api::*;
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ async fn create_post(
         if s.is_empty() { None } else { Some(s) }
     });
 
-    let body_html = render_markdown_simple(&body.body);
+    let body_html = render_markdown(&body.body);
 
     let article = fieldwork_db::articles_db::ArticleRow {
         id,
@@ -109,7 +109,7 @@ async fn update_post(
         }
     }
 
-    let body_html = body.body.as_deref().map(render_markdown_simple);
+    let body_html = body.body.as_deref().map(render_markdown);
     let now = now_secs();
 
     fieldwork_db::articles_db::update_article(
@@ -307,7 +307,7 @@ async fn create_collection_post(
         if s.is_empty() { None } else { Some(s) }
     });
 
-    let body_html = render_markdown_simple(&body.body);
+    let body_html = render_markdown(&body.body);
 
     let article = fieldwork_db::articles_db::ArticleRow {
         id,
@@ -416,7 +416,7 @@ async fn me_collections(
 async fn render_md(
     Json(body): Json<MarkdownRequest>,
 ) -> Json<WfResponse<MarkdownResponse>> {
-    let html = render_markdown_simple(&body.raw_body);
+    let html = render_markdown(&body.raw_body);
     Json(WfResponse {
         code: 200,
         data: MarkdownResponse { body: html },

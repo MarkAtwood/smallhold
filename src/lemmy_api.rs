@@ -11,6 +11,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use fieldwork::util::{epoch_to_iso, now_iso};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -115,18 +116,6 @@ fn now_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
-}
-
-fn now_iso() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.6fZ")
-        .to_string()
-}
-
-fn epoch_to_iso(epoch: i64) -> String {
-    chrono::DateTime::from_timestamp(epoch, 0)
-        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
-        .unwrap_or_else(|| now_iso())
 }
 
 // ---------------------------------------------------------------------------

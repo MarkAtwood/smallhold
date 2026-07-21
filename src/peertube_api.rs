@@ -12,6 +12,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
+use fieldwork::util::epoch_to_iso;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -80,18 +81,6 @@ struct CreateChannelRequest {
 
 fn default_limit() -> i64 {
     15
-}
-
-fn now_iso() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string()
-}
-
-fn epoch_to_iso(epoch: i64) -> String {
-    chrono::DateTime::from_timestamp(epoch, 0)
-        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
-        .unwrap_or_else(|| now_iso())
 }
 
 // ---------------------------------------------------------------------------
