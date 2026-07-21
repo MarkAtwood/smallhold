@@ -6,7 +6,7 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use image::GenericImageView;
+use fieldwork::media_processing::{self, MediaError};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -14,42 +14,17 @@ use std::sync::Arc;
 const MAX_DESCRIPTION_CHARS: usize = 1500;
 const MAX_DIMENSION: u32 = 4096;
 
-/// Sniff MIME type from magic bytes. Returns None if unrecognized.
-fn sniff_mime(data: &[u8]) -> Option<&'static str> {
-    if data.starts_with(b"\x89PNG") {
-        Some("image/png")
-    } else if data.starts_with(b"\xff\xd8\xff") {
-        Some("image/jpeg")
-    } else if data.starts_with(b"GIF8") {
-        Some("image/gif")
-    } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
-        Some("image/webp")
-    } else {
-        None
+fn media_error_to_app(e: MediaError) -> AppError {
+    match e {
+        MediaError::UnsupportedFormat => AppError::unprocessable("Unsupported image format"),
+        MediaError::DimensionsTooLarge(..) => AppError::unprocessable(e.to_string()),
+        MediaError::GifFrameBomb(..) => AppError::unprocessable(e.to_string()),
+        MediaError::FileTooLarge(..) => AppError::unprocessable(e.to_string()),
+        MediaError::DecodeError(_) => AppError::unprocessable(e.to_string()),
+        MediaError::EncodeError(_) => AppError::internal(e.to_string()),
+        MediaError::BlurhashError(_) => AppError::internal(e.to_string()),
     }
 }
-
-/// Map MIME type to image::ImageFormat for re-encoding.
-fn image_format_for_mime(mime: &str) -> Option<image::ImageFormat> {
-    match mime {
-        "image/jpeg" => Some(image::ImageFormat::Jpeg),
-        "image/png" => Some(image::ImageFormat::Png),
-        "image/gif" => Some(image::ImageFormat::Gif),
-        "image/webp" => Some(image::ImageFormat::WebP),
-        _ => None,
-    }
-}
-
-fn ext_for_mime(mime: &str) -> Option<&'static str> {
-    match mime {
-        "image/jpeg" => Some("jpg"),
-        "image/png" => Some("png"),
-        "image/gif" => Some("gif"),
-        "image/webp" => Some("webp"),
-        _ => None,
-    }
-}
-
 
 #[allow(dead_code)] // All fields are needed by FromRow; not all are used in rendering
 struct MediaRow {
@@ -159,8 +134,8 @@ async fn process_upload(
                     )));
                 }
 
-                // Sniff MIME from magic bytes — don't trust the Content-Type header
-                let sniffed = sniff_mime(&data).ok_or_else(|| {
+                // Sniff MIME from magic bytes -- don't trust the Content-Type header
+                let sniffed = media_processing::sniff_mime(&data).ok_or_else(|| {
                     AppError::unprocessable(
                         "Unsupported media type: could not identify image format from file contents",
                     )
@@ -184,7 +159,7 @@ async fn process_upload(
 
     let data = file_data.ok_or_else(|| AppError::bad_request("Missing file field"))?;
     let mime = file_mime.unwrap(); // safe: set together with file_data
-    let ext = ext_for_mime(&mime).unwrap(); // safe: validated against ALLOWED_MIMES
+    let ext = media_processing::ext_for_mime(&mime).unwrap(); // safe: validated by sniff_mime
 
     let id = generate_id();
     let id_hex = format!("{id:x}");
@@ -200,71 +175,17 @@ async fn process_upload(
         .join(prefix)
         .join(format!("{id}.{ext}"));
 
-    // Decode image with decompression bomb limits, strip EXIF by re-encoding,
-    // and resize if dimensions exceed MAX_DIMENSION.
-    let fmt = image_format_for_mime(&mime)
-        .ok_or_else(|| AppError::unprocessable("Unsupported image format for processing"))?;
-
-    let (width, height, blurhash, clean_data) = tokio::task::spawn_blocking({
-        let sniffed_mime = mime.clone();
-        move || -> Result<(u32, u32, String, Vec<u8>), AppError> {
-            // GIF frame bomb protection: reject GIFs with excessive frame counts
-            if sniffed_mime == "image/gif" {
-                let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(&data))
-                    .map_err(|e| AppError::unprocessable(format!("Invalid GIF data: {e}")))?;
-                use image::AnimationDecoder;
-                let frame_count = decoder.into_frames().count();
-                if frame_count > 500 {
-                    return Err(AppError::unprocessable(format!(
-                        "GIF has too many frames ({frame_count}, max 500)"
-                    )));
-                }
-            }
-
-            let mut reader = image::ImageReader::new(std::io::Cursor::new(&data))
-                .with_guessed_format()
-                .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
-            let mut limits = image::Limits::default();
-            limits.max_alloc = Some(64 * 1024 * 1024); // 64MB decoded max
-            reader.limits(limits);
-            let mut img = reader
-                .decode()
-                .map_err(|e| AppError::unprocessable(format!("Invalid image data: {e}")))?;
-
-            let (w, h) = img.dimensions();
-
-            // Resize if either dimension exceeds MAX_DIMENSION
-            if w > MAX_DIMENSION || h > MAX_DIMENSION {
-                img = img.resize(
-                    MAX_DIMENSION,
-                    MAX_DIMENSION,
-                    image::imageops::FilterType::Lanczos3,
-                );
-            }
-
-            let (w, h) = img.dimensions();
-
-            // Re-encode to strip EXIF metadata (GPS, camera info, embedded scripts)
-            let mut buf = std::io::Cursor::new(Vec::new());
-            img.write_to(&mut buf, fmt)
-                .map_err(|e| AppError::internal(format!("Image re-encoding failed: {e}")))?;
-            let clean = buf.into_inner();
-
-            let thumb = image::imageops::resize(
-                &img.to_rgba8(),
-                32,
-                32,
-                image::imageops::FilterType::Triangle,
-            );
-
-            let hash = blurhash::encode(4, 3, 32, 32, thumb.as_raw())
-                .map_err(|e| AppError::internal(format!("Blurhash encoding failed: {e}")))?;
-
-            Ok((w, h, hash, clean))
-        }
+    let processed = tokio::task::spawn_blocking({
+        move || media_processing::process_image(&data, MAX_DIMENSION)
     })
     .await
-    .map_err(|e| AppError::internal(format!("Image processing task failed: {e}")))??;
+    .map_err(|e| AppError::internal(format!("Image processing task failed: {e}")))?
+    .map_err(media_error_to_app)?;
+
+    let width = processed.width;
+    let height = processed.height;
+    let blurhash = processed.blurhash;
+    let clean_data = processed.data;
 
     // Write the re-encoded (EXIF-stripped) image to disk
     tokio::fs::write(&abs_path, &clean_data)
