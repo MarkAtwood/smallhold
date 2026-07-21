@@ -6,74 +6,9 @@ use crate::server::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use fieldwork::util::{now_secs, render_markdown_simple, slugify};
 use fieldwork::writefreely_api::*;
 use std::sync::Arc;
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
-
-fn epoch_to_iso(epoch: i64) -> String {
-    chrono::DateTime::from_timestamp(epoch, 0)
-        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-        .unwrap_or_default()
-}
-
-fn article_to_post_response(
-    a: &fieldwork_db::articles_db::ArticleRow,
-    include_token: bool,
-) -> PostResponse {
-    let collection = a.collection_alias.as_ref().map(|alias| CollectionRef {
-        alias: alias.clone(),
-        title: String::new(),
-    });
-    PostResponse {
-        id: a.id.to_string(),
-        slug: a.slug.clone(),
-        token: if include_token { a.edit_token.clone() } else { None },
-        title: a.title.clone(),
-        body: a.body.clone(),
-        font: Some(a.font.clone()),
-        lang: a.language.clone(),
-        rtl: if a.rtl { Some(true) } else { None },
-        created: epoch_to_iso(a.created_at),
-        updated: a.updated_at.map(epoch_to_iso),
-        views: a.views,
-        collection,
-    }
-}
-
-fn collection_to_response(c: &fieldwork_db::articles_db::CollectionRow) -> CollectionResponse {
-    CollectionResponse {
-        alias: c.alias.clone(),
-        title: c.title.clone(),
-        description: c.description.clone(),
-        style_sheet: if c.style_sheet.is_empty() { None } else { Some(c.style_sheet.clone()) },
-        public: c.visibility == "public",
-    }
-}
-
-fn render_markdown(md: &str) -> String {
-    // ponytail: basic markdown→HTML. pulldown-cmark would be better but
-    // ammonia::clean is already a dep. Paragraph wrapping is good enough.
-    let cleaned = ammonia::clean(md);
-    format!("<p>{}</p>", cleaned.replace("\n\n", "</p><p>").replace('\n', "<br>"))
-}
-
-fn slugify(title: &str) -> String {
-    title
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
-}
 
 // ---------------------------------------------------------------------------
 // POST /api/posts — create post
@@ -98,7 +33,7 @@ async fn create_post(
         if s.is_empty() { None } else { Some(s) }
     });
 
-    let body_html = render_markdown(&body.body);
+    let body_html = render_markdown_simple(&body.body);
 
     let article = fieldwork_db::articles_db::ArticleRow {
         id,
@@ -128,7 +63,7 @@ async fn create_post(
 
     Ok(Json(WfResponse {
         code: 201,
-        data: article_to_post_response(&article, true),
+        data: article.to_api_response(true),
     }))
 }
 
@@ -149,7 +84,7 @@ async fn get_post(
 
     Ok(Json(WfResponse {
         code: 200,
-        data: article_to_post_response(&article, false),
+        data: article.to_api_response(false),
     }))
 }
 
@@ -174,7 +109,7 @@ async fn update_post(
         }
     }
 
-    let body_html = body.body.as_deref().map(render_markdown);
+    let body_html = body.body.as_deref().map(render_markdown_simple);
     let now = now_secs();
 
     fieldwork_db::articles_db::update_article(
@@ -198,7 +133,7 @@ async fn update_post(
 
     Ok(Json(WfResponse {
         code: 200,
-        data: article_to_post_response(&updated, false),
+        data: updated.to_api_response(false),
     }))
 }
 
@@ -261,7 +196,7 @@ async fn create_collection(
         .map_err(AppError::from)?;
     Ok(Json(WfResponse {
         code: 201,
-        data: collection_to_response(&col),
+        data: col.to_api_response(),
     }))
 }
 
@@ -279,7 +214,7 @@ async fn get_collection(
         .ok_or_else(|| AppError::not_found("Collection not found"))?;
     Ok(Json(WfResponse {
         code: 200,
-        data: collection_to_response(&col),
+        data: col.to_api_response(),
     }))
 }
 
@@ -310,7 +245,7 @@ async fn update_collection(
         .ok_or_else(|| AppError::not_found("Collection not found"))?;
     Ok(Json(WfResponse {
         code: 200,
-        data: collection_to_response(&col),
+        data: col.to_api_response(),
     }))
 }
 
@@ -347,7 +282,7 @@ async fn collection_posts(
     )
     .await
     .map_err(AppError::from)?;
-    let posts: Vec<_> = articles.iter().map(|a| article_to_post_response(a, false)).collect();
+    let posts: Vec<_> = articles.iter().map(|a| a.to_api_response(false)).collect();
     Ok(Json(WfResponse { code: 200, data: posts }))
 }
 
@@ -372,7 +307,7 @@ async fn create_collection_post(
         if s.is_empty() { None } else { Some(s) }
     });
 
-    let body_html = render_markdown(&body.body);
+    let body_html = render_markdown_simple(&body.body);
 
     let article = fieldwork_db::articles_db::ArticleRow {
         id,
@@ -402,7 +337,7 @@ async fn create_collection_post(
 
     Ok(Json(WfResponse {
         code: 201,
-        data: article_to_post_response(&article, false),
+        data: article.to_api_response(false),
     }))
 }
 
@@ -423,7 +358,7 @@ async fn get_collection_post(
 
     Ok(Json(WfResponse {
         code: 200,
-        data: article_to_post_response(&article, false),
+        data: article.to_api_response(false),
     }))
 }
 
@@ -453,7 +388,7 @@ async fn me_posts(
     )
     .await
     .unwrap_or_default();
-    let posts: Vec<_> = articles.iter().map(|a| article_to_post_response(a, false)).collect();
+    let posts: Vec<_> = articles.iter().map(|a| a.to_api_response(false)).collect();
     Json(WfResponse { code: 200, data: posts })
 }
 
@@ -470,7 +405,7 @@ async fn me_collections(
     )
     .await
     .unwrap_or_default();
-    let data: Vec<_> = cols.iter().map(collection_to_response).collect();
+    let data: Vec<_> = cols.iter().map(|c| c.to_api_response()).collect();
     Json(WfResponse { code: 200, data })
 }
 
@@ -481,7 +416,7 @@ async fn me_collections(
 async fn render_md(
     Json(body): Json<MarkdownRequest>,
 ) -> Json<WfResponse<MarkdownResponse>> {
-    let html = render_markdown(&body.raw_body);
+    let html = render_markdown_simple(&body.raw_body);
     Json(WfResponse {
         code: 200,
         data: MarkdownResponse { body: html },

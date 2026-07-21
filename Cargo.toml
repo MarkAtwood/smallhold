@@ -8,7 +8,7 @@ license = "AGPL-3.0-only"
 [dependencies]
 # Shared fediverse building blocks
 fieldwork = { path = "../fedistract/fieldwork", features = ["full"] }
-fieldwork-db = { path = "../fedistract/fieldwork-db", features = ["sqlite"] }
+fieldwork-db = { path = "../fedistract/fieldwork-db", features = ["sqlite", "api-convert"] }
 cavage-httpsig = { path = "../fedistract/cavage-httpsig" }
 ssrf-guard = { path = "../fedistract/ssrf-guard", features = ["reqwest"] }
 fedi-did = { path = "../fedistract/fedi-did" }

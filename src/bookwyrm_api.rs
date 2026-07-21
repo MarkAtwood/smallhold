@@ -7,46 +7,8 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use fieldwork::bookwyrm_api::*;
+use fieldwork::util::now_secs;
 use std::sync::Arc;
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
-
-fn book_row_to_response(b: &fieldwork_db::books_db::BookRow) -> BookResponse {
-    BookResponse {
-        id: b.id,
-        title: b.title.clone(),
-        author: b.author.clone(),
-        isbn: b.isbn.clone(),
-        isbn13: b.isbn13.clone(),
-        openlibrary_id: b.openlibrary_id.clone(),
-        cover_url: b.cover_url.clone(),
-        description: b.description.clone(),
-        pages: b.pages,
-        published_year: b.published_year,
-        language: b.language.clone(),
-        created_at: b.created_at,
-    }
-}
-
-fn review_row_to_response(r: &fieldwork_db::books_db::ReviewRow) -> ReviewResponse {
-    ReviewResponse {
-        id: r.id,
-        user_id: r.user_id,
-        persona_id: r.persona_id,
-        book_id: r.book_id,
-        content: r.content.clone(),
-        content_html: r.content_html.clone(),
-        rating: r.rating,
-        spoiler: r.spoiler,
-        ap_id: r.ap_id.clone(),
-        created_at: r.created_at,
-    }
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/books — search books
@@ -66,7 +28,7 @@ async fn search_books(
             .await
             .unwrap_or_default()
     };
-    Json(books.iter().map(book_row_to_response).collect())
+    Json(books.iter().map(|b| b.into()).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +43,7 @@ async fn get_book(
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Book not found"))?;
-    Ok(Json(book_row_to_response(&book)))
+    Ok(Json(BookResponse::from(&book)))
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +75,7 @@ async fn create_book(
     fieldwork_db::books_db::create_book(&state.pool, &book)
         .await
         .map_err(AppError::from)?;
-    Ok(Json(book_row_to_response(&book)))
+    Ok(Json(BookResponse::from(&book)))
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +181,7 @@ async fn book_reviews(
     let reviews = fieldwork_db::books_db::reviews_for_book(&state.pool, id, 50)
         .await
         .unwrap_or_default();
-    Json(reviews.iter().map(review_row_to_response).collect())
+    Json(reviews.iter().map(|r| r.into()).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +213,7 @@ async fn create_review(
     fieldwork_db::books_db::create_review(&state.pool, &review)
         .await
         .map_err(AppError::from)?;
-    Ok(Json(review_row_to_response(&review)))
+    Ok(Json(ReviewResponse::from(&review)))
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +237,7 @@ async fn user_reading(
             reading,
             read,
         },
-        recent_reviews: reviews.iter().map(review_row_to_response).collect(),
+        recent_reviews: reviews.iter().map(|r| r.into()).collect(),
     })
 }
 
