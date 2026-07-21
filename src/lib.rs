@@ -20,6 +20,7 @@ pub mod inbox;
 pub mod interactions;
 pub mod lemmy_api;
 pub mod media;
+pub mod misskey_api;
 pub mod peertube_api;
 pub mod pixelfed_api;
 pub mod posting;
