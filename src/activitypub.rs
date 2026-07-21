@@ -765,6 +765,9 @@ async fn ap_status(
     if let Some(ref ctx) = post.context_url {
         note["context"] = json!(ctx);
     }
+    if let Some(ref abs) = post.abstract_text {
+        note["abstract"] = json!(abs);
+    }
 
     Ok(ap_response(note))
 }

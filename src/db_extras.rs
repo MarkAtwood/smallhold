@@ -1734,6 +1734,7 @@ pub fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow) -> crate::posting::PostRow
         language: row.get(12),
         created_at: row.get(13),
         edited_at: row.get(14),
+        abstract_text: row.get(15),
     }
 }
 

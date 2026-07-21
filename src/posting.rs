@@ -524,6 +524,7 @@ pub struct PostRow {
     pub language: Option<String>,
     pub created_at: i64,
     pub edited_at: Option<i64>,
+    pub abstract_text: Option<String>,
 }
 
 /// Convert a fieldwork PostRow to our local PostRow.
@@ -544,6 +545,7 @@ pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow) -> PostRow {
         language: p.language.clone(),
         created_at: p.created_at,
         edited_at: p.edited_at,
+        abstract_text: p.abstract_text.clone(),
     }
 }
 
@@ -567,7 +569,7 @@ pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str)
 // expressed through fieldwork's fixed query functions.
 pub const POST_COLUMNS: &str =
     "id, persona_id, ap_id, in_reply_to_id, in_reply_to_uri, boost_of_id, context_url, content, content_html, \
-     spoiler_text, visibility, sensitive, language, created_at, edited_at";
+     spoiler_text, visibility, sensitive, language, created_at, edited_at, abstract";
 
 /// Build the Mastodon Status JSON for a local post.
 #[allow(clippy::too_many_arguments)]
@@ -632,7 +634,8 @@ fn serialize_status(
         "emojis": [],
         "card": card,
         "poll": null,
-        "edited_at": edited
+        "edited_at": edited,
+        "abstract": post.abstract_text
     })
 }
 
@@ -650,6 +653,9 @@ struct CreateStatusRequest {
     visibility: Option<String>,
     language: Option<String>,
     scheduled_at: Option<String>,
+    /// FEP post abstract (plain text summary for accessibility/previews).
+    #[serde(rename = "abstract")]
+    abstract_text: Option<String>,
 }
 
 fn deserialize_optional_number<'de, D: serde::Deserializer<'de>>(
@@ -1086,6 +1092,25 @@ async fn create_status(
         None => format!("{ap_id}/context"),
     };
 
+    // FEP post abstract: use provided value, or auto-generate for long posts.
+    let abstract_text = body.abstract_text.clone().or_else(|| {
+        if text.chars().count() > 500 {
+            let first_sentence_end = text.find(". ")
+                .or_else(|| text.find(".\n"))
+                .map(|i| i + 1)
+                .unwrap_or_else(|| text.len().min(200));
+            let end = first_sentence_end.min(200);
+            let truncated: String = text.chars().take(end).collect();
+            if truncated.len() < text.len() {
+                Some(format!("{truncated}..."))
+            } else {
+                Some(truncated)
+            }
+        } else {
+            None
+        }
+    });
+
     fieldwork_db::posts_db::create_post(
         &state.pool,
         &fieldwork_db::posts_db::PostRow {
@@ -1108,6 +1133,7 @@ async fn create_status(
             edited_at: None,
             deleted_at: None,
             deleted_reason: None,
+            abstract_text: abstract_text.clone(),
         },
     ).await?;
 
@@ -2115,6 +2141,7 @@ async fn reblog(
                 edited_at: None,
                 deleted_at: None,
                 deleted_reason: None,
+                abstract_text: None,
             },
         ).await?;
 
@@ -3452,6 +3479,7 @@ mod tests {
             language: Some("en".into()),
             created_at: 1704067200000,
             edited_at: None,
+            abstract_text: None,
         };
         let account_json = json!({
             "id": "1",

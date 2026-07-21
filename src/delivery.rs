@@ -341,6 +341,23 @@ async fn create_scheduled_post(
     // FEP-f228: scheduled posts are always originals (no in_reply_to), so they get their own context.
     let context_url = format!("{ap_id}/context");
 
+    // FEP post abstract: auto-generate for long posts.
+    let abstract_text = if text.chars().count() > 500 {
+        let first_sentence_end = text.find(". ")
+            .or_else(|| text.find(".\n"))
+            .map(|i| i + 1)
+            .unwrap_or_else(|| text.len().min(200));
+        let end = first_sentence_end.min(200);
+        let truncated: String = text.chars().take(end).collect();
+        if truncated.len() < text.len() {
+            Some(format!("{truncated}..."))
+        } else {
+            Some(truncated)
+        }
+    } else {
+        None
+    };
+
     fieldwork_db::posts_db::create_post(
         pool,
         &fieldwork_db::posts_db::PostRow {
@@ -363,6 +380,7 @@ async fn create_scheduled_post(
             edited_at: None,
             deleted_at: None,
             deleted_reason: None,
+            abstract_text,
         },
     )
     .await?;
