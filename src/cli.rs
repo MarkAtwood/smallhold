@@ -78,6 +78,9 @@ pub enum Commands {
     /// DID identity management
     #[command(subcommand)]
     Did(DidCommands),
+
+    /// Rebuild media DB index from sidecar .meta files
+    RebuildMediaIndex,
 }
 
 #[derive(Subcommand)]
@@ -234,6 +237,7 @@ impl Cli {
             Commands::Census => cmd_census(&self.config).await,
             Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
             Commands::Did(cmd) => cmd_did(cmd, &self.config).await,
+            Commands::RebuildMediaIndex => cmd_rebuild_media_index(&self.config).await,
         }
     }
 }
@@ -1100,6 +1104,127 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                 }
             }
         }
+    }
+    Ok(())
+}
+
+async fn cmd_rebuild_media_index(config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    let media_dir = std::path::Path::new(&config.storage.media_dir);
+    anyhow::ensure!(
+        media_dir.is_dir(),
+        "Media directory does not exist: {}",
+        media_dir.display()
+    );
+
+    // Get default persona_id — use the first persona, or fall back to DEFAULT_USER_ID
+    let persona_id = match crate::db_extras::get_first_persona(&pool).await? {
+        Some((id, _)) => id,
+        None => crate::db::DEFAULT_USER_ID,
+    };
+
+    let mut count = 0usize;
+    let mut errors = 0usize;
+
+    fn walk_dir(dir: &std::path::Path, meta_files: &mut Vec<std::path::PathBuf>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk_dir(&path, meta_files);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("meta") {
+                meta_files.push(path);
+            }
+        }
+    }
+
+    let mut meta_files = Vec::new();
+    walk_dir(media_dir, &mut meta_files);
+
+    for meta_path in &meta_files {
+        let data = match std::fs::read_to_string(meta_path) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!("Cannot read {}: {e}", meta_path.display());
+                errors += 1;
+                continue;
+            }
+        };
+
+        let parsed: serde_json::Value = match serde_json::from_str(&data) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Cannot parse {}: {e}", meta_path.display());
+                errors += 1;
+                continue;
+            }
+        };
+
+        let id = match parsed["id"].as_i64() {
+            Some(v) => v,
+            None => {
+                tracing::warn!("Missing id in {}", meta_path.display());
+                errors += 1;
+                continue;
+            }
+        };
+
+        let mime_type = parsed["mime_type"].as_str().unwrap_or("application/octet-stream");
+        let file_size = parsed["file_size"].as_i64().unwrap_or(0);
+        let width = parsed["width"].as_i64().map(|v| v as i32);
+        let height = parsed["height"].as_i64().map(|v| v as i32);
+        let blurhash = parsed["blurhash"].as_str();
+        let description = parsed["description"].as_str().unwrap_or("");
+        let created_at = parsed["created_at"].as_i64().unwrap_or(0);
+
+        // Compute relative file_path from the media_dir.
+        // The .meta file sits next to the media file — strip the .meta suffix to get the media filename.
+        // e.g. media/ab/12345.jpg.meta -> strip .meta -> media/ab/12345.jpg -> relative: ab/12345.jpg
+        let media_file = meta_path.with_extension(""); // strips .meta, leaves e.g. ab/12345.jpg
+        let rel_path = match media_file.strip_prefix(media_dir) {
+            Ok(r) => format!("media/{}", r.display()),
+            Err(_) => {
+                tracing::warn!(
+                    "Cannot compute relative path for {}",
+                    meta_path.display()
+                );
+                errors += 1;
+                continue;
+            }
+        };
+
+        if let Err(e) = crate::db_extras::upsert_media_from_sidecar(
+            &pool,
+            id,
+            crate::db::DEFAULT_USER_ID,
+            persona_id,
+            &rel_path,
+            mime_type,
+            file_size,
+            width,
+            height,
+            blurhash,
+            description,
+            created_at,
+        )
+        .await
+        {
+            tracing::warn!("Failed to upsert media {id}: {e}");
+            errors += 1;
+            continue;
+        }
+
+        count += 1;
+    }
+
+    eprintln!("Rebuilt {count} media entries from sidecar files");
+    if errors > 0 {
+        eprintln!("  ({errors} sidecar files had warnings)");
     }
     Ok(())
 }

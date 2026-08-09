@@ -105,6 +105,18 @@ fn downscale_dimensions(w: u32, h: u32, max_width: u32) -> (u32, u32) {
     (max_width, sh.max(1))
 }
 
+/// Read a JSON sidecar file alongside a media file.
+/// Path: `{abs_path}.meta`. Returns None if the file doesn't exist or can't be parsed.
+/// Uses sync I/O — intended for CLI recovery tools, not the hot request path.
+pub fn read_media_sidecar(abs_path: &std::path::Path) -> Option<serde_json::Value> {
+    let meta_path = abs_path.with_extension(format!(
+        "{}.meta",
+        abs_path.extension().and_then(|e| e.to_str()).unwrap_or("bin")
+    ));
+    let data = std::fs::read_to_string(&meta_path).ok()?;
+    serde_json::from_str(&data).ok()
+}
+
 /// Write a JSON sidecar file alongside a media file for recovery/debugging.
 /// Path: `{abs_path}.meta`. Failures are logged but never fail the upload.
 async fn write_media_sidecar(
@@ -433,5 +445,42 @@ mod tests {
         assert!(parsed["height"].is_null());
         assert!(parsed["blurhash"].is_null());
         assert!(parsed["description"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_read_media_sidecar_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let media_path = dir.path().join("ab").join("67890.jpg");
+        std::fs::create_dir_all(media_path.parent().unwrap()).unwrap();
+        std::fs::write(&media_path, b"fake image").unwrap();
+
+        write_media_sidecar(
+            &media_path,
+            67890,
+            "image/jpeg",
+            54321,
+            Some(800),
+            Some(600),
+            Some("LKO2"),
+            Some("a photo"),
+            1730000000000,
+        )
+        .await;
+
+        let parsed = read_media_sidecar(&media_path).expect("sidecar should be readable");
+        assert_eq!(parsed["id"], 67890);
+        assert_eq!(parsed["mime_type"], "image/jpeg");
+        assert_eq!(parsed["file_size"], 54321);
+        assert_eq!(parsed["width"], 800);
+        assert_eq!(parsed["height"], 600);
+        assert_eq!(parsed["blurhash"], "LKO2");
+        assert_eq!(parsed["description"], "a photo");
+        assert_eq!(parsed["created_at"], 1730000000000_i64);
+    }
+
+    #[test]
+    fn test_read_media_sidecar_missing_file() {
+        let path = std::path::Path::new("/tmp/nonexistent-media-test-12345.jpg");
+        assert!(read_media_sidecar(path).is_none());
     }
 }
