@@ -55,7 +55,7 @@ bip39 = "2.2.2"
 multibase = "0.9.3"
 
 [dev-dependencies]
-axum-test = "16"
+axum-test = "21"
 
 [profile.release]
 lto = true

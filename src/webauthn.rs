@@ -513,3 +513,132 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/oauth/authorize/webauthn/begin", post(auth_begin))
         .route("/oauth/authorize/webauthn/complete", post(auth_complete))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // verify_passkey_token — unit tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn verify_passkey_token_rejects_random() {
+        assert!(!verify_passkey_token("not-a-real-token-at-all"));
+    }
+
+    #[test]
+    fn verify_passkey_token_rejects_empty() {
+        assert!(!verify_passkey_token(""));
+    }
+
+    #[test]
+    fn verify_passkey_token_accepts_valid_and_consumes() {
+        // Manually insert a token into PASSKEY_TOKENS
+        let token = "test-token-for-verification";
+        let token_hash = crate::api::hex_encode(&Sha256::digest(token.as_bytes()));
+        let expires = crate::api::now_millis() + 60_000;
+        {
+            let mut map = PASSKEY_TOKENS.lock().unwrap();
+            map.insert(token_hash, expires);
+        }
+
+        // First use succeeds
+        assert!(verify_passkey_token(token));
+        // Second use fails (consumed)
+        assert!(!verify_passkey_token(token));
+    }
+
+    #[test]
+    fn verify_passkey_token_rejects_expired() {
+        let token = "expired-test-token";
+        let token_hash = crate::api::hex_encode(&Sha256::digest(token.as_bytes()));
+        let expired = crate::api::now_millis() - 1000; // already expired
+        {
+            let mut map = PASSKEY_TOKENS.lock().unwrap();
+            map.insert(token_hash, expired);
+        }
+
+        assert!(!verify_passkey_token(token));
+    }
+
+    // -----------------------------------------------------------------------
+    // passkeys_registered — DB test
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn passkeys_registered_false_when_empty() {
+        let state = crate::db::test_app_state().await;
+        assert!(!passkeys_registered(&state.pool).await);
+    }
+
+    // -----------------------------------------------------------------------
+    // Route tests (axum-test)
+    // -----------------------------------------------------------------------
+
+    async fn test_server() -> axum_test::TestServer {
+        let state = crate::db::test_app_state().await;
+        let app = crate::server::create_router(state);
+        axum_test::TestServer::new(app)
+    }
+
+    async fn test_server_with_admin(password: &str) -> axum_test::TestServer {
+        let state = crate::db::test_app_state().await;
+        crate::db::test_set_admin_password(&state.pool, password).await;
+        let app = crate::server::create_router(state);
+        axum_test::TestServer::new(app)
+    }
+
+    #[tokio::test]
+    async fn register_page_returns_html() {
+        let server = test_server().await;
+        let resp = server.get("/admin/webauthn/register").await;
+        resp.assert_status_ok();
+        let body = resp.text();
+        assert!(body.contains("Register Passkey"));
+        assert!(body.contains("navigator.credentials.create"));
+    }
+
+    #[tokio::test]
+    async fn register_begin_rejects_missing_password() {
+        let server = test_server().await;
+        let resp = server
+            .post("/admin/webauthn/register/begin")
+            .content_type("application/x-www-form-urlencoded")
+            .bytes(axum::body::Bytes::from_static(b""))
+            .await;
+        assert!(resp.status_code().is_client_error());
+    }
+
+    #[tokio::test]
+    async fn register_begin_rejects_wrong_password() {
+        let server = test_server_with_admin("correct-password").await;
+        let resp = server
+            .post("/admin/webauthn/register/begin")
+            .content_type("application/x-www-form-urlencoded")
+            .bytes(axum::body::Bytes::from_static(b"password=wrong-password"))
+            .await;
+        resp.assert_status(axum::http::StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn register_begin_accepts_correct_password() {
+        let server = test_server_with_admin("test-password-123").await;
+        let resp = server
+            .post("/admin/webauthn/register/begin")
+            .content_type("application/x-www-form-urlencoded")
+            .bytes(axum::body::Bytes::from("password=test-password-123"))
+            .await;
+        resp.assert_status_ok();
+        let body: serde_json::Value = resp.json();
+        assert!(body.get("challenge_id").is_some());
+        assert!(body.get("publicKey").is_some());
+    }
+
+    #[tokio::test]
+    async fn auth_begin_fails_without_passkeys() {
+        let server = test_server().await;
+        let resp = server.post("/oauth/authorize/webauthn/begin").await;
+        assert!(resp.status_code().is_client_error());
+    }
+}

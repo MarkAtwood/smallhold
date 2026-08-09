@@ -1557,6 +1557,108 @@ pub async fn test_insert_follower(pool: &fieldwork_db::db::Pool, persona_id: i64
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn setup_session_fixtures(pool: &fieldwork_db::db::Pool) -> (i64, i64, String) {
+        test_insert_user(pool).await.unwrap();
+        let persona_id = 9000;
+        test_insert_persona(pool, persona_id).await.unwrap();
+
+        // Create an OAuth app
+        let app_id: i64 = 1;
+        sqlx::query(
+            "INSERT INTO oauth_apps (id, client_id, client_secret, name, redirect_uri, scopes, created_at) \
+             VALUES (?, 'test-client', 'test-secret', 'Test App', 'http://localhost', 'read write', 0)",
+        )
+        .bind(app_id)
+        .execute(sq(pool))
+        .await
+        .unwrap();
+
+        // Create a token
+        let token_hash = "abcdef1234567890abcdef1234567890";
+        sqlx::query(
+            "INSERT INTO oauth_tokens (id, app_id, user_id, persona_id, token_hash, scopes, created_at) \
+             VALUES (1, ?, 1000000000001, ?, ?, 'read write', 100)",
+        )
+        .bind(app_id)
+        .bind(persona_id)
+        .bind(token_hash)
+        .execute(sq(pool))
+        .await
+        .unwrap();
+
+        (persona_id, 1, token_hash.to_string())
+    }
+
+    #[tokio::test]
+    async fn list_sessions_empty() {
+        let pool = crate::db::test_pool().await;
+        let rows = list_sessions(&pool, 999).await.unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_sessions_returns_active_token() {
+        let pool = crate::db::test_pool().await;
+        let (persona_id, _token_id, _) = setup_session_fixtures(&pool).await;
+        let rows = list_sessions(&pool, persona_id).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].1, "Test App");
+        assert_eq!(rows[0].2, "read write");
+    }
+
+    #[tokio::test]
+    async fn revoke_session_marks_token() {
+        let pool = crate::db::test_pool().await;
+        let (persona_id, token_id, _) = setup_session_fixtures(&pool).await;
+
+        let affected = revoke_session(&pool, token_id, persona_id, 5000).await.unwrap();
+        assert_eq!(affected, 1);
+
+        // After revocation, list should be empty
+        let rows = list_sessions(&pool, persona_id).await.unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn revoke_session_wrong_persona_fails() {
+        let pool = crate::db::test_pool().await;
+        let (_persona_id, token_id, _) = setup_session_fixtures(&pool).await;
+
+        let affected = revoke_session(&pool, token_id, 9999, 5000).await.unwrap();
+        assert_eq!(affected, 0);
+    }
+
+    #[tokio::test]
+    async fn revoke_all_sessions_spares_current() {
+        let pool = crate::db::test_pool().await;
+        let (persona_id, _token_id, token_hash) = setup_session_fixtures(&pool).await;
+
+        // Add a second token
+        sqlx::query(
+            "INSERT INTO oauth_tokens (id, app_id, user_id, persona_id, token_hash, scopes, created_at) \
+             VALUES (2, 1, 1000000000001, ?, 'other-token-hash', 'read', 200)",
+        )
+        .bind(persona_id)
+        .execute(sq(&pool))
+        .await
+        .unwrap();
+
+        let rows_before = list_sessions(&pool, persona_id).await.unwrap();
+        assert_eq!(rows_before.len(), 2);
+
+        // Revoke all except current token
+        let affected = revoke_all_sessions(&pool, persona_id, &token_hash, 5000).await.unwrap();
+        assert_eq!(affected, 1);
+
+        let rows_after = list_sessions(&pool, persona_id).await.unwrap();
+        assert_eq!(rows_after.len(), 1);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ActivityPub: complex JOIN queries for outbox, featured, context, post_page
 // ---------------------------------------------------------------------------

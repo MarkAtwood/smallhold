@@ -77,6 +77,56 @@ pub async fn test_pool() -> fieldwork_db::db::Pool {
     create_pool("sqlite::memory:").await.unwrap()
 }
 
+/// Build a test AppState with in-memory DB and dummy config.
+#[cfg(test)]
+pub async fn test_app_state() -> std::sync::Arc<crate::server::AppState> {
+    let pool = test_pool().await;
+    let config: crate::config::Config = toml::from_str(
+        r#"
+[server]
+listen = "127.0.0.1:0"
+domain = "test.example.com"
+secret_key = "test-secret-key-at-least-32-chars-long!!"
+
+[storage]
+database_path = ":memory:"
+media_dir = "/tmp/smallhold-test-media"
+
+[federation]
+[limits]
+[defaults]
+"#,
+    )
+    .unwrap();
+    std::sync::Arc::new(crate::server::AppState {
+        config,
+        pool,
+        search: None,
+    })
+}
+
+/// Insert an admin row with a known password hash for testing.
+#[cfg(test)]
+pub async fn test_set_admin_password(pool: &fieldwork_db::db::Pool, password: &str) {
+    use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+    let salt = SaltString::generate(&mut rand::thread_rng());
+    let hash = Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+    match pool {
+        fieldwork_db::db::Pool::Sqlite(sq) => {
+            sqlx::raw_sql(&format!(
+                "INSERT OR REPLACE INTO admin (id, password_hash, created_at) VALUES (1, '{}', 0)",
+                hash
+            ))
+            .execute(sq)
+            .await
+            .unwrap();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
