@@ -1,0 +1,12 @@
+{
+  "id": "smallhold-tkfg",
+  "title": "[epic] File-backed storage for media sidecars and long-form content",
+  "description": "Move metadata and large text out of SQLite into filesystem files with JSON sidecar metadata. Media files already on disk get .meta sidecar files. Long-form text (\u003e4KB) stored as .md/.html files with sidecars. Short posts stay inline in DB. ID-based naming, single-level prefix (ab/).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T22:12:35.261558623Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T22:12:35.261558623Z"
+}

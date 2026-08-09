@@ -10,6 +10,7 @@ use fieldwork::media_processing::{self, MediaError};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
+use tracing::warn;
 
 const MAX_DESCRIPTION_CHARS: usize = 1500;
 const MAX_DIMENSION: u32 = 4096;
@@ -104,6 +105,47 @@ fn downscale_dimensions(w: u32, h: u32, max_width: u32) -> (u32, u32) {
     (max_width, sh.max(1))
 }
 
+/// Write a JSON sidecar file alongside a media file for recovery/debugging.
+/// Path: `{abs_path}.meta`. Failures are logged but never fail the upload.
+async fn write_media_sidecar(
+    abs_path: &std::path::Path,
+    id: i64,
+    mime_type: &str,
+    file_size: i64,
+    width: Option<u32>,
+    height: Option<u32>,
+    blurhash: Option<&str>,
+    description: Option<&str>,
+    created_at: i64,
+) {
+    let meta_path = abs_path.with_extension(
+        format!(
+            "{}.meta",
+            abs_path.extension().and_then(|e| e.to_str()).unwrap_or("bin")
+        ),
+    );
+    let meta = json!({
+        "id": id,
+        "mime_type": mime_type,
+        "file_size": file_size,
+        "width": width,
+        "height": height,
+        "blurhash": blurhash,
+        "description": description,
+        "created_at": created_at,
+    });
+    match serde_json::to_string_pretty(&meta) {
+        Ok(json_str) => {
+            if let Err(e) = tokio::fs::write(&meta_path, json_str.as_bytes()).await {
+                warn!("Failed to write media sidecar {}: {e}", meta_path.display());
+            }
+        }
+        Err(e) => {
+            warn!("Failed to serialize media sidecar: {e}");
+        }
+    }
+}
+
 async fn process_upload(
     state: &Arc<AppState>,
     auth: &AuthenticatedAccount,
@@ -194,6 +236,19 @@ async fn process_upload(
 
     let now = now_millis();
     let file_size = clean_data.len() as i64;
+
+    write_media_sidecar(
+        &abs_path,
+        id,
+        &mime,
+        file_size,
+        Some(width),
+        Some(height),
+        Some(&blurhash),
+        description.as_deref(),
+        now,
+    )
+    .await;
 
     fieldwork_db::media_db::insert_media(
         &state.pool,
@@ -319,4 +374,64 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/media", post(upload_media_v1))
         .route("/api/v2/media", post(upload_media_v2))
         .route("/api/v1/media/{id}", get(get_media).put(update_media))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_write_media_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let media_path = dir.path().join("ab").join("12345.jpg");
+        std::fs::create_dir_all(media_path.parent().unwrap()).unwrap();
+        std::fs::write(&media_path, b"fake image data").unwrap();
+
+        write_media_sidecar(
+            &media_path,
+            12345,
+            "image/jpeg",
+            98765,
+            Some(1920),
+            Some(1080),
+            Some("LEHV6n"),
+            Some("alt text"),
+            1720000000000,
+        )
+        .await;
+
+        let meta_path = dir.path().join("ab").join("12345.jpg.meta");
+        assert!(meta_path.exists(), "sidecar file should exist");
+
+        let contents = std::fs::read_to_string(&meta_path).unwrap();
+        let parsed: Value = serde_json::from_str(&contents).unwrap();
+
+        assert_eq!(parsed["id"], 12345);
+        assert_eq!(parsed["mime_type"], "image/jpeg");
+        assert_eq!(parsed["file_size"], 98765);
+        assert_eq!(parsed["width"], 1920);
+        assert_eq!(parsed["height"], 1080);
+        assert_eq!(parsed["blurhash"], "LEHV6n");
+        assert_eq!(parsed["description"], "alt text");
+        assert_eq!(parsed["created_at"], 1720000000000_i64);
+    }
+
+    #[tokio::test]
+    async fn test_write_media_sidecar_null_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let media_path = dir.path().join("99999.png");
+        std::fs::write(&media_path, b"fake").unwrap();
+
+        write_media_sidecar(&media_path, 99999, "image/png", 100, None, None, None, None, 0).await;
+
+        let meta_path = dir.path().join("99999.png.meta");
+        let parsed: Value =
+            serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+
+        assert_eq!(parsed["id"], 99999);
+        assert!(parsed["width"].is_null());
+        assert!(parsed["height"].is_null());
+        assert!(parsed["blurhash"].is_null());
+        assert!(parsed["description"].is_null());
+    }
 }

@@ -1,0 +1,30 @@
+{
+  "id": "smallhold-tkfg.2",
+  "title": "Read media metadata from sidecar with DB fallback",
+  "description": "Media metadata reads should check for .meta sidecar file first, fall back to DB. Add a recovery/rebuild command that scans media dir and reconstructs DB media table from sidecar files.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T22:12:52.310296718Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T22:12:52.310296718Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-tkfg.2",
+      "depends_on_id": "smallhold-tkfg",
+      "type": "parent-child",
+      "created_at": "2026-08-09T22:12:52.329155104Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "smallhold-tkfg.2",
+      "depends_on_id": "smallhold-tkfg.1",
+      "type": "blocks",
+      "created_at": "2026-08-09T22:13:21.054054711Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

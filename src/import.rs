@@ -400,6 +400,30 @@ async fn import_outbox(
                             .map(|m| m.len() as i64)
                             .unwrap_or(0);
 
+                        // Write sidecar .meta file for recovery/debugging
+                        let sidecar_path = dest_path.with_extension(
+                            format!(
+                                "{}.meta",
+                                dest_path.extension().and_then(|e| e.to_str()).unwrap_or("bin")
+                            ),
+                        );
+                        let sidecar_json = serde_json::json!({
+                            "id": media_id,
+                            "mime_type": media_type,
+                            "file_size": file_size,
+                            "description": description,
+                            "created_at": published_ms,
+                        });
+                        if let Err(e) = std::fs::write(
+                            &sidecar_path,
+                            serde_json::to_string_pretty(&sidecar_json).unwrap_or_default(),
+                        ) {
+                            tracing::warn!(
+                                "Failed to write media sidecar {}: {e}",
+                                sidecar_path.display()
+                            );
+                        }
+
                         let _ = crate::db_extras::import_insert_media(
                             &mut tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
                             &dest_filename, media_type, file_size, description, published_ms,

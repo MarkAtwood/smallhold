@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-tkfg.5",
+  "title": "Schema migration: add content_path to posts and community_posts",
+  "description": "Add nullable content_path TEXT column to posts and community_posts tables in fieldwork-db. When set, content/content_html are NULL and the actual text lives at the file path. Requires a new migration version in fieldwork-db/src/db.rs.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T22:13:04.337424568Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T22:19:54.321262053Z",
+  "started_at": "2026-08-09T22:14:59.29655704Z",
+  "closed_at": "2026-08-09T22:19:54.321262053Z",
+  "close_reason": "Implemented and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-tkfg.5",
+      "depends_on_id": "smallhold-tkfg",
+      "type": "parent-child",
+      "created_at": "2026-08-09T22:13:04.354675801Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

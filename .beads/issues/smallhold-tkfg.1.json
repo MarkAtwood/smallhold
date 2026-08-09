@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-tkfg.1",
+  "title": "Write media sidecar .meta files on upload",
+  "description": "When a media file is saved to disk, also write a .meta JSON sidecar alongside it containing: mime_type, file_size, width, height, blurhash, description, created_at, original_filename. Affects media.rs upload path and import.rs.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T22:12:49.795836425Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T22:19:54.294234323Z",
+  "started_at": "2026-08-09T22:14:59.247724504Z",
+  "closed_at": "2026-08-09T22:19:54.294234323Z",
+  "close_reason": "Implemented and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-tkfg.1",
+      "depends_on_id": "smallhold-tkfg",
+      "type": "parent-child",
+      "created_at": "2026-08-09T22:12:49.813952444Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
