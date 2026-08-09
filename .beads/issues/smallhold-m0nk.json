@@ -1,0 +1,24 @@
+{
+  "id": "smallhold-m0nk",
+  "title": "Fix Docker build to use rust:latest",
+  "description": "Port Docker fix from local branch.\n\n**Changes:**\n- Dockerfile uses rust:latest (deps need Rust 1.88+)\n- Document that Docker requires listen = \"0.0.0.0:8080\" in config\n- Docker smoke test verified: health, WebFinger, instance all pass\n\n**Depends on:** Docker and Compose deployment issue\n\n**Patch:** ~/PROJECT/smallhold/0004-fix-Docker-build-uses-rust-latest-document-0.0.0.0-l.patch",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T20:26:17.593206691Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T20:33:42.819400407Z",
+  "closed_at": "2026-08-09T20:33:42.819400407Z",
+  "close_reason": "Already applied and verified — patches deleted",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-m0nk",
+      "depends_on_id": "smallhold-35jb",
+      "type": "blocks",
+      "created_at": "2026-08-09T20:26:24.393594202Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

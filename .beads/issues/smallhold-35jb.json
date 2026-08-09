@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-35jb",
+  "title": "Add Docker and Compose deployment",
+  "description": "Port Docker deployment setup from local branch.\n\n**Adds:**\n- Multi-stage Dockerfile: rust:1.80 builder → debian:bookworm-slim runtime (~25MB image, non-root user)\n- compose.yaml: smallhold + Caddy with auto-TLS\n- Caddyfile: reverse proxy + static media with immutable cache\n- .dockerignore: excludes target/, .git/, data/\n\n**Files:** Dockerfile, compose.yaml, Caddyfile, .dockerignore\n\n**Patch:** ~/PROJECT/smallhold/0003-feat-Docker-and-Compose-deployment.patch",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T20:26:15.473664461Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T20:33:42.793370156Z",
+  "closed_at": "2026-08-09T20:33:42.793370156Z",
+  "close_reason": "Already applied and verified — patches deleted"
+}

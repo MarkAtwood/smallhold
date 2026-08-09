@@ -1,6 +1,8 @@
 services:
   smallhold:
-    build: .
+    build:
+      context: ..
+      dockerfile: smallhold/Dockerfile
     restart: unless-stopped
     volumes:
       - ./data:/data

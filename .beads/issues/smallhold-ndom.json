@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-ndom",
+  "title": "Docker build broken: fedistract deps missing from context",
+  "description": "The Dockerfile only COPYs Cargo.toml, Cargo.lock, and src/, but Cargo.toml references ../fedistract/* path dependencies. Docker build fails because those crates aren't in the build context. Need to either restructure the Dockerfile to include fedistract, or publish the deps to a registry. GH Actions workflow also affected.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-09T20:56:01.525461325Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-09T21:16:06.255900248Z",
+  "started_at": "2026-08-09T20:56:05.91202254Z",
+  "closed_at": "2026-08-09T21:16:06.255900248Z",
+  "close_reason": "Fixed: Dockerfile now uses parent dir as build context to include fedistract deps. compose.yaml updated. Verified build succeeds and binary runs."
+}

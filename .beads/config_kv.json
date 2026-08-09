@@ -1,3 +1,4 @@
 {
-  "issue_prefix": "smallhold"
+  "issue_prefix": "smallhold",
+  "kv.memory.smallhold-project-uses-git-email-mark-reviewcommit-com": "smallhold project uses git email mark@reviewcommit.com — no wolfssl email"
 }
