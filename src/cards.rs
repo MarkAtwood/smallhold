@@ -1,10 +1,13 @@
 use anyhow::{bail, Context, Result};
-use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub use fieldwork::cards::{
+    card_to_json, classify_card_type, decode_html_entities, extract_first_url, parse_html_title,
+    parse_og_tags, CardData,
+};
 
 // ---------------------------------------------------------------------------
 // Shared HTTP client for card fetching
@@ -21,41 +24,6 @@ static CARD_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .build()
         .expect("failed to build card HTTP client")
 });
-
-// ---------------------------------------------------------------------------
-// CardData
-// ---------------------------------------------------------------------------
-
-pub struct CardData {
-    pub url: String,
-    pub card_type: String,
-    pub title: String,
-    pub description: String,
-    pub image_url: Option<String>,
-    pub author_name: String,
-    pub author_url: String,
-    pub provider_name: String,
-    pub provider_url: String,
-    pub html: String,
-    pub width: i32,
-    pub height: i32,
-}
-
-// ---------------------------------------------------------------------------
-// URL extraction
-// ---------------------------------------------------------------------------
-
-static URL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"https://[^\s<>\]\)]+").unwrap());
-
-/// Extract the first https:// URL from raw post text.
-pub fn extract_first_url(text: &str) -> Option<String> {
-    URL_RE.find(text).map(|m| {
-        let url = m
-            .as_str()
-            .trim_end_matches(['.', ',', ';', ')', ']', '!', '?']);
-        url.to_string()
-    })
-}
 
 // ---------------------------------------------------------------------------
 // OG metadata fetching
@@ -143,13 +111,12 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         });
 
     let og_type = tags.get("og:type").cloned().unwrap_or_default();
-    let card_type = if og_type.contains("video") || tags.contains_key("og:video") {
-        "video".to_string()
-    } else if image_url.is_some() && title.is_empty() {
-        "photo".to_string()
-    } else {
-        "link".to_string()
-    };
+    let card_type = classify_card_type(
+        &og_type,
+        tags.contains_key("og:video"),
+        image_url.is_some(),
+        !title.is_empty(),
+    );
 
     let provider_name =
         decode_html_entities(&tags.get("og:site_name").cloned().unwrap_or_default());
@@ -180,99 +147,6 @@ pub async fn fetch_card(url: &str, own_domain: &str) -> Result<CardData> {
         html: String::new(), // Never store untrusted HTML; we don't support oEmbed/rich embeds
         width,
         height,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// HTML parsing (regex-based, no full parser needed)
-// ---------------------------------------------------------------------------
-
-fn decode_html_entities(s: &str) -> String {
-    static ENTITY_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"&#(\d+);|&#x([0-9a-fA-F]+);").unwrap());
-
-    let decoded = s
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&#x27;", "'")
-        .replace("&apos;", "'")
-        .replace("&nbsp;", " ");
-
-    // Decode numeric entities (&#8217; &#x2019; etc.)
-    ENTITY_RE
-        .replace_all(&decoded, |caps: &regex::Captures| {
-            let code = if let Some(dec) = caps.get(1) {
-                dec.as_str().parse::<u32>().ok()
-            } else if let Some(hex) = caps.get(2) {
-                u32::from_str_radix(hex.as_str(), 16).ok()
-            } else {
-                None
-            };
-            code.and_then(char::from_u32)
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| caps[0].to_string())
-        })
-        .into_owned()
-}
-
-/// Parse OpenGraph and Twitter Card meta tags from HTML.
-fn parse_og_tags(html: &str) -> HashMap<String, String> {
-    static META_RE: LazyLock<Regex> = LazyLock::new(|| {
-        // Match: <meta property="og:X" content="Y"> or <meta name="twitter:X" content="Y">
-        // Also handles reversed attribute order: content="Y" property="og:X"
-        Regex::new(
-            r#"(?i)<meta\s+(?:[^>]*?\s)?(?:(?:property|name)\s*=\s*"((?:og|twitter|article):[^"]+)"[^>]*?\scontent\s*=\s*"([^"]*)"|content\s*=\s*"([^"]*)"[^>]*?(?:property|name)\s*=\s*"((?:og|twitter|article):[^"]+)")"#,
-        )
-        .unwrap()
-    });
-
-    let mut tags = HashMap::new();
-    for cap in META_RE.captures_iter(html) {
-        let (key, value) = if let (Some(k), Some(v)) = (cap.get(1), cap.get(2)) {
-            (k.as_str().to_string(), v.as_str().to_string())
-        } else if let (Some(v), Some(k)) = (cap.get(3), cap.get(4)) {
-            (k.as_str().to_string(), v.as_str().to_string())
-        } else {
-            continue;
-        };
-        // Don't overwrite — first occurrence wins
-        tags.entry(key).or_insert(value);
-    }
-    tags
-}
-
-/// Extract <title> content as fallback.
-fn parse_html_title(html: &str) -> Option<String> {
-    static TITLE_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?i)<title[^>]*>([^<]+)</title>").unwrap());
-
-    TITLE_RE.captures(html).map(|c| c[1].trim().to_string())
-}
-
-// ---------------------------------------------------------------------------
-// Card JSON serialization (Mastodon format)
-// ---------------------------------------------------------------------------
-
-pub fn card_to_json(card: &CardData) -> Value {
-    json!({
-        "url": card.url,
-        "title": card.title,
-        "description": card.description,
-        "type": card.card_type,
-        "author_name": card.author_name,
-        "author_url": card.author_url,
-        "provider_name": card.provider_name,
-        "provider_url": card.provider_url,
-        "html": card.html,
-        "width": card.width,
-        "height": card.height,
-        "image": card.image_url,
-        "embed_url": "",
-        "blurhash": null,
-        "published_at": null
     })
 }
 

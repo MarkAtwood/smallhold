@@ -181,13 +181,9 @@ async fn actor(
     Ok(ap_response(doc))
 }
 
-const PAGE_CSS: &str = r#"
-:root{--text:#1d1d1f;--muted:#6e6e73;--bg:#fff;--card:#f5f5f7;--border:#d2d2d7;--link:#0066cc}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
- color:var(--text);background:var(--bg);line-height:1.6}
-main{max-width:640px;margin:0 auto;padding:2rem 1.5rem}
-h1{font-size:1.75rem;font-weight:600;margin-bottom:.15rem}
+// Smallhold-specific CSS additions layered on top of fieldwork::theme::BASE_CSS.
+const PAGE_EXTRA_CSS: &str = r#"
+h1{margin-bottom:.15rem}
 h2{font-size:1.1rem;font-weight:600;color:var(--muted);text-transform:uppercase;
  letter-spacing:.05em;margin:1.5rem 0 .75rem}
 .handle{color:var(--muted);font-size:.95rem;margin-bottom:1rem}
@@ -209,14 +205,9 @@ li{padding:.75rem 0;border-bottom:1px solid var(--border)}
 li a{text-decoration:none;color:var(--text);display:block}
 li a:hover{color:var(--link)}
 li span{color:var(--muted);font-size:.9rem;margin-left:.5rem}
-a{color:var(--link);text-decoration:none}
-a:hover{text-decoration:underline}
 footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 .mention{color:var(--link)}
 .hashtag{color:var(--link)}
-@media(prefers-color-scheme:dark){
- :root{--text:#f5f5f7;--muted:#98989d;--bg:#1d1d1f;--card:#2c2c2e;--border:#3a3a3c;--link:#2997ff}
-}
 "#;
 
 /// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
@@ -243,6 +234,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
         ammonia::clean(&state.config.branding.site_description)
     };
     let custom_css = load_extra_css(&state.config);
+    let base_css = fieldwork::theme::BASE_CSS;
 
     let accounts: Vec<(String, String)> =
         crate::db_extras::list_personas_display(&state.pool).await?;
@@ -262,7 +254,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> Result<Html<String>, 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{domain} — {site_title}</title>
-<style>{PAGE_CSS}</style>
+<style>{base_css}{PAGE_EXTRA_CSS}</style>
 <style>{custom_css}</style>
 </head>
 <body>
@@ -289,6 +281,7 @@ async fn profile_page(
     let display_name = ammonia::clean(&account.display_name);
     let dn_escaped = html_attr_escape(&display_name);
     let custom_css = load_extra_css(&state.config);
+    let base_css = fieldwork::theme::BASE_CSS;
 
     // Counts
     let persona = fieldwork_db::persona_db::get_persona_by_username(
@@ -365,7 +358,7 @@ async fn profile_page(
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}">
 <link rel="alternate" type="application/rss+xml" title="RSS" href="https://{domain}/users/{username}/feed.rss">
 <link rel="alternate" type="application/atom+xml" title="Atom" href="https://{domain}/users/{username}/feed.atom">
-<style>{PAGE_CSS}</style>
+<style>{base_css}{PAGE_EXTRA_CSS}</style>
 <style>{custom_css}</style>
 </head>
 <body>
@@ -416,6 +409,7 @@ async fn post_page(
     let display_name = ammonia::clean(&account.display_name);
     let dn_escaped = html_attr_escape(&display_name);
     let custom_css = load_extra_css(&state.config);
+    let base_css = fieldwork::theme::BASE_CSS;
 
     let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
     let date = dt.format("%Y-%m-%d %H:%M").to_string();
@@ -448,7 +442,7 @@ async fn post_page(
 <meta property="og:url" content="https://{domain}/@{username}/{post_id}">
 <meta property="og:description" content="{og_desc_escaped}">
 <link rel="alternate" type="application/activity+json" href="https://{domain}/users/{username}/statuses/{post_id}">
-<style>{PAGE_CSS}</style>
+<style>{base_css}{PAGE_EXTRA_CSS}</style>
 <style>{custom_css}</style>
 </head>
 <body>
@@ -930,6 +924,7 @@ async fn photo_gallery(
 
     let domain = &state.config.server.domain;
     let custom_css = load_extra_css(&state.config);
+    let base_css = fieldwork::theme::BASE_CSS;
 
     let images = fieldwork_db::media_db::list_images_for_persona(&state.pool, persona.id, 100, 0)
         .await
@@ -958,7 +953,7 @@ async fn photo_gallery(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>@{username} photos</title>
-  <style>{PAGE_CSS}{grid_css}</style>
+  <style>{base_css}{PAGE_EXTRA_CSS}{grid_css}</style>
   <style>{custom_css}</style>
 </head>
 <body>

@@ -30,6 +30,5 @@ pub mod push;
 pub mod search;
 pub mod server;
 pub mod streaming;
-pub mod theme;
 pub mod webauthn;
 pub mod writefreely_api;
