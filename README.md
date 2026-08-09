@@ -64,7 +64,7 @@ Put a reverse proxy (Caddy or nginx) in front for TLS. See [DEPLOY.md](DEPLOY.md
 **Content modes:**
 - Microblogging (Mastodon/Misskey) — statuses, replies, boosts, favourites
 - Photo sharing (Pixelfed) — albums, photo grid gallery, trending
-- Video hosting (PeerTube) — channels, HLS transcoding pipeline
+- Video hosting (PeerTube) — channels, video CRUD API (transcoding not yet implemented)
 - Communities (Lemmy) — threaded posts, comments, upvotes/downvotes
 - Audio/Music (Funkwhale) — tracks, albums, playlists, podcast RSS
 - Book tracking (Bookwyrm) — shelves, reviews, ratings, search
