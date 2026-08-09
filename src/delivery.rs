@@ -381,6 +381,7 @@ async fn create_scheduled_post(
             deleted_at: None,
             deleted_reason: None,
             abstract_text,
+            content_path: None,
         },
     )
     .await?;

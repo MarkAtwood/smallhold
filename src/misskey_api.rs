@@ -342,6 +342,7 @@ async fn notes_create(
             deleted_at: None,
             deleted_reason: None,
             abstract_text: None,
+            content_path: None,
         },
     )
     .await?;

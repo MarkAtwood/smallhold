@@ -17,6 +17,50 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
+/// Posts larger than this (in bytes) get content written to files instead of
+/// stored inline in the database row.
+const FILE_BACKED_THRESHOLD: usize = 4096;
+
+/// Write content and HTML to files under `{media_dir}/content/{prefix}/`.
+///
+/// Returns the relative content path (e.g. `"content/ab/12345"`) without
+/// extension, suitable for storing in `PostRow.content_path`.
+fn write_content_files(
+    media_dir: &str,
+    id: i64,
+    content: &str,
+    content_html: &str,
+) -> Result<String, crate::error::AppError> {
+    let id_hex = format!("{id:x}");
+    let prefix = &id_hex[..2.min(id_hex.len())];
+    let dir = std::path::Path::new(media_dir)
+        .join("content")
+        .join(prefix);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| crate::error::AppError::internal(format!("Failed to create content dir: {e}")))?;
+
+    let md_path = dir.join(format!("{id}.md"));
+    std::fs::write(&md_path, content)
+        .map_err(|e| crate::error::AppError::internal(format!("Failed to write content md: {e}")))?;
+
+    let html_path = dir.join(format!("{id}.html"));
+    std::fs::write(&html_path, content_html)
+        .map_err(|e| crate::error::AppError::internal(format!("Failed to write content html: {e}")))?;
+
+    let now = crate::api::now_millis();
+    let meta = serde_json::json!({
+        "id": id,
+        "content_length": content.len(),
+        "html_length": content_html.len(),
+        "created_at": now,
+    });
+    let meta_path = dir.join(format!("{id}.html.meta"));
+    std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap())
+        .map_err(|e| crate::error::AppError::internal(format!("Failed to write content meta: {e}")))?;
+
+    Ok(format!("content/{prefix}/{id}"))
+}
+
 // ---------------------------------------------------------------------------
 // Language detection
 // ---------------------------------------------------------------------------
@@ -1111,6 +1155,18 @@ async fn create_status(
         }
     });
 
+    let (db_content, db_content_html, content_path) = if text.len() > FILE_BACKED_THRESHOLD {
+        let path = write_content_files(
+            &state.config.storage.media_dir,
+            post_id,
+            &text,
+            &rendered.html,
+        )?;
+        (String::new(), String::new(), Some(path))
+    } else {
+        (text.clone(), rendered.html.clone(), None)
+    };
+
     fieldwork_db::posts_db::create_post(
         &state.pool,
         &fieldwork_db::posts_db::PostRow {
@@ -1122,8 +1178,8 @@ async fn create_status(
             in_reply_to_uri: None,
             boost_of_id: None,
             boost_of_uri: None,
-            content: text.clone(),
-            content_html: rendered.html.clone(),
+            content: db_content,
+            content_html: db_content_html,
             spoiler_text: spoiler_text.clone(),
             visibility: visibility.clone(),
             sensitive,
@@ -1134,6 +1190,7 @@ async fn create_status(
             deleted_at: None,
             deleted_reason: None,
             abstract_text: abstract_text.clone(),
+            content_path,
         },
     ).await?;
 
@@ -1582,8 +1639,19 @@ async fn edit_status(
     // Save current version to edit history before overwriting
     crate::db_extras::save_post_edit_history(&state.pool, generate_id(), post_id).await?;
 
-    // Update the post row
-    crate::db_extras::update_post_full(&state.pool, post_id, &text, &rendered.html, &spoiler_text, sensitive, &language, now).await?;
+    // Update the post row (externalize content if above threshold)
+    let (db_content, db_content_html, content_path) = if text.len() > FILE_BACKED_THRESHOLD {
+        let path = write_content_files(
+            &state.config.storage.media_dir,
+            post_id,
+            &text,
+            &rendered.html,
+        )?;
+        (String::new(), String::new(), Some(path))
+    } else {
+        (text.clone(), rendered.html.clone(), None)
+    };
+    crate::db_extras::update_post_full(&state.pool, post_id, &db_content, &db_content_html, &spoiler_text, sensitive, &language, now, &content_path).await?;
 
     // Delete old mentions and tags, re-insert new ones
     let fwp_del = state.pool.clone();
@@ -2142,6 +2210,7 @@ async fn reblog(
                 deleted_at: None,
                 deleted_reason: None,
                 abstract_text: None,
+                content_path: None,
             },
         ).await?;
 

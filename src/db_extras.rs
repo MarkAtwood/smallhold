@@ -235,10 +235,11 @@ pub async fn update_post_full(
     sensitive: bool,
     language: &Option<String>,
     edited_at: i64,
+    content_path: &Option<String>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE posts SET content = ?, content_html = ?, spoiler_text = ?, \
-         sensitive = ?, language = ?, edited_at = ? WHERE id = ?",
+         sensitive = ?, language = ?, edited_at = ?, content_path = ? WHERE id = ?",
     )
     .bind(content)
     .bind(content_html)
@@ -246,6 +247,7 @@ pub async fn update_post_full(
     .bind(sensitive)
     .bind(language)
     .bind(edited_at)
+    .bind(content_path)
     .bind(post_id)
     .execute(sq(pool))
     .await?;
@@ -1466,6 +1468,46 @@ pub async fn import_insert_media<'a>(
     .bind(id).bind(user_id).bind(account_id).bind(post_id)
     .bind(file_path).bind(mime_type).bind(file_size).bind(description).bind(created_at)
     .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Media: upsert for rebuild-media-index
+// ---------------------------------------------------------------------------
+
+/// Upsert a media row from sidecar data. Uses INSERT OR REPLACE for idempotency.
+pub async fn upsert_media_from_sidecar(
+    pool: &fieldwork_db::db::Pool,
+    id: i64,
+    user_id: i64,
+    persona_id: i64,
+    file_path: &str,
+    mime_type: &str,
+    file_size: i64,
+    width: Option<i32>,
+    height: Option<i32>,
+    blurhash: Option<&str>,
+    description: &str,
+    created_at: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT OR REPLACE INTO media (id, user_id, persona_id, file_path, mime_type, \
+         file_size, width, height, blurhash, description, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(persona_id)
+    .bind(file_path)
+    .bind(mime_type)
+    .bind(file_size)
+    .bind(width)
+    .bind(height)
+    .bind(blurhash)
+    .bind(description)
+    .bind(created_at)
+    .execute(sq(pool))
     .await?;
     Ok(())
 }
