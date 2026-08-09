@@ -1916,3 +1916,37 @@ impl NotificationRow {
     }
 }
 
+// ---------------------------------------------------------------------------
+// migrate-storage helpers
+// ---------------------------------------------------------------------------
+
+/// All media rows for sidecar backfill.
+pub async fn all_media_for_sidecar(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String, String, i64, Option<i32>, Option<i32>, Option<String>, String, i64)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, file_path, mime_type, file_size, width, height, blurhash, description, created_at FROM media",
+    )
+    .fetch_all(sq(pool))
+    .await
+}
+
+/// Posts with long inline content that should be externalized.
+pub async fn posts_needing_externalization(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, content, content_html FROM posts WHERE content_path IS NULL AND LENGTH(content) > 4096",
+    )
+    .fetch_all(sq(pool))
+    .await
+}
+
+/// Set content_path and clear inline content after externalization.
+pub async fn set_post_content_path(pool: &fieldwork_db::db::Pool, post_id: i64, content_path: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE posts SET content = '', content_html = '', content_path = ? WHERE id = ?",
+    )
+    .bind(content_path)
+    .bind(post_id)
+    .execute(sq(pool))
+    .await?;
+    Ok(())
+}
+

@@ -81,6 +81,9 @@ pub enum Commands {
 
     /// Rebuild media DB index from sidecar .meta files
     RebuildMediaIndex,
+
+    /// Backfill media sidecars and externalize long post content
+    MigrateStorage,
 }
 
 #[derive(Subcommand)]
@@ -238,6 +241,7 @@ impl Cli {
             Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
             Commands::Did(cmd) => cmd_did(cmd, &self.config).await,
             Commands::RebuildMediaIndex => cmd_rebuild_media_index(&self.config).await,
+            Commands::MigrateStorage => cmd_migrate_storage(&self.config).await,
         }
     }
 }
@@ -1226,5 +1230,85 @@ async fn cmd_rebuild_media_index(config_path: &Path) -> Result<()> {
     if errors > 0 {
         eprintln!("  ({errors} sidecar files had warnings)");
     }
+    Ok(())
+}
+
+async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+    let media_dir = &config.storage.media_dir;
+
+    // Step 1: Backfill media sidecars
+    let media_rows = crate::db_extras::all_media_for_sidecar(&pool).await
+        .context("Failed to query media table")?;
+
+    let mut backfilled = 0usize;
+    let mut already_existed = 0usize;
+
+    for (id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) in &media_rows {
+        // file_path is like "media/ab/12345.jpg"; strip "media/" prefix to get relative-to-media_dir
+        let rel = match file_path.strip_prefix("media/") {
+            Some(r) => r,
+            None => {
+                eprintln!("  warning: unexpected file_path format: {file_path}");
+                continue;
+            }
+        };
+        let abs_path = std::path::Path::new(media_dir).join(rel);
+
+        // Compute sidecar path the same way write_media_sidecar does: {path}.meta
+        let ext = abs_path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+        let meta_path = abs_path.with_extension(format!("{ext}.meta"));
+
+        if meta_path.exists() {
+            already_existed += 1;
+            continue;
+        }
+
+        let desc = if description.is_empty() { None } else { Some(description.as_str()) };
+        let meta = serde_json::json!({
+            "id": id,
+            "mime_type": mime_type,
+            "file_size": file_size,
+            "width": width,
+            "height": height,
+            "blurhash": blurhash,
+            "description": desc,
+            "created_at": created_at,
+        });
+
+        if let Some(parent) = meta_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+
+        let json_str = serde_json::to_string_pretty(&meta)
+            .context("Failed to serialize media sidecar")?;
+        std::fs::write(&meta_path, json_str.as_bytes())
+            .with_context(|| format!("Failed to write sidecar: {}", meta_path.display()))?;
+
+        backfilled += 1;
+    }
+
+    eprintln!("Backfilled {backfilled} media sidecars ({already_existed} already existed)");
+
+    // Step 2: Externalize long post content
+    let long_posts = crate::db_extras::posts_needing_externalization(&pool).await
+        .context("Failed to query posts for externalization")?;
+
+    let mut externalized = 0usize;
+
+    for (id, content, content_html) in &long_posts {
+        let content_path = crate::posting::write_content_files(media_dir, *id, content, content_html)
+            .map_err(|e| anyhow::anyhow!("Failed to write content files for post {id}: {e}"))?;
+
+        crate::db_extras::set_post_content_path(&pool, *id, &content_path).await
+            .with_context(|| format!("Failed to update content_path for post {id}"))?;
+
+        externalized += 1;
+    }
+
+    eprintln!("Externalized {externalized} posts to file-backed storage");
+
     Ok(())
 }

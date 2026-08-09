@@ -25,7 +25,7 @@ const FILE_BACKED_THRESHOLD: usize = 4096;
 ///
 /// Returns the relative content path (e.g. `"content/ab/12345"`) without
 /// extension, suitable for storing in `PostRow.content_path`.
-fn write_content_files(
+pub fn write_content_files(
     media_dir: &str,
     id: i64,
     content: &str,
