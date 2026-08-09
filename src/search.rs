@@ -96,21 +96,24 @@ impl SearchIndex {
     }
 
     /// Reindex all posts from the database
-    pub async fn reindex_all(&self, pool: &fieldwork_db::db::Pool) -> Result<usize> {
+    pub async fn reindex_all(&self, pool: &fieldwork_db::db::Pool, media_dir: &str) -> Result<usize> {
         // fieldwork::posts_db doesn't expose a "list all posts" function with
         // just (id, content, persona_id) columns and no persona filter.
         // ponytail: complex projection query not covered by fieldwork module
-        let posts: Vec<(i64, String, String)> =
+        let posts: Vec<(i64, String, String, Option<String>)> =
             crate::db_extras::get_all_posts_for_search(pool).await?;
 
         let mut writer = self.writer.lock().await;
         writer.delete_all_documents()?;
 
         let count = posts.len();
-        for (id, content, account_id) in posts {
+        for (id, content, account_id, content_path) in posts {
+            let (resolved_content, _) = crate::posting::resolve_content(
+                media_dir, &content, "", content_path.as_deref(),
+            );
             writer.add_document(doc!(
                 self.id_field => id.to_string(),
-                self.content_field => content,
+                self.content_field => resolved_content,
                 self.account_id_field => account_id,
             ))?;
         }

@@ -319,11 +319,13 @@ async fn profile_page(
     }
 
     // Recent posts
-    let post_tuples: Vec<(i64, String, i64)> = crate::db_extras::get_public_feed_posts(&state.pool, aid)
+    let post_tuples: Vec<(i64, String, i64, Option<String>)> = crate::db_extras::get_public_feed_posts(&state.pool, aid)
         .await
         .unwrap_or_default();
-    let posts: Vec<PostRow> = post_tuples.into_iter().map(|(id, content_html, created_at)| PostRow {
-        id, content_html, context_url: None, created_at,
+    let media_dir = &state.config.storage.media_dir;
+    let posts: Vec<PostRow> = post_tuples.into_iter().map(|(id, content_html, created_at, content_path)| {
+        let (_, resolved_html) = crate::posting::resolve_content(media_dir, "", &content_html, content_path.as_deref());
+        PostRow { id, content_html: resolved_html, context_url: None, created_at }
     }).collect();
 
     let mut posts_html = String::new();
@@ -401,10 +403,13 @@ async fn post_page(
         .parse()
         .map_err(|_| AppError::not_found("Post not found"))?;
 
-    let (pid2, ch, ca) = crate::db_extras::get_post_for_page(&state.pool, pid, &username)
+    let (pid2, ch, ca, cp) = crate::db_extras::get_post_for_page(&state.pool, pid, &username)
         .await?
         .ok_or_else(|| AppError::not_found("Post not found"))?;
-    let post = PostRow { id: pid2, content_html: ch, context_url: None, created_at: ca };
+    let (_, resolved_html) = crate::posting::resolve_content(
+        &state.config.storage.media_dir, "", &ch, cp.as_deref(),
+    );
+    let post = PostRow { id: pid2, content_html: resolved_html, context_url: None, created_at: ca };
 
     let account = fetch_account(&state.pool, &username).await?;
     let username = html_attr_escape(&username);
@@ -508,8 +513,10 @@ async fn outbox(
     let actor_uri = format!("https://{domain}/users/{username}");
 
     let outbox_tuples = crate::db_extras::get_outbox_posts(&state.pool, account_id, i64::from(per_page), offset).await?;
-    let posts: Vec<PostRow> = outbox_tuples.into_iter().map(|(id, content_html, context_url, created_at)| PostRow {
-        id, content_html, context_url, created_at,
+    let media_dir = &state.config.storage.media_dir;
+    let posts: Vec<PostRow> = outbox_tuples.into_iter().map(|(id, content_html, context_url, created_at, content_path)| {
+        let (_, resolved_html) = crate::posting::resolve_content(media_dir, "", &content_html, content_path.as_deref());
+        PostRow { id, content_html: resolved_html, context_url, created_at }
     }).collect();
 
     let items: Vec<Value> = posts
@@ -600,8 +607,10 @@ async fn featured(
     let actor_uri = format!("https://{domain}/users/{username}");
 
     let featured_tuples = crate::db_extras::get_featured_posts(&state.pool, account_id).await?;
-    let posts: Vec<PostRow> = featured_tuples.into_iter().map(|(id, content_html, context_url, created_at)| PostRow {
-        id, content_html, context_url, created_at,
+    let media_dir = &state.config.storage.media_dir;
+    let posts: Vec<PostRow> = featured_tuples.into_iter().map(|(id, content_html, context_url, created_at, content_path)| {
+        let (_, resolved_html) = crate::posting::resolve_content(media_dir, "", &content_html, content_path.as_deref());
+        PostRow { id, content_html: resolved_html, context_url, created_at }
     }).collect();
 
     let items: Vec<Value> = posts
@@ -670,9 +679,16 @@ async fn ap_status(
         .ok_or_else(|| AppError::not_found("Account not found"))?;
 
     // Get the post
-    let post = fieldwork_db::posts_db::get_post(&state.pool, post_id)
+    let mut post = fieldwork_db::posts_db::get_post(&state.pool, post_id)
         .await?
         .ok_or_else(|| AppError::not_found("Post not found"))?;
+
+    // Resolve file-backed content
+    let (resolved_content, resolved_html) = crate::posting::resolve_content(
+        &state.config.storage.media_dir, &post.content, &post.content_html, post.content_path.as_deref(),
+    );
+    post.content = resolved_content;
+    post.content_html = resolved_html;
 
     // Verify the post belongs to this persona
     if post.persona_id != persona.id {
@@ -816,8 +832,10 @@ async fn ap_context_collection(
     }
 
     let ctx_tuples = crate::db_extras::get_context_posts(&state.pool, &context_url).await?;
-    let posts: Vec<ContextPostRow> = ctx_tuples.into_iter().map(|(id, content_html, context_url, created_at, username)| ContextPostRow {
-        id, content_html, context_url, created_at, username,
+    let media_dir = &state.config.storage.media_dir;
+    let posts: Vec<ContextPostRow> = ctx_tuples.into_iter().map(|(id, content_html, context_url, created_at, username, content_path)| {
+        let (_, resolved_html) = crate::posting::resolve_content(media_dir, "", &content_html, content_path.as_deref());
+        ContextPostRow { id, content_html: resolved_html, context_url, created_at, username }
     }).collect();
 
     let items: Vec<Value> = posts

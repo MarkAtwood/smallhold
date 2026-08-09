@@ -1053,7 +1053,7 @@ async fn search(
         if let Some(ref search_idx) = state.search {
             if let Ok(post_ids) = search_idx.search(query, limit as usize) {
                 for pid in post_ids {
-                    let post = crate::posting::get_local_post(&state.pool, pid).await?;
+                    let post = crate::posting::get_local_post(&state.pool, pid, &state.config.storage.media_dir).await?;
 
                     if let Some(post) = post {
                         let status = crate::posting::load_status(
@@ -1061,6 +1061,7 @@ async fn search(
                             &post,
                             domain,
                             Some(auth.account_id),
+                            &state.config.storage.media_dir,
                         )
                         .await?;
                         result_statuses.push(status);

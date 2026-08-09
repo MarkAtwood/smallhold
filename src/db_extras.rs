@@ -1007,7 +1007,7 @@ pub async fn get_persona_signing_key(pool: &fieldwork_db::db::Pool, persona_id: 
 /// Get account statuses with max_id pagination.
 pub async fn account_statuses_max_id(pool: &fieldwork_db::db::Pool, account_id: i64, max_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
+        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at, content_path FROM posts WHERE persona_id = ? AND id < ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
     )
     .bind(account_id)
     .bind(max_id)
@@ -1019,7 +1019,7 @@ pub async fn account_statuses_max_id(pool: &fieldwork_db::db::Pool, account_id: 
 /// Get account statuses with min_id pagination.
 pub async fn account_statuses_min_id(pool: &fieldwork_db::db::Pool, account_id: i64, min_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
+        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at, content_path FROM posts WHERE persona_id = ? AND id > ? AND visibility IN ('public', 'unlisted') ORDER BY id ASC LIMIT ?",
     )
     .bind(account_id)
     .bind(min_id)
@@ -1031,7 +1031,7 @@ pub async fn account_statuses_min_id(pool: &fieldwork_db::db::Pool, account_id: 
 /// Get account statuses (no pagination).
 pub async fn account_statuses_default(pool: &fieldwork_db::db::Pool, account_id: i64, limit: i64) -> Result<Vec<crate::api::StatusRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
+        "SELECT id, persona_id, ap_id, content_html, spoiler_text, visibility, sensitive, language, created_at, edited_at, content_path FROM posts WHERE persona_id = ? AND visibility IN ('public', 'unlisted') ORDER BY id DESC LIMIT ?",
     )
     .bind(account_id)
     .bind(limit)
@@ -1359,9 +1359,9 @@ pub async fn fetch_pending_deliveries(pool: &fieldwork_db::db::Pool, now: i64, l
 // ---------------------------------------------------------------------------
 
 /// Get public posts for RSS/Atom feeds.
-pub async fn get_public_feed_posts(pool: &fieldwork_db::db::Pool, account_id: i64) -> Result<Vec<(i64, String, i64)>, sqlx::Error> {
+pub async fn get_public_feed_posts(pool: &fieldwork_db::db::Pool, account_id: i64) -> Result<Vec<(i64, String, i64, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, content_html, created_at FROM posts \
+        "SELECT id, content_html, created_at, content_path FROM posts \
          WHERE persona_id = ? AND visibility = 'public' AND boost_of_id IS NULL \
          ORDER BY created_at DESC LIMIT 20",
     )
@@ -1517,8 +1517,8 @@ pub async fn upsert_media_from_sidecar(
 // ---------------------------------------------------------------------------
 
 /// Get all posts for search reindexing.
-pub async fn get_all_posts_for_search(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
-    sqlx::query_as("SELECT id, content, persona_id FROM posts ORDER BY id")
+pub async fn get_all_posts_for_search(pool: &fieldwork_db::db::Pool) -> Result<Vec<(i64, String, String, Option<String>)>, sqlx::Error> {
+    sqlx::query_as("SELECT id, content, persona_id, content_path FROM posts ORDER BY id")
         .fetch_all(sq(pool))
         .await
 }
@@ -1706,9 +1706,9 @@ mod tests {
 // ---------------------------------------------------------------------------
 
 /// Get a post for the profile post page (JOIN with persona for username check).
-pub async fn get_post_for_page(pool: &fieldwork_db::db::Pool, post_id: i64, username: &str) -> Result<Option<(i64, String, i64)>, sqlx::Error> {
+pub async fn get_post_for_page(pool: &fieldwork_db::db::Pool, post_id: i64, username: &str) -> Result<Option<(i64, String, i64, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT p.id, p.content_html, p.created_at FROM posts p \
+        "SELECT p.id, p.content_html, p.created_at, p.content_path FROM posts p \
          JOIN personas a ON p.persona_id = a.id \
          WHERE p.id = ? AND a.username = ? AND p.visibility IN ('public', 'unlisted')",
     )
@@ -1719,9 +1719,9 @@ pub async fn get_post_for_page(pool: &fieldwork_db::db::Pool, post_id: i64, user
 }
 
 /// Get outbox posts (public only, with context_url).
-pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64, limit: i64, offset: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
+pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64, limit: i64, offset: i64) -> Result<Vec<(i64, String, Option<String>, i64, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, content_html, context_url, created_at \
+        "SELECT id, content_html, context_url, created_at, content_path \
          FROM posts \
          WHERE persona_id = ? AND visibility = 'public' \
          ORDER BY created_at DESC \
@@ -1735,9 +1735,9 @@ pub async fn get_outbox_posts(pool: &fieldwork_db::db::Pool, persona_id: i64, li
 }
 
 /// Get featured (pinned) posts.
-pub async fn get_featured_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64)>, sqlx::Error> {
+pub async fn get_featured_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) -> Result<Vec<(i64, String, Option<String>, i64, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT p.id, p.content_html, p.context_url, p.created_at \
+        "SELECT p.id, p.content_html, p.context_url, p.created_at, p.content_path \
          FROM pinned_posts pp JOIN posts p ON pp.post_id = p.id \
          WHERE pp.persona_id = ? AND p.visibility = 'public' \
          ORDER BY pp.pinned_at DESC",
@@ -1748,9 +1748,9 @@ pub async fn get_featured_posts(pool: &fieldwork_db::db::Pool, persona_id: i64) 
 }
 
 /// Get posts in a context collection (FEP-f228).
-pub async fn get_context_posts(pool: &fieldwork_db::db::Pool, context_url: &str) -> Result<Vec<(i64, String, Option<String>, i64, String)>, sqlx::Error> {
+pub async fn get_context_posts(pool: &fieldwork_db::db::Pool, context_url: &str) -> Result<Vec<(i64, String, Option<String>, i64, String, Option<String>)>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username \
+        "SELECT p.id, p.content_html, p.context_url, p.created_at, a.username, p.content_path \
          FROM posts p \
          JOIN personas a ON p.persona_id = a.id \
          WHERE p.context_url = ? \
@@ -1832,6 +1832,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for crate::api::StatusRow {
             language: row.try_get("language")?,
             created_at: row.try_get("created_at")?,
             edited_at: row.try_get("edited_at")?,
+            content_path: row.try_get("content_path")?,
         })
     }
 }
@@ -1859,9 +1860,15 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for crate::activitypub::ApAc
 // Row converters (moved from posting.rs — these reference SqliteRow)
 // ---------------------------------------------------------------------------
 
-/// Convert a raw SqliteRow (from dynamic queries) to a PostRow.
-pub fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow) -> crate::posting::PostRow {
+/// Convert a raw SqliteRow (from dynamic queries) to a PostRow, resolving file-backed content.
+pub fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow, media_dir: &str) -> crate::posting::PostRow {
     use sqlx::Row;
+    let content: String = row.get(7);
+    let content_html: String = row.get(8);
+    let content_path: Option<String> = row.get(16);
+    let (resolved_content, resolved_html) = crate::posting::resolve_content(
+        media_dir, &content, &content_html, content_path.as_deref(),
+    );
     crate::posting::PostRow {
         id: row.get(0),
         persona_id: row.get(1),
@@ -1870,8 +1877,8 @@ pub fn sqlx_row_to_post(row: sqlx::sqlite::SqliteRow) -> crate::posting::PostRow
         in_reply_to_uri: row.get(4),
         boost_of_id: row.get(5),
         context_url: row.get(6),
-        content: row.get(7),
-        content_html: row.get(8),
+        content: resolved_content,
+        content_html: resolved_html,
         spoiler_text: row.get(9),
         visibility: row.get(10),
         sensitive: row.get(11),

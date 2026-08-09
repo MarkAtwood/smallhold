@@ -118,12 +118,16 @@ fn post_to_video(
     post: &fieldwork_db::posts_db::PostRow,
     persona: &fieldwork_db::persona_db::PersonaRow,
     domain: &str,
+    media_dir: &str,
 ) -> Value {
+    let (_, resolved_html) = crate::posting::resolve_content(
+        media_dir, &post.content, &post.content_html, post.content_path.as_deref(),
+    );
     json!({
         "id": post.id,
         "uuid": format!("{:016x}", post.id),
         "name": if post.spoiler_text.is_empty() { "Untitled" } else { &post.spoiler_text },
-        "description": post.content_html,
+        "description": resolved_html,
         "isLocal": true,
         "duration": 0,
         "views": 0,
@@ -175,7 +179,7 @@ async fn list_videos(
                 .unwrap_or_default();
         for post in &posts {
             if post.visibility == "public" {
-                videos.push(post_to_video(post, p, domain));
+                videos.push(post_to_video(post, p, domain, &state.config.storage.media_dir));
             }
         }
     }
@@ -209,7 +213,7 @@ async fn get_video(
             .map_err(AppError::from)?
             .ok_or_else(|| AppError::not_found("Channel not found"))?;
 
-    Ok(Json(post_to_video(&post, &persona, domain)))
+    Ok(Json(post_to_video(&post, &persona, domain, &state.config.storage.media_dir)))
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +377,7 @@ async fn list_channel_videos(
     let videos: Vec<Value> = posts
         .iter()
         .filter(|p| p.visibility == "public")
-        .map(|p| post_to_video(p, &persona, domain))
+        .map(|p| post_to_video(p, &persona, domain, &state.config.storage.media_dir))
         .collect();
 
     Ok(Json(json!({

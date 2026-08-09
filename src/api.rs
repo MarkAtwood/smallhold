@@ -127,6 +127,7 @@ pub struct StatusRow {
     pub language: Option<String>,
     pub created_at: i64,
     pub edited_at: Option<i64>,
+    pub content_path: Option<String>,
 }
 
 pub fn account_to_json(row: &AccountRow, domain: &str) -> Value {
@@ -1035,10 +1036,14 @@ async fn account_statuses(
 
     let account_row = fetch_account_row(&state.pool, account_id).await?;
     let account_json = account_to_json(&account_row, domain);
+    let media_dir = &state.config.storage.media_dir;
 
     let items: Vec<Value> = statuses
         .iter()
         .map(|s| {
+            let (_, resolved_html) = crate::posting::resolve_content(
+                media_dir, "", &s.content_html, s.content_path.as_deref(),
+            );
             json!({
                 "id": s.id.to_string(),
                 "created_at": millis_to_iso(s.created_at),
@@ -1054,7 +1059,7 @@ async fn account_statuses(
                 "reblogs_count": 0,
                 "favourites_count": 0,
                 "edited_at": s.edited_at.map(millis_to_iso),
-                "content": &s.content_html,
+                "content": resolved_html,
                 "reblog": null,
                 "application": null,
                 "account": account_json.clone(),

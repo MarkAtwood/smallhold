@@ -147,16 +147,20 @@ fn post_to_note(
     domain: &str,
     reactions: &[(String, i64)],
     my_reaction: Option<&str>,
+    media_dir: &str,
 ) -> Value {
     let reactions_map: serde_json::Map<String, Value> = reactions
         .iter()
         .map(|(emoji, count)| (emoji.clone(), json!(count)))
         .collect();
 
+    let (resolved_content, _) = crate::posting::resolve_content(
+        media_dir, &post.content, &post.content_html, post.content_path.as_deref(),
+    );
     json!({
         "id": post.id.to_string(),
         "createdAt": epoch_to_misskey_date(post.created_at),
-        "text": post.content,
+        "text": resolved_content,
         "cw": if post.spoiler_text.is_empty() { None } else { Some(&post.spoiler_text) },
         "visibility": misskey_visibility(&post.visibility),
         "uri": format!("https://{domain}/users/{}/statuses/{}", persona.username, post.id),
@@ -224,6 +228,7 @@ async fn note_with_reactions(
     persona: &fieldwork_db::persona_db::PersonaRow,
     domain: &str,
     viewer_persona_id: Option<i64>,
+    media_dir: &str,
 ) -> Result<Value, AppError> {
     let reactions = fieldwork_db::reactions_db::reactions_for_post(pool, post.id)
         .await
@@ -244,6 +249,7 @@ async fn note_with_reactions(
         domain,
         &reactions,
         my_reaction.as_deref(),
+        media_dir,
     ))
 }
 
@@ -283,6 +289,7 @@ async fn notes_show(
         &persona,
         domain,
         viewer.as_ref().map(|v| v.account_id),
+        &state.config.storage.media_dir,
     )
     .await?;
 
@@ -354,7 +361,7 @@ async fn notes_create(
         .await?
         .ok_or_else(|| AppError::internal("Persona not found"))?;
 
-    let note = post_to_note(&post, &persona, domain, &[], None);
+    let note = post_to_note(&post, &persona, domain, &[], None, &state.config.storage.media_dir);
     Ok(Json(json!({ "createdNote": note })))
 }
 
@@ -385,7 +392,7 @@ async fn notes_timeline(
             Ok(Some(p)) => p,
             _ => continue,
         };
-        match note_with_reactions(&state.pool, post, &persona, domain, Some(auth.account_id)).await {
+        match note_with_reactions(&state.pool, post, &persona, domain, Some(auth.account_id), &state.config.storage.media_dir).await {
             Ok(n) => notes.push(n),
             Err(_) => continue,
         }
@@ -426,6 +433,7 @@ async fn notes_local_timeline(
         match note_with_reactions(
             &state.pool, post, &persona, domain,
             viewer.as_ref().map(|v| v.account_id),
+            &state.config.storage.media_dir,
         ).await {
             Ok(n) => notes.push(n),
             Err(_) => continue,

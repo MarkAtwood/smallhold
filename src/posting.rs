@@ -61,6 +61,27 @@ fn write_content_files(
     Ok(format!("content/{prefix}/{id}"))
 }
 
+/// Load file-backed content. If content_path is set, reads .md and .html
+/// files from disk. Falls back to the inline values on any error.
+pub fn resolve_content(
+    media_dir: &str,
+    content: &str,
+    content_html: &str,
+    content_path: Option<&str>,
+) -> (String, String) {
+    match content_path {
+        Some(path) if !path.is_empty() => {
+            let base = std::path::Path::new(media_dir).join(path);
+            let md = std::fs::read_to_string(base.with_extension("md"))
+                .unwrap_or_else(|_| content.to_string());
+            let html = std::fs::read_to_string(base.with_extension("html"))
+                .unwrap_or_else(|_| content_html.to_string());
+            (md, html)
+        }
+        _ => (content.to_string(), content_html.to_string()),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Language detection
 // ---------------------------------------------------------------------------
@@ -571,8 +592,11 @@ pub struct PostRow {
     pub abstract_text: Option<String>,
 }
 
-/// Convert a fieldwork PostRow to our local PostRow.
-pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow) -> PostRow {
+/// Convert a fieldwork PostRow to our local PostRow, resolving file-backed content.
+pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow, media_dir: &str) -> PostRow {
+    let (content, content_html) = resolve_content(
+        media_dir, &p.content, &p.content_html, p.content_path.as_deref(),
+    );
     PostRow {
         id: p.id,
         persona_id: p.persona_id,
@@ -581,8 +605,8 @@ pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow) -> PostRow {
         in_reply_to_uri: p.in_reply_to_uri.clone(),
         boost_of_id: p.boost_of_id,
         context_url: p.context_url.clone(),
-        content: p.content.clone(),
-        content_html: p.content_html.clone(),
+        content,
+        content_html,
         spoiler_text: p.spoiler_text.clone(),
         visibility: p.visibility.clone(),
         sensitive: p.sensitive,
@@ -594,17 +618,17 @@ pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow) -> PostRow {
 }
 
 /// Fetch a local post by ID using fieldwork, returning our local PostRow.
-pub async fn get_local_post(pool: &fieldwork_db::db::Pool, id: i64) -> Result<Option<PostRow>, AppError> {
+pub async fn get_local_post(pool: &fieldwork_db::db::Pool, id: i64, media_dir: &str) -> Result<Option<PostRow>, AppError> {
     let fwp = pool;
     let fw_post = fieldwork_db::posts_db::get_post(&fwp, id).await?;
-    Ok(fw_post.map(|p| fw_to_local_post(&p)))
+    Ok(fw_post.map(|p| fw_to_local_post(&p, media_dir)))
 }
 
 /// Fetch a local post by AP ID using fieldwork.
-pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str) -> Result<Option<PostRow>, AppError> {
+pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str, media_dir: &str) -> Result<Option<PostRow>, AppError> {
     let fwp = pool;
     let fw_post = fieldwork_db::posts_db::get_post_by_ap_id(&fwp, ap_id).await?;
-    Ok(fw_post.map(|p| fw_to_local_post(&p)))
+    Ok(fw_post.map(|p| fw_to_local_post(&p, media_dir)))
 }
 
 // REMAINING: POST_COLUMNS and sqlx_row_to_post are needed for dynamic SQL queries
@@ -613,7 +637,7 @@ pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str)
 // expressed through fieldwork's fixed query functions.
 pub const POST_COLUMNS: &str =
     "id, persona_id, ap_id, in_reply_to_id, in_reply_to_uri, boost_of_id, context_url, content, content_html, \
-     spoiler_text, visibility, sensitive, language, created_at, edited_at, abstract";
+     spoiler_text, visibility, sensitive, language, created_at, edited_at, abstract, content_path";
 
 /// Build the Mastodon Status JSON for a local post.
 #[allow(clippy::too_many_arguments)]
@@ -768,6 +792,7 @@ pub async fn load_status(
     post: &PostRow,
     domain: &str,
     viewer_account_id: Option<i64>,
+    media_dir: &str,
 ) -> Result<Value, AppError> {
     let account = fetch_account_row(pool, post.persona_id).await?;
     let account_json = account_to_json(&account, domain);
@@ -854,9 +879,9 @@ pub async fn load_status(
     // Handle reblog (boost_of_id)
     let reblog_value = if let Some(boost_id) = post.boost_of_id {
         let boosted: Option<PostRow> =
-            get_local_post(pool, boost_id).await?;
+            get_local_post(pool, boost_id, media_dir).await?;
         if let Some(bp) = &boosted {
-            Some(Box::pin(load_status(pool, bp, domain, viewer_account_id)).await?)
+            Some(Box::pin(load_status(pool, bp, domain, viewer_account_id, media_dir)).await?)
         } else {
             None
         }
@@ -941,6 +966,7 @@ async fn fetch_paginated_statuses(
     domain: &str,
     viewer_account_id: Option<i64>,
     order_asc: bool,
+    media_dir: &str,
 ) -> Result<Vec<Value>, AppError> {
     let (page_clause, page_binds) = pagination_clause(params);
     let limit = params.limit.unwrap_or(20).clamp(1, 40);
@@ -961,11 +987,11 @@ async fn fetch_paginated_statuses(
         all_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(pool, &sql, &all_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(|r| crate::db_extras::sqlx_row_to_post(r, media_dir)).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
-        let status = load_status(pool, p, domain, viewer_account_id).await?;
+        let status = load_status(pool, p, domain, viewer_account_id, media_dir).await?;
         statuses.push(status);
     }
 
@@ -1000,10 +1026,10 @@ async fn create_status(
         .await?;
 
         if let Some(post_id) = existing {
-            let post = get_local_post(&state.pool, post_id).await?
+            let post = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
                 .ok_or_else(|| AppError::not_found("Post not found"))?;
 
-            let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+            let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
             return Ok((StatusCode::OK, Json(status)).into_response());
         }
     }
@@ -1125,7 +1151,7 @@ async fn create_status(
     // FEP-f228: compute context_url. Replies inherit parent's context; originals get their own.
     let context_url = match in_reply_to_id {
         Some(parent_id) => {
-            let parent_post = get_local_post(&state.pool, parent_id).await?;
+            let parent_post = get_local_post(&state.pool, parent_id, &state.config.storage.media_dir).await?;
             let parent_ctx = parent_post.map(|p| (p.context_url, p.ap_id, p.created_at));
             match parent_ctx {
                 Some((Some(url), _, _)) => url,
@@ -1467,9 +1493,9 @@ async fn create_status(
 
     // Build response
     let post =
-        get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
 
     // Publish streaming events
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1511,7 +1537,7 @@ async fn delete_status(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -1519,7 +1545,7 @@ async fn delete_status(
     }
 
     // Build response before deletion (Mastodon returns the deleted status)
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
 
     // Enqueue Delete activity for federation
     let ap_id = format!(
@@ -1601,7 +1627,7 @@ async fn edit_status(
     let now = now_millis();
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -1733,7 +1759,7 @@ async fn edit_status(
         }
 
         // Query inReplyTo URI
-        let reply_post = get_local_post(&state.pool, post_id).await?
+        let reply_post = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Post not found"))?;
         let in_reply_to_uri = reply_post.in_reply_to_uri;
 
@@ -1804,9 +1830,9 @@ async fn edit_status(
 
     // Re-fetch the updated post and build response
     let updated_post =
-        get_local_post(&state.pool, post_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &updated_post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
 
     // Publish streaming status.update event
     let status_json_str = serde_json::to_string(&status).unwrap_or_default();
@@ -1844,7 +1870,7 @@ async fn get_status(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Unauthenticated endpoint: only expose public/unlisted posts
@@ -1852,7 +1878,7 @@ async fn get_status(
         return Err(AppError::not_found("Status not found"));
     }
 
-    let status = load_status(&state.pool, &post, domain, None).await?;
+    let status = load_status(&state.pool, &post, domain, None, &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -1870,7 +1896,7 @@ async fn status_history(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // For non-public posts, history is not exposed (simplification)
@@ -1929,7 +1955,7 @@ async fn status_context(
     let domain = &state.config.server.domain;
 
     let target =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Ancestors: walk up the reply chain
@@ -1937,12 +1963,12 @@ async fn status_context(
     let mut current_id = target.in_reply_to_id;
     while let Some(parent_id) = current_id {
         let parent =
-            get_local_post(&state.pool, parent_id).await?;
+            get_local_post(&state.pool, parent_id, &state.config.storage.media_dir).await?;
 
         match parent {
             Some(p) => {
                 current_id = p.in_reply_to_id;
-                let s = load_status(&state.pool, &p, domain, None).await?;
+                let s = load_status(&state.pool, &p, domain, None, &state.config.storage.media_dir).await?;
                 ancestors.push(s);
             }
             None => break,
@@ -1964,11 +1990,11 @@ async fn status_context(
     let descendants_rows = crate::db_extras::execute_raw_query(&state.pool, &cte_sql, &[post_id.to_string()]).await
         // ponytail: if the CTE alias fails, fall back to the simple form
         .unwrap_or_default();
-    let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
+    let descendants_posts: Vec<PostRow> = descendants_rows.into_iter().map(|r| crate::db_extras::sqlx_row_to_post(r, &state.config.storage.media_dir)).collect();
 
     let mut descendants = Vec::with_capacity(descendants_posts.len());
     for p in &descendants_posts {
-        let s = load_status(&state.pool, p, domain, None).await?;
+        let s = load_status(&state.pool, p, domain, None, &state.config.storage.media_dir).await?;
         descendants.push(s);
     }
 
@@ -1995,7 +2021,7 @@ async fn favourite(
     let now = now_millis();
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork_db::interactions_db::favourite(
@@ -2061,7 +2087,7 @@ async fn favourite(
         // Look up the post's AP ID — if it points to a remote server, deliver
         // the Like to that server's inbox. Local posts have local AP IDs so
         // this is a no-op for local-to-local interactions.
-        let ap_id = get_local_post(&state.pool, post_id).await?.map(|p| (p.ap_id,));
+        let ap_id = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?.map(|p| (p.ap_id,));
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
@@ -2087,7 +2113,7 @@ async fn favourite(
         }
     }
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2102,7 +2128,7 @@ async fn unfavourite(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork_db::interactions_db::unfavourite(
@@ -2132,7 +2158,7 @@ async fn unfavourite(
             }
         });
 
-        let ap_id = get_local_post(&state.pool, post_id).await?.map(|p| (p.ap_id,));
+        let ap_id = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?.map(|p| (p.ap_id,));
         let local_prefix = format!("https://{domain}/");
         if let Some((ref post_ap_id,)) = ap_id {
             if !post_ap_id.starts_with(&local_prefix) {
@@ -2157,7 +2183,7 @@ async fn unfavourite(
         }
     }
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2174,7 +2200,7 @@ async fn reblog(
     let now = now_millis();
 
     let original =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     // Check for existing reblog
@@ -2306,9 +2332,9 @@ async fn reblog(
     };
 
     let boost_post =
-        get_local_post(&state.pool, boost_id).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
+        get_local_post(&state.pool, boost_id, &state.config.storage.media_dir).await?.ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &boost_post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2328,7 +2354,7 @@ async fn unreblog(
     if let Some((boost_id,)) = boost {
         // Enqueue outbound Undo{Announce} before deleting
         {
-            let original = get_local_post(&state.pool, post_id).await?;
+            let original = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?;
 
             if let Some(ref orig) = original {
                 let post_author = fetch_account_row(&state.pool, orig.persona_id).await?;
@@ -2360,7 +2386,7 @@ async fn unreblog(
 
                 // Also deliver to the post author's inbox if remote
                 let local_prefix = format!("https://{domain}/");
-                let unreblog_post = get_local_post(&state.pool, post_id).await?;
+                let unreblog_post = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?;
                 if let Some(ref post_ap_id) = unreblog_post.map(|p| (p.ap_id,))
                 {
                     if !post_ap_id.0.starts_with(&local_prefix) {
@@ -2394,10 +2420,10 @@ async fn unreblog(
     }
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2414,7 +2440,7 @@ async fn bookmark(
     let now = now_millis();
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork_db::interactions_db::bookmark(
@@ -2422,7 +2448,7 @@ async fn bookmark(
         crate::db::DEFAULT_USER_ID, auth.account_id, Some(post_id), None, now,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2437,14 +2463,14 @@ async fn unbookmark(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     fieldwork_db::interactions_db::unbookmark(
         &state.pool, auth.account_id, Some(post_id), None,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2474,6 +2500,7 @@ async fn timeline_home(
         domain,
         Some(auth.account_id),
         false,
+        &state.config.storage.media_dir,
     )
     .await?;
 
@@ -2597,6 +2624,7 @@ async fn timeline_public(
         domain,
         None,
         false,
+        &state.config.storage.media_dir,
     )
     .await?;
 
@@ -2637,11 +2665,11 @@ async fn timeline_tag(
         tag_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &tag_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(|r| crate::db_extras::sqlx_row_to_post(r, &state.config.storage.media_dir)).collect();
 
     let mut statuses = Vec::with_capacity(posts.len());
     for p in &posts {
-        let status = load_status(&state.pool, p, domain, None).await?;
+        let status = load_status(&state.pool, p, domain, None, &state.config.storage.media_dir).await?;
         statuses.push(status);
     }
 
@@ -2721,6 +2749,7 @@ async fn timeline_list(
         domain,
         Some(auth.account_id),
         false,
+        &state.config.storage.media_dir,
     )
     .await?;
 
@@ -2743,6 +2772,7 @@ async fn serialize_notification(
     notif: &NotificationRow,
     domain: &str,
     viewer_account_id: i64,
+    media_dir: &str,
 ) -> Result<Value, AppError> {
     let from_account = if let Some(ref aid) = notif.from_persona_id {
         let a = fetch_account_row(pool, *aid).await?;
@@ -2785,9 +2815,9 @@ async fn serialize_notification(
 
     let status = if let Some(pid) = notif.post_id {
         let post =
-            get_local_post(pool, pid).await?;
+            get_local_post(pool, pid, media_dir).await?;
         if let Some(p) = &post {
-            Some(load_status(pool, p, domain, Some(viewer_account_id)).await?)
+            Some(load_status(pool, p, domain, Some(viewer_account_id), media_dir).await?)
         } else {
             None
         }
@@ -2835,7 +2865,7 @@ async fn get_notifications(
 
     let mut values = Vec::with_capacity(notifs.len());
     for n in &notifs {
-        let v = serialize_notification(&state.pool, n, domain, auth.account_id).await?;
+        let v = serialize_notification(&state.pool, n, domain, auth.account_id, &state.config.storage.media_dir).await?;
         values.push(v);
     }
 
@@ -2867,7 +2897,7 @@ async fn get_notification(
         .ok_or_else(|| AppError::not_found("Notification not found"))?;
     let notif = NotificationRow::from_sqlx_row(notif_raw);
 
-    let value = serialize_notification(&state.pool, &notif, domain, auth.account_id).await?;
+    let value = serialize_notification(&state.pool, &notif, domain, auth.account_id, &state.config.storage.media_dir).await?;
     Ok(Json(value))
 }
 
@@ -2913,7 +2943,7 @@ async fn pin_status(
     let now = now_millis();
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -2924,7 +2954,7 @@ async fn pin_status(
         &state.pool, auth.account_id, post_id, now,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 
@@ -2939,7 +2969,7 @@ async fn unpin_status(
     let domain = &state.config.server.domain;
 
     let post =
-        get_local_post(&state.pool, post_id).await?
+        get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
             .ok_or_else(|| AppError::not_found("Status not found"))?;
 
     if post.persona_id != auth.account_id {
@@ -2950,7 +2980,7 @@ async fn unpin_status(
         &state.pool, auth.account_id, post_id,
     ).await?;
 
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     Ok(Json(status))
 }
 // ---------------------------------------------------------------------------
@@ -3232,14 +3262,14 @@ async fn list_conversations(
         conv_binds.push(b.to_string());
     }
     let rows = crate::db_extras::execute_dynamic_query(&state.pool, &sql, &conv_binds, limit).await?;
-    let posts: Vec<PostRow> = rows.into_iter().map(crate::db_extras::sqlx_row_to_post).collect();
+    let posts: Vec<PostRow> = rows.into_iter().map(|r| crate::db_extras::sqlx_row_to_post(r, &state.config.storage.media_dir)).collect();
 
     // TODO(perf): N+1 queries for participants per conversation. The result set is
     // already bounded by LIMIT (max 40), so this is acceptable for now. Batch-loading
     // mentions/accounts for all post IDs would eliminate the per-post queries.
     let mut conversations = Vec::with_capacity(posts.len());
     for p in &posts {
-        let status = load_status(&state.pool, p, domain, Some(auth.account_id)).await?;
+        let status = load_status(&state.pool, p, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
 
         // Determine unread: not in conversation_read_markers
         let is_read = fieldwork_db::conversations_db::is_read(
@@ -3283,7 +3313,7 @@ async fn mark_conversation_read(
     let domain = &state.config.server.domain;
 
     // Verify the post exists, is direct, and the user is involved
-    let post = get_local_post(&state.pool, post_id).await?
+    let post = get_local_post(&state.pool, post_id, &state.config.storage.media_dir).await?
         .ok_or_else(|| AppError::not_found("Conversation not found"))?;
     if post.visibility != "direct" {
         return Err(AppError::not_found("Conversation not found"));
@@ -3308,7 +3338,7 @@ async fn mark_conversation_read(
     .await?;
 
     // Return the updated conversation object
-    let status = load_status(&state.pool, &post, domain, Some(auth.account_id)).await?;
+    let status = load_status(&state.pool, &post, domain, Some(auth.account_id), &state.config.storage.media_dir).await?;
     let accounts = conversation_participants(&state.pool, &post, domain, auth.account_id).await?;
 
     Ok(Json(json!({

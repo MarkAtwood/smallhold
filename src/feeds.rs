@@ -26,12 +26,16 @@ async fn resolve_account_id(pool: &fieldwork_db::db::Pool, username: &str) -> Re
 async fn fetch_public_posts(
     pool: &fieldwork_db::db::Pool,
     account_id: i64,
+    media_dir: &str,
 ) -> Result<Vec<FeedPost>, AppError> {
     // ponytail: fieldwork_db::posts_db::posts_by_persona doesn't filter by
     // visibility or exclude boosts. Custom query needed for feed generation.
-    let rows: Vec<(i64, String, i64)> =
+    let rows: Vec<(i64, String, i64, Option<String>)> =
         crate::db_extras::get_public_feed_posts(pool, account_id).await?;
-    Ok(rows.into_iter().map(|(id, content_html, created_at)| FeedPost { id, content_html, created_at }).collect())
+    Ok(rows.into_iter().map(|(id, content_html, created_at, content_path)| {
+        let (_, resolved_html) = crate::posting::resolve_content(media_dir, "", &content_html, content_path.as_deref());
+        FeedPost { id, content_html: resolved_html, created_at }
+    }).collect())
 }
 
 fn millis_to_rfc2822(ms: i64) -> String {
@@ -62,7 +66,7 @@ async fn rss_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, account_id).await?;
+    let posts = fetch_public_posts(&state.pool, account_id, &state.config.storage.media_dir).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);
@@ -111,7 +115,7 @@ async fn atom_feed(
 ) -> Result<Response, AppError> {
     let domain = &state.config.server.domain;
     let account_id = resolve_account_id(&state.pool, &username).await?;
-    let posts = fetch_public_posts(&state.pool, account_id).await?;
+    let posts = fetch_public_posts(&state.pool, account_id, &state.config.storage.media_dir).await?;
 
     let escaped_username = xml_escape(&username);
     let escaped_domain = xml_escape(domain);

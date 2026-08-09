@@ -307,8 +307,8 @@ async fn discover_posts(
             Ok(Some(p)) if p.visibility == "public" => p,
             _ => continue,
         };
-        let local_post = fw_to_local_post(&fw_post);
-        match load_status(&state.pool, &local_post, domain, None).await {
+        let local_post = fw_to_local_post(&fw_post, &state.config.storage.media_dir);
+        match load_status(&state.pool, &local_post, domain, None, &state.config.storage.media_dir).await {
             Ok(status) => statuses.push(status),
             Err(_) => continue,
         }

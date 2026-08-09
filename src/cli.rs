@@ -881,7 +881,7 @@ async fn cmd_search(cmd: SearchCommands, config_path: &Path) -> Result<()> {
                 .unwrap_or(std::path::Path::new("."));
             let search = crate::search::SearchIndex::open(search_dir)
                 .context("Failed to open search index")?;
-            let count = search.reindex_all(&pool).await?;
+            let count = search.reindex_all(&pool, &config.storage.media_dir).await?;
             eprintln!("Reindexed {count} posts");
         }
     }
