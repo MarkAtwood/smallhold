@@ -1300,6 +1300,7 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
 
     for (id, content, content_html) in &long_posts {
         let content_path = crate::posting::write_content_files(media_dir, *id, content, content_html)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to write content files for post {id}: {e}"))?;
 
         crate::db_extras::set_post_content_path(&pool, *id, &content_path).await

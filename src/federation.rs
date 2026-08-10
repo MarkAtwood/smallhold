@@ -531,6 +531,9 @@ pub fn parse_collection_sync_header(header_val: &str) -> Option<(String, String,
 /// Returns the signature as base64.
 // ponytail: PEM re-parsed per sign; cache parsed RsaPrivateKey in AppState
 // if delivery throughput exceeds ~100 signs/sec
+// SECURITY: RsaPrivateKey is not zeroized on drop. The rsa crate does not
+// implement Zeroize for RsaPrivateKey. Accepted risk for single-operator
+// deployment where the process memory is trusted.
 fn rsa_sha256_sign(private_key_pem: &str, message: &[u8]) -> anyhow::Result<String> {
     use rsa::pkcs8::DecodePrivateKey;
     use rsa::signature::{SignatureEncoding, Signer};

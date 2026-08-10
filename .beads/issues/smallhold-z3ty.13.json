@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.13",
   "title": "OAuth authorize_form does not validate client_id exists",
   "description": "api.rs:403-584. The GET /oauth/authorize form renders the client_id, redirect_uri, response_type, and scope from query parameters into hidden form fields. These are HTML-escaped, so XSS is prevented. However, the form renders even if the client_id is invalid or empty — the error only surfaces when the form is POST-submitted. More critically, the redirect_uri in the query is rendered into the form without verifying it matches the app's registered redirect_uri. A phishing attack could craft a URL with a malicious redirect_uri that the user sees in the form. The validation happens in authorize_submit (line 647) but after the user has already entered credentials.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T00:59:45.049315608Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T00:59:45.049315608Z",
+  "updated_at": "2026-08-10T03:34:42.146160649Z",
+  "closed_at": "2026-08-10T03:34:42.146160649Z",
+  "close_reason": "Fixed",
   "labels": [
     "risk",
     "review"

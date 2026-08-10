@@ -68,13 +68,28 @@ impl SearchIndex {
     }
 
     pub fn search(&self, query_str: &str, limit: usize) -> Result<Vec<i64>> {
+        // Sanitize: limit query length and strip Tantivy field query syntax
+        // (e.g. "field:value") to prevent users from querying arbitrary fields
+        // like id or account_id.
+        const MAX_QUERY_LEN: usize = 500;
+        let truncated = if query_str.len() > MAX_QUERY_LEN {
+            &query_str[..query_str.floor_char_boundary(MAX_QUERY_LEN)]
+        } else {
+            query_str
+        };
+        // Remove field:value prefix patterns — only content_field should be queried
+        let sanitized: String = truncated
+            .replace("id:", "")
+            .replace("account_id:", "")
+            .replace("content:", "");
+
         self.reader.reload()?;
         let searcher = self.reader.searcher();
         let query_parser = QueryParser::for_index(&self.index, vec![self.content_field]);
-        let query = query_parser.parse_query(query_str).unwrap_or_else(|_| {
+        let query = query_parser.parse_query(&sanitized).unwrap_or_else(|_| {
             // Fallback: treat entire input as a term query
             Box::new(tantivy::query::TermQuery::new(
-                Term::from_field_text(self.content_field, query_str),
+                Term::from_field_text(self.content_field, &sanitized),
                 IndexRecordOption::Basic,
             ))
         });

@@ -1,6 +1,11 @@
 use crate::error::AppError;
 
 /// Generate an Ed25519 recovery keypair. Returns (private_key_bytes, public_key_bytes).
+///
+/// SECURITY: The returned private key bytes are not zeroized on drop. The caller
+/// (CLI persona create) encodes them as a BIP-39 mnemonic and displays once;
+/// the bytes remain in stack memory until overwritten. Accepted risk for
+/// single-operator deployment. Use `zeroize` crate if this becomes multi-tenant.
 pub fn generate_recovery_keypair() -> ([u8; 32], [u8; 32]) {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;

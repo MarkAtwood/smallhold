@@ -326,9 +326,12 @@ async fn profile_page(
         let dt = chrono::DateTime::from_timestamp_millis(post.created_at).unwrap_or_default();
         let date = dt.format("%Y-%m-%d").to_string();
         let iso = dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        // Defense-in-depth: re-sanitize at output time even though content_html
+        // was sanitized at write time.
+        let clean_content = ammonia::clean(&post.content_html);
         posts_html.push_str(&format!(
             r#"<article><div class="content">{content}</div><footer><a href="/@{username}/{id}"><time datetime="{iso}">{date}</time></a></footer></article>"#,
-            content = post.content_html,
+            content = clean_content,
             id = post.id,
         ));
     }
@@ -338,10 +341,11 @@ async fn profile_page(
         .format("%B %Y")
         .to_string();
 
+    // Defense-in-depth: re-sanitize bio_html at output time
     let bio_section = if account.bio_html.is_empty() {
         String::new()
     } else {
-        format!(r#"<div class="bio">{}</div>"#, account.bio_html)
+        format!(r#"<div class="bio">{}</div>"#, ammonia::clean(&account.bio_html))
     };
 
     let html = format!(
@@ -456,7 +460,8 @@ async fn post_page(
 </main>
 </body>
 </html>"#,
-        content = post.content_html,
+        // Defense-in-depth: re-sanitize at output time
+        content = ammonia::clean(&post.content_html),
     );
     Ok(Html(html))
 }
@@ -930,6 +935,7 @@ async fn photo_gallery(
 
     let items: Vec<(String, String, String)> = images
         .iter()
+        .filter(|m| !m.file_path.contains("..") && !m.file_path.starts_with('/'))
         .map(|m| {
             let file_url = format!("https://{domain}/{}", m.file_path);
             let alt_text = m.description.clone();

@@ -31,6 +31,25 @@ static ADMIN_USER_ID: LazyLock<Uuid> =
 static PASSKEY_TOKENS: LazyLock<Mutex<HashMap<String, i64>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+// Rate limiter for unauthenticated WebAuthn auth_begin endpoint.
+// Tracks (minute_timestamp, request_count). Resets each minute.
+const AUTH_BEGIN_MAX_PER_MINUTE: u32 = 20;
+static AUTH_BEGIN_RATE: LazyLock<Mutex<(i64, u32)>> = LazyLock::new(|| Mutex::new((0, 0)));
+
+fn check_auth_begin_rate_limit() -> Result<(), AppError> {
+    let now_minute = now_millis() / 60_000;
+    let mut guard = AUTH_BEGIN_RATE.lock().unwrap();
+    if guard.0 != now_minute {
+        *guard = (now_minute, 1);
+        return Ok(());
+    }
+    guard.1 += 1;
+    if guard.1 > AUTH_BEGIN_MAX_PER_MINUTE {
+        return Err(AppError::too_many_requests("Rate limit exceeded"));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // WebAuthn instance builder
 // ---------------------------------------------------------------------------
@@ -340,6 +359,8 @@ async fn register_page(State(_state): State<Arc<AppState>>) -> Result<Html<Strin
 // ---------------------------------------------------------------------------
 
 async fn auth_begin(State(state): State<Arc<AppState>>) -> Result<Json<Value>, AppError> {
+    check_auth_begin_rate_limit()?;
+
     let webauthn = build_webauthn(&state.config.server.domain)?;
     let existing = load_passkeys(&state.pool).await?;
 
@@ -406,7 +427,7 @@ async fn auth_complete(
     let expires = now_millis() + PASSKEY_TOKEN_TTL_MS;
 
     {
-        let mut map = PASSKEY_TOKENS.lock().unwrap();
+        let mut map = PASSKEY_TOKENS.lock().unwrap_or_else(|e| e.into_inner());
         // Clean up expired tokens
         let now = now_millis();
         map.retain(|_, exp| *exp > now);
@@ -463,7 +484,7 @@ pub fn verify_passkey_token(token: &str) -> bool {
     use subtle::ConstantTimeEq;
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
     let now = now_millis();
-    let mut map = PASSKEY_TOKENS.lock().unwrap();
+    let mut map = PASSKEY_TOKENS.lock().unwrap_or_else(|e| e.into_inner());
     // Purge expired entries
     map.retain(|_, exp| *exp > now);
     // Constant-time scan: check all entries to avoid timing leak

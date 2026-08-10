@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.19",
   "title": "client_id/client_secret optional in token exchange",
   "description": "api.rs:747-769. The token exchange endpoint treats client_id and client_secret as optional. If a client omits them entirely, the authorization code is exchanged for a token without any client authentication. This violates RFC 6749 Section 4.1.3 for confidential clients and allows any party who intercepts an authorization code to exchange it for a token. Since the server generates and stores client_secret (line 353), all registered clients are implicitly confidential and should be required to authenticate at the token endpoint.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:00:01.579615Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:00:01.579615Z",
+  "updated_at": "2026-08-10T03:34:42.295269946Z",
+  "closed_at": "2026-08-10T03:34:42.295269946Z",
+  "close_reason": "Fixed",
   "labels": [
     "risk",
     "review"

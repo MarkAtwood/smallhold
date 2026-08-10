@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use fieldwork::cards::{
     card_to_json, classify_card_type, decode_html_entities, extract_first_url, parse_html_title,
@@ -162,7 +161,7 @@ pub async fn fetch_and_cache_card(
     own_domain: &str,
 ) -> Result<()> {
     let fwp = pool.clone();
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    let now = crate::api::now_secs();
 
     // Check if already cached and fresh (< 24h)
     if let Some(cached) = fieldwork_db::cards_db::get_card_by_url(&fwp, url).await? {

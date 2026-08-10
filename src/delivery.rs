@@ -1,5 +1,5 @@
 use std::sync::LazyLock;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use fieldwork::circuit_breaker::CircuitBreaker;
 
@@ -37,7 +37,7 @@ impl std::fmt::Debug for DeliveryRow {
 static CIRCUIT_BREAKER: LazyLock<CircuitBreaker> = LazyLock::new(CircuitBreaker::new);
 
 fn now_secs() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
+    crate::api::now_secs()
 }
 
 // -- Public API --
@@ -142,11 +142,13 @@ async fn process_batch(
     ));
     let mut handles = Vec::new();
 
+    let now_ms = chrono::Utc::now().timestamp_millis();
+
     for row in rows {
         // Skip rows whose target domain has an open circuit breaker.
         if let Ok(url) = row.target_inbox.parse::<url::Url>() {
             if let Some(domain) = url.host_str() {
-                if CIRCUIT_BREAKER.is_open(domain, now) {
+                if CIRCUIT_BREAKER.is_open(domain, now_ms) {
                     continue;
                 }
             }

@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.76",
   "title": "Signature header parser fails on escaped quotes in values",
   "description": "inbox.rs:326-329. The parse_signature_header function finds the closing quote with remaining.find('\"'). This does not handle escaped quotes inside values. Per the HTTP Signature spec, signature parameter values are quoted-strings as defined in RFC 7230, which allows backslash-escaped characters inside quoted strings. A keyId containing a literal backslash-quote (\\\\\\\\\\\" in the PEM) would cause the parser to split the value at the wrong position. In practice, keyIds are URLs (no quotes), and signature values are base64 (no quotes), so this edge case is extremely unlikely to occur in real federation traffic.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:03:24.336210981Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:03:27.894995252Z",
+  "updated_at": "2026-08-10T03:34:42.905162517Z",
+  "closed_at": "2026-08-10T03:34:42.905162517Z",
+  "close_reason": "Fixed",
   "labels": [
     "correctness",
     "review"

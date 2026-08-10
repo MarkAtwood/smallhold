@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.44",
   "title": "handle_move does not verify new actor's alsoKnownAs",
   "description": "inbox.rs:1489-1551. The handle_move function verifies that the OLD actor's alsoKnownAs includes the new target URI (line 1530-1537). However, per Mastodon's Move handling spec, both actors should have alsoKnownAs pointing to each other. The code only checks old -\u003e new (line 1535), but does not verify that the NEW actor's alsoKnownAs includes the old actor URI. A malicious actor could set their alsoKnownAs to any URI and then send a Move activity claiming to migrate away, stealing follows if only one direction is checked.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:00:52.745182589Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:00:52.745182589Z",
+  "updated_at": "2026-08-10T03:34:42.660651256Z",
+  "closed_at": "2026-08-10T03:34:42.660651256Z",
+  "close_reason": "Fixed",
   "labels": [
     "risk",
     "review"

@@ -53,8 +53,20 @@ fn fw_media_to_local(fw: &fieldwork_db::media_db::MediaRow) -> MediaRow {
     }
 }
 
+/// Validate that a file_path from the database is safe (no path traversal).
+/// Returns true if the path is safe to use in URLs and filesystem operations.
+fn is_safe_file_path(path: &str) -> bool {
+    !path.contains("..") && !path.starts_with('/')
+}
+
 fn media_attachment_json(row: &MediaRow, domain: &str) -> Value {
-    let url = format!("https://{domain}/{}", row.file_path);
+    let safe_path = if is_safe_file_path(&row.file_path) {
+        &row.file_path
+    } else {
+        tracing::warn!(file_path = %row.file_path, "media file_path failed path traversal check");
+        "invalid"
+    };
+    let url = format!("https://{domain}/{}", safe_path);
 
     let (meta_original, meta_small) = match (row.width, row.height) {
         (Some(w), Some(h)) if w > 0 && h > 0 => {
@@ -366,6 +378,7 @@ struct UpdateMediaRequest {
 /// GET /api/v1/media/{id} — get media metadata
 async fn get_media(
     State(state): State<Arc<AppState>>,
+    _auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let media_id: i64 = id

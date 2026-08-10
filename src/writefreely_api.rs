@@ -9,6 +9,7 @@ use axum::{Json, Router};
 use fieldwork::util::{now_secs, render_markdown, slugify};
 use fieldwork::writefreely_api::*;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 // ---------------------------------------------------------------------------
 // POST /api/posts — create post
@@ -105,7 +106,9 @@ async fn update_post(
 
     // Auth: either valid edit token or authenticated owner
     let token_ok = match (&body.token, &article.edit_token) {
-        (Some(provided), Some(stored)) => provided == stored,
+        (Some(provided), Some(stored)) => {
+            provided.as_bytes().ct_eq(stored.as_bytes()).into()
+        }
         _ => false,
     };
     if !token_ok {
@@ -119,7 +122,12 @@ async fn update_post(
         }
     }
     if let Some(ref provided) = body.token {
-        if article.edit_token.as_deref() != Some(provided) {
+        let matches: bool = article
+            .edit_token
+            .as_deref()
+            .map(|s| provided.as_bytes().ct_eq(s.as_bytes()).into())
+            .unwrap_or(false);
+        if !matches {
             return Err(AppError::unauthorized("Invalid edit token"));
         }
     }
@@ -175,7 +183,9 @@ async fn delete_post(
 
     // Auth: either valid edit token or authenticated owner
     let token_ok = match (&query.token, &article.edit_token) {
-        (Some(provided), Some(stored)) => provided == stored,
+        (Some(provided), Some(stored)) => {
+            provided.as_bytes().ct_eq(stored.as_bytes()).into()
+        }
         _ => false,
     };
     if !token_ok {
@@ -189,7 +199,12 @@ async fn delete_post(
         }
     }
     if let Some(ref provided) = query.token {
-        if article.edit_token.as_deref() != Some(provided) {
+        let matches: bool = article
+            .edit_token
+            .as_deref()
+            .map(|s| provided.as_bytes().ct_eq(s.as_bytes()).into())
+            .unwrap_or(false);
+        if !matches {
             return Err(AppError::unauthorized("Invalid edit token"));
         }
     }

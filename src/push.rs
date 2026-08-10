@@ -55,6 +55,11 @@ struct SubscriptionRow {
 // ---------------------------------------------------------------------------
 
 /// Get or create the server's VAPID keypair. Returns (private_key_pem, public_key_base64url).
+///
+/// SECURITY: The VAPID private key is stored as plaintext PEM in the database.
+/// Key material is not zeroized on drop. Accepted trade-off: single-operator
+/// server; the SQLite database file should be permission-restricted (0600).
+/// A proper key encryption scheme would require a key management system.
 pub async fn get_or_create_vapid_key(pool: &fieldwork_db::db::Pool) -> anyhow::Result<(String, String)> {
     let fwp = pool.clone();
     if let Some((pem, pub_b64)) = fieldwork_db::push_db::get_vapid_keys(&fwp).await? {
@@ -418,6 +423,8 @@ fn encrypt_payload(
 // VAPID JWT (ES256)
 // ---------------------------------------------------------------------------
 
+// SECURITY: SigningKey is not zeroized on drop. The p256 crate's SigningKey
+// does not implement Zeroize. Accepted risk for single-operator deployment.
 fn build_vapid_jwt(private_key_pem: &str, audience: &str, domain: &str) -> anyhow::Result<String> {
     let signing_key = SigningKey::from_pkcs8_pem(private_key_pem)
         .map_err(|e| anyhow::anyhow!("Failed to parse VAPID key: {e}"))?;

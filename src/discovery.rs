@@ -114,7 +114,7 @@ async fn webfinger(
     Ok(Response::builder()
         .header("Content-Type", "application/jrd+json; charset=utf-8")
         .body(body.into())
-        .unwrap())
+        .expect("static response"))
 }
 
 // --- NodeInfo ---
@@ -131,7 +131,7 @@ async fn nodeinfo_links(State(state): State<Arc<AppState>>) -> Response {
     Response::builder()
         .header("Content-Type", "application/json")
         .body(serde_json::to_string(&body).unwrap().into())
-        .unwrap()
+        .expect("static response")
 }
 
 async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppError> {
@@ -168,7 +168,7 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
             "application/json; profile=\"http://nodeinfo.diaspora.software/ns/schema/2.0\"",
         )
         .body(json.into())
-        .unwrap())
+        .expect("static response"))
 }
 
 // --- host-meta (RFC 6415) ---
@@ -187,5 +187,5 @@ async fn host_meta(State(state): State<Arc<AppState>>) -> Response {
     Response::builder()
         .header("Content-Type", "application/xrd+xml; charset=utf-8")
         .body(xml.into())
-        .unwrap()
+        .expect("static response")
 }

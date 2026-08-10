@@ -323,14 +323,33 @@ fn parse_signature_header(header_val: &str) -> Result<SignatureParams, AppError>
             ));
         }
         remaining = &remaining[1..]; // skip opening quote
-        let close_quote = remaining
-            .find('"')
+
+        // Find closing quote, handling escaped quotes (backslash-quote).
+        let mut close_quote = None;
+        let mut escaped = false;
+        for (i, ch) in remaining.char_indices() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == '"' {
+                close_quote = Some(i);
+                break;
+            }
+        }
+        let close_quote = close_quote
             .ok_or_else(|| AppError::bad_request("malformed Signature header: unclosed quote"))?;
-        let value = &remaining[..close_quote];
+        // Unescape backslash-quote sequences in the value
+        let raw_value = &remaining[..close_quote];
+        let value = raw_value.replace("\\\"", "\"");
         remaining = &remaining[close_quote + 1..];
 
         match param_name {
-            "keyId" => key_id = Some(value.to_string()),
+            "keyId" => key_id = Some(value.clone()),
             "headers" => {
                 headers_list = Some(
                     value
@@ -341,7 +360,7 @@ fn parse_signature_header(header_val: &str) -> Result<SignatureParams, AppError>
             }
             "signature" => {
                 let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(value)
+                    .decode(&value)
                     .map_err(|_| AppError::bad_request("invalid base64 in Signature"))?;
                 signature_b64 = Some(decoded);
             }
@@ -581,7 +600,7 @@ async fn verify_and_fetch_actor(
     ));
     {
         let now = crate::api::now_millis();
-        let mut seen = SEEN_DIGESTS.lock().unwrap();
+        let mut seen = SEEN_DIGESTS.lock().unwrap_or_else(|e| e.into_inner());
         seen.retain(|_, exp| *exp > now); // purge expired
         if seen.len() > 10_000 {
             seen.clear(); // ponytail: cap unbounded growth; losing entries just means one duplicate may slip through
@@ -1568,6 +1587,58 @@ async fn handle_move(
 
     // Fetch and upsert the new actor.
     let new_account = fetch_and_upsert_actor(state, target_uri).await?;
+
+    // Bidirectional verification: the NEW actor's alsoKnownAs must also list
+    // the OLD actor's URI. Without this, a compromised old account could
+    // redirect followers to an unrelated account.
+    let new_actor_url: url::Url = target_uri
+        .parse()
+        .map_err(|_| AppError::bad_request("invalid target URI"))?;
+    let new_get_headers =
+        FederationClient::sign_get_headers(&signing_key_pem, &signing_key_id, &new_actor_url)
+            .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
+    let new_resp = fed_client
+        .client()
+        .get(new_actor_url.as_str())
+        .headers(new_get_headers)
+        .header(
+            "Accept",
+            "application/activity+json, application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::internal(format!("fetch new actor: {e}")))?;
+
+    if !new_resp.status().is_success() {
+        return Err(AppError::internal(
+            "failed to fetch new actor for Move verification",
+        ));
+    }
+
+    let new_doc: Value = new_resp
+        .json()
+        .await
+        .map_err(|e| AppError::internal(format!("parse new actor: {e}")))?;
+
+    let new_also_known = new_doc["alsoKnownAs"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .any(|s| s == remote.actor_uri)
+        })
+        .unwrap_or(false);
+
+    if !new_also_known {
+        tracing::warn!(
+            old_actor = %remote.actor_uri,
+            new_actor = target_uri,
+            "Move rejected: new actor alsoKnownAs does not include old actor"
+        );
+        return Err(AppError::unauthorized(
+            "Move: new actor alsoKnownAs does not include old actor (bidirectional check failed)",
+        ));
+    }
 
     // Migrate follows: for each local account following the old remote account,
     // create a follow on the new account and enqueue a Follow activity.

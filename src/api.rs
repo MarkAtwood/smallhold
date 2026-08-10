@@ -51,7 +51,7 @@ pub fn now_millis() -> i64 {
         .as_millis() as i64
 }
 
-fn now_secs() -> i64 {
+pub fn now_secs() -> i64 {
     // SystemTime::now() is always after UNIX_EPOCH on any supported platform
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -172,15 +172,24 @@ pub async fn fetch_account_counts(pool: &fieldwork_db::db::Pool, account_id: i64
     let fwp = pool;
     let followers = fieldwork_db::followers_db::follower_count(&fwp, account_id)
         .await
-        .unwrap_or(0);
+        .unwrap_or_else(|e| {
+            tracing::warn!(account_id, error = %e, "failed to fetch follower count");
+            0
+        });
 
     let following = fieldwork_db::follows_db::following_count(&fwp, account_id)
         .await
-        .unwrap_or(0);
+        .unwrap_or_else(|e| {
+            tracing::warn!(account_id, error = %e, "failed to fetch following count");
+            0
+        });
 
     let statuses = fieldwork_db::posts_db::posts_count(&fwp, account_id)
         .await
-        .unwrap_or(0);
+        .unwrap_or_else(|e| {
+            tracing::warn!(account_id, error = %e, "failed to fetch statuses count");
+            0
+        });
 
     (followers, following, statuses)
 }
@@ -411,6 +420,16 @@ async fn authorize_form(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AuthorizeQuery>,
 ) -> Result<Html<String>, AppError> {
+    // Validate client_id exists before rendering the form
+    if let Some(ref cid) = params.client_id {
+        if !cid.is_empty() {
+            let app = fieldwork_db::oauth_db::get_app_by_client_id(&state.pool, cid).await?;
+            if app.is_none() {
+                return Err(AppError::bad_request("Unknown client_id"));
+            }
+        }
+    }
+
     let fwp = state.pool.clone();
     let personas = fieldwork_db::persona_db::list_personas(&fwp).await?;
     let accounts: Vec<(i64, String, String)> = personas
@@ -743,15 +762,19 @@ async fn token(
     let (app_id, account_id, scopes, stored_redirect) =
         code_row.ok_or_else(|| AppError::bad_request("Invalid or expired authorization code"))?;
 
-    // Verify redirect_uri matches
-    if let Some(ref uri) = form.redirect_uri {
-        if *uri != stored_redirect {
-            return Err(AppError::bad_request("redirect_uri mismatch"));
-        }
+    // Verify redirect_uri matches (required per RFC 6749 4.1.3)
+    let provided_redirect = form
+        .redirect_uri
+        .as_deref()
+        .ok_or_else(|| AppError::bad_request("Missing redirect_uri"))?;
+    if provided_redirect != stored_redirect {
+        return Err(AppError::bad_request("redirect_uri mismatch"));
     }
 
-    // Verify client credentials if provided
-    if let Some(ref cid) = form.client_id {
+    // Verify client credentials (client_id required for authorization_code)
+    {
+        let cid = form.client_id.as_deref()
+            .ok_or_else(|| AppError::bad_request("Missing client_id"))?;
         let app_row: Option<(i64, String)> = crate::db_extras::get_oauth_app_secret(&state.pool, cid).await?;
 
         let (found_app_id, stored_secret) =
@@ -811,16 +834,29 @@ async fn revoke(
     State(state): State<Arc<AppState>>,
     axum::Form(form): axum::Form<RevokeRequest>,
 ) -> Result<StatusCode, AppError> {
+    let client_id = form
+        .client_id
+        .as_deref()
+        .ok_or_else(|| AppError::bad_request("Missing client_id"))?;
+
+    // Resolve client_id to app_id
+    let app = fieldwork_db::oauth_db::get_app_by_client_id(&state.pool, client_id).await?;
+    let requesting_app_id = app
+        .ok_or_else(|| AppError::bad_request("Unknown client_id"))?
+        .id;
+
     let token_hash = hex_encode(&Sha256::digest(form.token.as_bytes()));
 
-    // Look up token ID by hash to use revoke_token API.
-    let token_id = crate::db_extras::find_token_id_by_hash(&state.pool, &token_hash).await?;
-
-    if let Some(token_id) = token_id {
+    // Look up token and verify it belongs to the requesting client
+    if let Some((token_id, token_app_id)) =
+        crate::db_extras::find_token_and_app_by_hash(&state.pool, &token_hash).await?
+    {
+        if token_app_id != requesting_app_id {
+            // Token exists but belongs to a different app — treat as not found per RFC 7009
+            return Ok(StatusCode::OK);
+        }
         let now = now_millis();
-        fieldwork_db::oauth_db::revoke_token(
-            &state.pool, token_id, now,
-        ).await?;
+        fieldwork_db::oauth_db::revoke_token(&state.pool, token_id, now).await?;
     }
 
     // Always return 200 per RFC 7009, even if token not found
@@ -1109,7 +1145,7 @@ async fn account_statuses(
         builder = builder.header("Link", link_parts.join(", "));
     }
 
-    Ok(builder.body(body.into()).unwrap())
+    Ok(builder.body(body.into()).expect("static response"))
 }
 
 /// GET /api/v1/accounts/relationships?id[]=...

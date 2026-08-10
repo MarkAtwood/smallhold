@@ -12,10 +12,7 @@ pub const DEFAULT_USER_ID: i64 = 1_000_000_000_001;
 pub async fn ensure_default_user(pool: &fieldwork_db::db::Pool) -> Result<()> {
     let existing = fieldwork_db::tenant_db::get_user_by_id(pool, DEFAULT_USER_ID).await?;
     if existing.is_none() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let now = crate::api::now_millis();
         fieldwork_db::tenant_db::create_user(pool, DEFAULT_USER_ID, "admin@localhost", None, "admin", now)
             .await
             .context("Failed to ensure default user")?;
@@ -116,13 +113,11 @@ pub async fn test_set_admin_password(pool: &fieldwork_db::db::Pool, password: &s
         .to_string();
     match pool {
         fieldwork_db::db::Pool::Sqlite(sq) => {
-            sqlx::raw_sql(&format!(
-                "INSERT OR REPLACE INTO admin (id, password_hash, created_at) VALUES (1, '{}', 0)",
-                hash
-            ))
-            .execute(sq)
-            .await
-            .unwrap();
+            sqlx::query("INSERT OR REPLACE INTO admin (id, password_hash, created_at) VALUES (1, ?, 0)")
+                .bind(&hash)
+                .execute(sq)
+                .await
+                .unwrap();
         }
     }
 }

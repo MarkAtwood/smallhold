@@ -75,6 +75,16 @@ pub async fn find_token_id_by_hash(pool: &fieldwork_db::db::Pool, token_hash: &s
     Ok(row.map(|(id,)| id))
 }
 
+/// Find a token's (id, app_id) by its hash (for ownership-checked revocation).
+pub async fn find_token_and_app_by_hash(pool: &fieldwork_db::db::Pool, token_hash: &str) -> Result<Option<(i64, i64)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, app_id FROM oauth_tokens WHERE token_hash = ? AND revoked_at IS NULL",
+    )
+    .bind(token_hash)
+    .fetch_optional(sq(pool))
+    .await
+}
+
 /// Update last_status_at timestamp on a persona.
 pub async fn touch_persona_last_status(
     pool: &fieldwork_db::db::Pool,
@@ -1088,6 +1098,11 @@ pub async fn list_personas_cli(pool: &fieldwork_db::db::Pool) -> Result<Vec<(Str
 }
 
 /// Create a persona (CLI).
+///
+/// SECURITY: The RSA private key (private_key_pem) is stored as plaintext in
+/// the database. Accepted trade-off: single-operator server, and the SQLite
+/// database file should be permission-restricted (0600). A proper key encryption
+/// scheme would require a key management system (KMS or passphrase-derived KEK).
 pub async fn create_persona(
     pool: &fieldwork_db::db::Pool,
     id: i64,

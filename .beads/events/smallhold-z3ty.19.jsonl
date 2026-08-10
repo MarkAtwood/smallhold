@@ -1,3 +1,4 @@
 {"id":"019fe92f-08ae-7a2a-911c-9190f5ea2ba0","issue_id":"smallhold-z3ty.19","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:00:01.582667101Z"}
 {"id":"019fe92f-08b1-795b-a188-27b921e4fffc","issue_id":"smallhold-z3ty.19","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-08-10T01:00:01.585614027Z"}
 {"id":"019fe92f-08b4-7950-9b7f-9a2af8d09b3b","issue_id":"smallhold-z3ty.19","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:00:01.5886112Z"}
+{"id":"019fe9bc-a57b-7e74-844c-d5ee9b9e68d3","issue_id":"smallhold-z3ty.19","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed","created_at":"2026-08-10T03:34:42.299947765Z"}

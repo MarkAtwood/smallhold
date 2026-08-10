@@ -25,7 +25,7 @@ const FILE_BACKED_THRESHOLD: usize = 4096;
 ///
 /// Returns the relative content path (e.g. `"content/ab/12345"`) without
 /// extension, suitable for storing in `PostRow.content_path`.
-pub fn write_content_files(
+pub async fn write_content_files(
     media_dir: &str,
     id: i64,
     content: &str,
@@ -36,15 +36,18 @@ pub fn write_content_files(
     let dir = std::path::Path::new(media_dir)
         .join("content")
         .join(prefix);
-    std::fs::create_dir_all(&dir)
+    tokio::fs::create_dir_all(&dir)
+        .await
         .map_err(|e| crate::error::AppError::internal(format!("Failed to create content dir: {e}")))?;
 
     let md_path = dir.join(format!("{id}.md"));
-    std::fs::write(&md_path, content)
+    tokio::fs::write(&md_path, content)
+        .await
         .map_err(|e| crate::error::AppError::internal(format!("Failed to write content md: {e}")))?;
 
     let html_path = dir.join(format!("{id}.html"));
-    std::fs::write(&html_path, content_html)
+    tokio::fs::write(&html_path, content_html)
+        .await
         .map_err(|e| crate::error::AppError::internal(format!("Failed to write content html: {e}")))?;
 
     let now = crate::api::now_millis();
@@ -55,7 +58,8 @@ pub fn write_content_files(
         "created_at": now,
     });
     let meta_path = dir.join(format!("{id}.html.meta"));
-    std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap())
+    tokio::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap())
+        .await
         .map_err(|e| crate::error::AppError::internal(format!("Failed to write content meta: {e}")))?;
 
     Ok(format!("content/{prefix}/{id}"))
@@ -206,29 +210,38 @@ fn keyword_matches(content: &str, keyword: &str, whole_word: bool) -> bool {
     }
 
     // Word-boundary matching: keyword must be bounded by non-alphanumeric chars
-    // (or start/end of string).
-    let kw_len = lower_keyword.len();
-    let content_bytes = lower_content.as_bytes();
-    let kw_bytes = lower_keyword.as_bytes();
+    // (or start/end of string). Uses char iterators to handle multi-byte UTF-8
+    // correctly (e.g. CJK, accented chars). The old code used byte indexing
+    // which could panic or mis-detect boundaries on multi-byte sequences.
+    let kw_byte_len = lower_keyword.len();
 
     let mut start = 0;
     while let Some(pos) = lower_content[start..].find(&lower_keyword) {
         let abs_pos = start + pos;
-        let end_pos = abs_pos + kw_len;
+        let end_pos = abs_pos + kw_byte_len;
 
-        let at_word_start = abs_pos == 0 || !content_bytes[abs_pos - 1].is_ascii_alphanumeric();
-        let at_word_end =
-            end_pos >= content_bytes.len() || !content_bytes[end_pos].is_ascii_alphanumeric();
+        let at_word_start = abs_pos == 0 || {
+            let prev_char = lower_content[..abs_pos].chars().next_back().unwrap();
+            !prev_char.is_alphanumeric()
+        };
+
+        // end_pos is always a valid char boundary: str::find returns byte
+        // offsets aligned to the needle, and the needle is valid UTF-8.
+        let at_word_end = end_pos >= lower_content.len() || {
+            let next_char = lower_content[end_pos..].chars().next().unwrap();
+            !next_char.is_alphanumeric()
+        };
 
         if at_word_start && at_word_end {
             return true;
         }
-        start = abs_pos + 1;
+
+        // Advance past the current position by one char, not one byte
+        start = abs_pos + lower_content[abs_pos..].chars().next().map_or(1, |c| c.len_utf8());
         if start >= lower_content.len() {
             break;
         }
     }
-    let _ = kw_bytes; // suppress unused warning
     false
 }
 
@@ -384,7 +397,14 @@ pub fn render_content(input: &str, domain: &str) -> RenderedContent {
     let mentions = parse_mentions(input);
     let tags = parse_hashtags(input);
 
-    // Replace mention patterns in the HTML
+    // Replace mention patterns in the sanitized HTML with <a> links.
+    // SAFETY: This post-sanitization injection is safe because:
+    // - Mention patterns (@user@domain) can only contain [a-zA-Z0-9._-] chars
+    //   (validated by the mention regex), none of which are HTML-special.
+    // - Hashtag patterns (#tag) can only contain alphanumeric chars.
+    // - The generated <a> hrefs use only these validated components.
+    // - An attacker cannot inject HTML through these patterns because the regex
+    //   rejects any input containing <, >, ", &, or other special characters.
     let mut html = clean_html;
     for m in &mentions {
         let full_match = match &m.domain {
@@ -593,27 +613,28 @@ pub struct PostRow {
 }
 
 /// Convert a fieldwork PostRow to our local PostRow, resolving file-backed content.
-pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow, media_dir: &str) -> PostRow {
+/// Takes ownership to avoid cloning every field.
+pub fn fw_to_local_post(p: fieldwork_db::posts_db::PostRow, media_dir: &str) -> PostRow {
     let (content, content_html) = resolve_content(
         media_dir, &p.content, &p.content_html, p.content_path.as_deref(),
     );
     PostRow {
         id: p.id,
         persona_id: p.persona_id,
-        ap_id: p.ap_id.clone(),
+        ap_id: p.ap_id,
         in_reply_to_id: p.in_reply_to_id,
-        in_reply_to_uri: p.in_reply_to_uri.clone(),
+        in_reply_to_uri: p.in_reply_to_uri,
         boost_of_id: p.boost_of_id,
-        context_url: p.context_url.clone(),
+        context_url: p.context_url,
         content,
         content_html,
-        spoiler_text: p.spoiler_text.clone(),
-        visibility: p.visibility.clone(),
+        spoiler_text: p.spoiler_text,
+        visibility: p.visibility,
         sensitive: p.sensitive,
-        language: p.language.clone(),
+        language: p.language,
         created_at: p.created_at,
         edited_at: p.edited_at,
-        abstract_text: p.abstract_text.clone(),
+        abstract_text: p.abstract_text,
     }
 }
 
@@ -621,14 +642,14 @@ pub fn fw_to_local_post(p: &fieldwork_db::posts_db::PostRow, media_dir: &str) ->
 pub async fn get_local_post(pool: &fieldwork_db::db::Pool, id: i64, media_dir: &str) -> Result<Option<PostRow>, AppError> {
     let fwp = pool;
     let fw_post = fieldwork_db::posts_db::get_post(&fwp, id).await?;
-    Ok(fw_post.map(|p| fw_to_local_post(&p, media_dir)))
+    Ok(fw_post.map(|p| fw_to_local_post(p, media_dir)))
 }
 
 /// Fetch a local post by AP ID using fieldwork.
 pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str, media_dir: &str) -> Result<Option<PostRow>, AppError> {
     let fwp = pool;
     let fw_post = fieldwork_db::posts_db::get_post_by_ap_id(&fwp, ap_id).await?;
-    Ok(fw_post.map(|p| fw_to_local_post(&p, media_dir)))
+    Ok(fw_post.map(|p| fw_to_local_post(p, media_dir)))
 }
 
 // REMAINING: POST_COLUMNS and sqlx_row_to_post are needed for dynamic SQL queries
@@ -1187,7 +1208,7 @@ async fn create_status(
             post_id,
             &text,
             &rendered.html,
-        )?;
+        ).await?;
         (String::new(), String::new(), Some(path))
     } else {
         (text.clone(), rendered.html.clone(), None)
@@ -1584,6 +1605,11 @@ async fn delete_status(
     // Remove media files from disk (best-effort, after transaction committed)
     let media_dir = &state.config.storage.media_dir;
     for (file_path,) in &media_paths {
+        // Path traversal check: reject file_path values that could escape media_dir
+        if file_path.contains("..") || file_path.starts_with('/') {
+            tracing::warn!(file_path, "media file_path failed path traversal check, skipping delete");
+            continue;
+        }
         let abs_path = std::path::Path::new(media_dir).join(file_path);
         if let Err(e) = tokio::fs::remove_file(&abs_path).await {
             tracing::warn!(path = %abs_path.display(), error = %e, "failed to remove media file");
@@ -1672,7 +1698,7 @@ async fn edit_status(
             post_id,
             &text,
             &rendered.html,
-        )?;
+        ).await?;
         (String::new(), String::new(), Some(path))
     } else {
         (text.clone(), rendered.html.clone(), None)
@@ -2527,7 +2553,7 @@ async fn timeline_home(
     let url_base = format!("https://{domain}/api/v1/timelines/home");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().expect("Link header from valid components"));
     }
     Ok(response)
 }
@@ -2631,7 +2657,7 @@ async fn timeline_public(
     let url_base = format!("https://{domain}/api/v1/timelines/public");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().expect("Link header from valid components"));
     }
     Ok(response)
 }
@@ -2680,7 +2706,7 @@ async fn timeline_tag(
     let url_base = format!("https://{domain}/api/v1/timelines/tag/{tag_lower}");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().expect("Link header from valid components"));
     }
     Ok(response)
 }
@@ -2756,7 +2782,7 @@ async fn timeline_list(
     let url_base = format!("https://{domain}/api/v1/timelines/list/{list_id}");
     let mut response = Json(&statuses).into_response();
     if let Some(link) = pagination_link_header(&url_base, &statuses) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().expect("Link header from valid components"));
     }
     Ok(response)
 }
@@ -2876,7 +2902,7 @@ async fn get_notifications(
     let url_base = format!("https://{domain}/api/v1/notifications");
     let mut response = Json(&values).into_response();
     if let Some(link) = pagination_link_header(&url_base, &values) {
-        response.headers_mut().insert("Link", link.parse().unwrap());
+        response.headers_mut().insert("Link", link.parse().expect("Link header from valid components"));
     }
     Ok(response)
 }
