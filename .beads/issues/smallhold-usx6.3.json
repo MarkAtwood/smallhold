@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-usx6.3",
+  "title": "DNS rebinding not mitigated on outbound fetches",
+  "description": "federation.rs:60-64 documents this. validate_outbound_url checks IP at DNS resolution time, but attacker domain can re-resolve to private IP on the actual connection. Single-operator accepted risk but should be documented more prominently.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:52:34.609802555Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:56:52.313251048Z",
+  "started_at": "2026-08-10T00:52:58.474961262Z",
+  "closed_at": "2026-08-10T00:56:52.313251048Z",
+  "close_reason": "Fixed and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-usx6.3",
+      "depends_on_id": "smallhold-usx6",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:52:34.626627732Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

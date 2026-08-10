@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-usx6.6",
+  "title": "No security headers in application layer",
+  "description": "server.rs:43-45 delegates all security headers to reverse proxy. Should add defense-in-depth headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy) in the app itself via tower middleware.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:52:48.466228378Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:56:52.424064456Z",
+  "started_at": "2026-08-10T00:52:58.613074697Z",
+  "closed_at": "2026-08-10T00:56:52.424064456Z",
+  "close_reason": "Fixed and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-usx6.6",
+      "depends_on_id": "smallhold-usx6",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:52:48.483636911Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -5,7 +5,9 @@ use axum::routing::post;
 use axum::Router;
 use base64::Engine;
 use serde_json::Value;
-use std::sync::Arc;
+use sha2::Digest;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::delivery;
 use crate::error::AppError;
@@ -14,6 +16,10 @@ use crate::id::generate_id;
 use crate::posting::html_sanitizer;
 use crate::server::AppState;
 use crate::streaming::{publish, StreamEvent};
+
+static SEEN_DIGESTS: LazyLock<Mutex<HashMap<String, i64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+const REPLAY_WINDOW_MS: i64 = 600_000; // 10 minutes
 
 // Length caps for inbound string fields.
 const MAX_CONTENT_LEN: usize = 100_000;
@@ -498,7 +504,7 @@ async fn verify_and_fetch_actor(
     actor_uri: &str,
     request_path: &str,
 ) -> Result<RemoteAccountRow, AppError> {
-    // Check Date header freshness (±12 hours)
+    // Check Date header freshness (±5 minutes)
     let date_val = headers
         .get("date")
         .ok_or_else(|| AppError::unauthorized("Missing Date header"))?;
@@ -511,7 +517,7 @@ async fn verify_and_fetch_actor(
     let diff = (now - parsed.with_timezone(&chrono::Utc))
         .num_seconds()
         .abs();
-    if diff > 43200 {
+    if diff > 300 {
         return Err(AppError::unauthorized(
             "Date header too old or too far in future",
         ));
@@ -592,6 +598,22 @@ async fn verify_and_fetch_actor(
         signed_string.as_bytes(),
         &sig_params.signature_bytes,
     )?;
+
+    // Replay protection: reject duplicate (actor, date, digest) within window
+    let date_str = headers.get("date").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let digest_str = headers.get("digest").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let replay_key = crate::api::hex_encode(&sha2::Sha256::digest(
+        format!("{actor_uri}:{date_str}:{digest_str}").as_bytes(),
+    ));
+    {
+        let now = crate::api::now_millis();
+        let mut seen = SEEN_DIGESTS.lock().unwrap();
+        seen.retain(|_, exp| *exp > now); // purge expired
+        if seen.contains_key(&replay_key) {
+            return Err(AppError::conflict("Duplicate delivery rejected"));
+        }
+        seen.insert(replay_key, now + REPLAY_WINDOW_MS);
+    }
 
     Ok(account)
 }
@@ -1295,46 +1317,45 @@ async fn handle_like(
 
     if let Some((post_id, account_id)) = post_row {
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
-            let now = chrono::Utc::now().timestamp();
-            let notif_id = generate_id();
+            if !crate::db_extras::notification_exists(&state.pool, account_id, "favourite", remote.id, Some(post_id), None).await.unwrap_or(false) {
+                let now = chrono::Utc::now().timestamp();
+                let notif_id = generate_id();
 
-            // ponytail: create_notification doesn't return rows_affected, so we
-            // always attempt the push notification. Duplicate notifications are
-            // prevented by the unique ID.
-            fieldwork_db::notifications_db::create_notification(
-                &state.pool,
-                &fieldwork_db::notifications_db::NotificationRow {
-                    id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID,
-                    persona_id: account_id,
-                    kind: "favourite".to_string(),
-                    from_persona_id: None,
-                    from_remote_account_id: Some(remote.id),
-                    post_id: Some(post_id),
-                    remote_post_id: None,
-                    created_at: now,
-                    read_at: None,
-                },
-            ).await?;
+                fieldwork_db::notifications_db::create_notification(
+                    &state.pool,
+                    &fieldwork_db::notifications_db::NotificationRow {
+                        id: notif_id,
+                        user_id: crate::db::DEFAULT_USER_ID,
+                        persona_id: account_id,
+                        kind: "favourite".to_string(),
+                        from_persona_id: None,
+                        from_remote_account_id: Some(remote.id),
+                        post_id: Some(post_id),
+                        remote_post_id: None,
+                        created_at: now,
+                        read_at: None,
+                    },
+                ).await?;
 
-            {
-                // Fire-and-forget push notification
-                let pool = state.pool.clone();
-                let actor = remote.actor_uri.clone();
-                let push_domain = state.config.server.domain.clone();
-                let push_account_id = account_id;
-                tokio::spawn(async move {
-                    crate::push::send_push_notification(
-                        &pool,
-                        push_account_id,
-                        "favourite",
-                        "New favourite",
-                        &actor,
-                        None,
-                        &push_domain,
-                    )
-                    .await;
-                });
+                {
+                    // Fire-and-forget push notification
+                    let pool = state.pool.clone();
+                    let actor = remote.actor_uri.clone();
+                    let push_domain = state.config.server.domain.clone();
+                    let push_account_id = account_id;
+                    tokio::spawn(async move {
+                        crate::push::send_push_notification(
+                            &pool,
+                            push_account_id,
+                            "favourite",
+                            "New favourite",
+                            &actor,
+                            None,
+                            &push_domain,
+                        )
+                        .await;
+                    });
+                }
             }
         }
 
@@ -1364,43 +1385,45 @@ async fn handle_announce(
 
     if let Some((post_id, account_id)) = post_row {
         if !is_blocked_or_muted(&state.pool, account_id, remote.id).await? {
-            let now = chrono::Utc::now().timestamp();
-            let notif_id = generate_id();
+            if !crate::db_extras::notification_exists(&state.pool, account_id, "reblog", remote.id, Some(post_id), None).await.unwrap_or(false) {
+                let now = chrono::Utc::now().timestamp();
+                let notif_id = generate_id();
 
-            fieldwork_db::notifications_db::create_notification(
-                &state.pool,
-                &fieldwork_db::notifications_db::NotificationRow {
-                    id: notif_id,
-                    user_id: crate::db::DEFAULT_USER_ID,
-                    persona_id: account_id,
-                    kind: "reblog".to_string(),
-                    from_persona_id: None,
-                    from_remote_account_id: Some(remote.id),
-                    post_id: Some(post_id),
-                    remote_post_id: None,
-                    created_at: now,
-                    read_at: None,
-                },
-            ).await?;
+                fieldwork_db::notifications_db::create_notification(
+                    &state.pool,
+                    &fieldwork_db::notifications_db::NotificationRow {
+                        id: notif_id,
+                        user_id: crate::db::DEFAULT_USER_ID,
+                        persona_id: account_id,
+                        kind: "reblog".to_string(),
+                        from_persona_id: None,
+                        from_remote_account_id: Some(remote.id),
+                        post_id: Some(post_id),
+                        remote_post_id: None,
+                        created_at: now,
+                        read_at: None,
+                    },
+                ).await?;
 
-            {
-                // Fire-and-forget push notification
-                let pool = state.pool.clone();
-                let actor = remote.actor_uri.clone();
-                let push_domain = state.config.server.domain.clone();
-                let push_account_id = account_id;
-                tokio::spawn(async move {
-                    crate::push::send_push_notification(
-                        &pool,
-                        push_account_id,
-                        "reblog",
-                        "New boost",
-                        &actor,
-                        None,
-                        &push_domain,
-                    )
-                    .await;
-                });
+                {
+                    // Fire-and-forget push notification
+                    let pool = state.pool.clone();
+                    let actor = remote.actor_uri.clone();
+                    let push_domain = state.config.server.domain.clone();
+                    let push_account_id = account_id;
+                    tokio::spawn(async move {
+                        crate::push::send_push_notification(
+                            &pool,
+                            push_account_id,
+                            "reblog",
+                            "New boost",
+                            &actor,
+                            None,
+                            &push_domain,
+                        )
+                        .await;
+                    });
+                }
             }
         }
 

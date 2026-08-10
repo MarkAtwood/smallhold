@@ -57,11 +57,10 @@ fn is_private_host(host: &str) -> bool {
         || host.ends_with(".internal")
 }
 
-// ponytail: DNS rebinding is not mitigated. To fully prevent it, we'd need
-// to pin DNS responses or use a custom resolver that validates IPs after
-// resolution. The SSRF check on URL parsing catches direct IP literals and
-// known hostnames but not DNS rebinding attacks. Acceptable risk for a
-// single-operator server.
+// SECURITY: DNS rebinding is NOT mitigated. An attacker's domain can resolve
+// to a public IP during validation, then re-resolve to a private IP during
+// the actual connection. Mitigation requires pinning DNS responses or using
+// a custom resolver. Accepted risk for single-operator deployment.
 pub fn validate_outbound_url(url: &url::Url) -> Result<(), anyhow::Error> {
     let host = url.host_str().ok_or_else(|| anyhow!("URL has no host"))?;
     if is_private_host(host) {

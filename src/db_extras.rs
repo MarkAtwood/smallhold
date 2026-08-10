@@ -542,6 +542,29 @@ pub async fn insert_remote_mention(pool: &fieldwork_db::db::Pool, remote_post_id
     Ok(())
 }
 
+/// Check if a notification already exists (dedup for favourite/reblog).
+pub async fn notification_exists(
+    pool: &fieldwork_db::db::Pool,
+    persona_id: i64,
+    kind: &str,
+    from_remote_id: i64,
+    post_id: Option<i64>,
+    remote_post_id: Option<i64>,
+) -> Result<bool, sqlx::Error> {
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT 1 FROM notifications WHERE persona_id = ? AND kind = ? \
+         AND from_remote_account_id = ? AND (post_id = ? OR remote_post_id = ?) LIMIT 1",
+    )
+    .bind(persona_id)
+    .bind(kind)
+    .bind(from_remote_id)
+    .bind(post_id)
+    .bind(remote_post_id)
+    .fetch_optional(sq(pool))
+    .await?;
+    Ok(row.is_some())
+}
+
 /// Check if a mention notification already exists.
 pub async fn mention_notification_exists(pool: &fieldwork_db::db::Pool, persona_id: i64, remote_post_id: i64) -> Result<bool, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as(

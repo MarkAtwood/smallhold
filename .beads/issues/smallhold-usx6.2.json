@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-usx6.2",
+  "title": "No replay protection on signed inbox deliveries",
+  "description": "inbox.rs verify path accepts the same signed request repeatedly. No nonce tracking, no request dedup. An attacker can capture and replay valid signed activities within the Date freshness window.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:52:29.61513508Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:56:52.273990045Z",
+  "started_at": "2026-08-10T00:52:58.432144424Z",
+  "closed_at": "2026-08-10T00:56:52.273990045Z",
+  "close_reason": "Fixed and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-usx6.2",
+      "depends_on_id": "smallhold-usx6",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:52:29.633595386Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

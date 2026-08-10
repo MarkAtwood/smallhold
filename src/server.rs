@@ -1,5 +1,6 @@
 use crate::config::Config;
-use axum::{routing::get, Json, Router};
+use axum::response::Response;
+use axum::{middleware, routing::get, Json, Router};
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -7,6 +8,21 @@ pub struct AppState {
     pub config: Config,
     pub pool: fieldwork_db::db::Pool,
     pub search: Option<std::sync::Arc<crate::search::SearchIndex>>,
+}
+
+async fn security_headers(
+    request: axum::http::Request<axum::body::Body>,
+    next: middleware::Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("x-content-type-options", "nosniff".parse().unwrap());
+    headers.insert("x-frame-options", "DENY".parse().unwrap());
+    headers.insert(
+        "referrer-policy",
+        "strict-origin-when-cross-origin".parse().unwrap(),
+    );
+    response
 }
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -36,13 +52,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::bookwyrm_api::routes())
         .merge(crate::writefreely_api::routes())
         .route("/health", get(health))
+        .layer(middleware::from_fn(security_headers))
         .layer(cors)
         .with_state(state)
 }
-
-// ponytail: security headers (X-Frame-Options, X-Content-Type-Options,
-// Referrer-Policy, CSP, Cache-Control, HSTS) delegated to reverse proxy
-// (Caddy/nginx). See docs/deployment.md for required proxy config.
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))

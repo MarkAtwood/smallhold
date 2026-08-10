@@ -460,11 +460,22 @@ struct AuthCompleteRequest {
 
 /// Verify and consume a one-time passkey token. Returns true if valid.
 pub fn verify_passkey_token(token: &str) -> bool {
+    use subtle::ConstantTimeEq;
     let token_hash = hex_encode(&Sha256::digest(token.as_bytes()));
     let now = now_millis();
     let mut map = PASSKEY_TOKENS.lock().unwrap();
-    if let Some(expires) = map.remove(&token_hash) {
-        expires > now
+    // Purge expired entries
+    map.retain(|_, exp| *exp > now);
+    // Constant-time scan: check all entries to avoid timing leak
+    let mut found_key = None;
+    for (k, _) in map.iter() {
+        if k.as_bytes().ct_eq(token_hash.as_bytes()).into() {
+            found_key = Some(k.clone());
+        }
+    }
+    if let Some(key) = found_key {
+        map.remove(&key);
+        true
     } else {
         false
     }
