@@ -1,0 +1,4 @@
+{"id":"019fe931-ed3d-749d-8fe7-f108ad4bd3ba","issue_id":"smallhold-z3ty.75","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:03:11.165303789Z"}
+{"id":"019fe931-ed42-7d29-aa9e-c2578ab3baa5","issue_id":"smallhold-z3ty.75","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-08-10T01:03:11.170863037Z"}
+{"id":"019fe931-ed47-706d-96ac-0305788abf81","issue_id":"smallhold-z3ty.75","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:03:11.175028557Z"}
+{"id":"019fe932-00da-73df-8d7b-7d163f0ca71b","issue_id":"smallhold-z3ty.75","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"This is a documented design decision (comment on line 20-21), not a finding. No-redirect is the correct SSRF-safe default.","created_at":"2026-08-10T01:03:16.186265012Z"}

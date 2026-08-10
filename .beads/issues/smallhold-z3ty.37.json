@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.37",
+  "title": "No zeroize on drop for key material",
+  "description": "Affects all key-handling code across the codebase. The zeroize crate is not used anywhere. Specific instances: (1) federation.rs:540-542 — RSA private key parsed from PEM and used for signing, then dropped without zeroing. (2) push.rs:65-68 — VAPID SigningKey generated and serialized to PEM, original key object dropped without zeroing. (3) push.rs:347-356 — ECDH EphemeralSecret and shared_secret.raw_secret_bytes() IKM dropped without zeroing. (4) push.rs:379 — CEK (content encryption key) stored in [u8; 16] on stack, dropped without zeroing. (5) did.rs:4-10 — Ed25519 SigningKey and private key bytes returned as plain [u8; 32], dropped without zeroing. (6) push.rs:366-368 — HKDF-derived ikm_derived [u8; 32] dropped without zeroing. Impact: keys persist in freed heap/stack memory and could be recovered via memory dumps, core dumps, or swap. Add zeroize dep, use Zeroizing\u003cT\u003e wrapper or implement ZeroizeOnDrop for types holding key material.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:37.432746977Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:37.432746977Z",
+  "labels": [
+    "crypto-security",
+    "key-lifecycle",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.37",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:37.463535601Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

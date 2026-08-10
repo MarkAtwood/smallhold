@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.29",
+  "title": "Redundant id parse in resolve_target",
+  "description": "interactions.rs:139-148. resolve_target() parses id_str as i64 twice — once at line 140 and again at line 148 — with identical error handling. The second parse is unreachable because the first either succeeds (and the function may return at line 145) or fails (and returns Err). The code at line 148 is dead code after a successful first parse that found no local persona.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:21.082903055Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:59.27429401Z",
+  "closed_at": "2026-08-10T01:00:59.27429401Z",
+  "close_reason": "Duplicate of smallhold-z3ty.22",
+  "labels": [
+    "idiomatic-rust",
+    "clippy",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.29",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:21.108864194Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

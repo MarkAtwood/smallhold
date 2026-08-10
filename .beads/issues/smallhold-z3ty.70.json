@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.70",
+  "title": "abstract_text truncation uses chars().take(end) but end is a byte offset",
+  "description": "posting.rs:1170-1178, delivery.rs:348-352. The auto-generated abstract_text for long posts computes 'end' using text.find(\". \") which returns a byte offset. Then it does text.chars().take(end).collect(). The .take(end) treats 'end' as a character count, not a byte offset. For ASCII text this is identical, but for multi-byte UTF-8 text (e.g., CJK, emoji), chars().take(byte_offset) will take fewer characters than intended because byte_offset \u003e char_count for multi-byte text. The abstract will be shorter than expected but not incorrectly truncated. Same pattern exists in delivery.rs:348-352.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:02:29.382889625Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:58.946181307Z",
+  "closed_at": "2026-08-10T03:22:58.946181307Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.70",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:02:29.407278847Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.30",
+  "title": "kw_bytes assigned but only used to suppress warning",
+  "description": "posting.rs:212,231. In keyword_matches(), the variable kw_bytes is assigned on line 212 (let kw_bytes = lower_keyword.as_bytes()) but is never used in the function body. Line 231 has 'let _ = kw_bytes; // suppress unused warning' — a workaround that should be removed by simply not assigning the variable.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:23.540435719Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:23.540435719Z",
+  "labels": [
+    "idiomatic-rust",
+    "iterators",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.30",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:23.570082889Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

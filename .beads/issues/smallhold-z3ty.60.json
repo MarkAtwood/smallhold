@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.60",
+  "title": "photo_gallery URL uses /domain/ prefix instead of /media/",
+  "description": "activitypub.rs:936. In photo_gallery, the image URL is built as format\\!(\"https://{domain}/{}\", m.file_path). The file_path already starts with 'media/' (e.g., 'media/ab/12345.jpg'), so the resulting URL is correct: https://domain/media/ab/12345.jpg. But this relies on the file_path having the 'media/' prefix. If file_path ever changes to not include 'media/', the URLs will break. Compare with other locations like posting.rs:1407 which use format\\!(\"https://{domain}/media/{file_path}\") — which would produce a double 'media/media/' prefix. The codebase uses inconsistent URL construction patterns for media, making it fragile.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:51.478945843Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:01:51.478945843Z",
+  "labels": [
+    "risk",
+    "maintainer-burden",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.60",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:51.510529558Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

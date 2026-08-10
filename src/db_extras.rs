@@ -528,6 +528,20 @@ pub async fn delete_follow_requests_from_remote(pool: &fieldwork_db::db::Pool, r
     Ok(())
 }
 
+/// Delete a follower relationship for a specific persona and remote account.
+pub async fn delete_follower_scoped(pool: &fieldwork_db::db::Pool, persona_id: i64, remote_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM followers WHERE persona_id = ? AND remote_account_id = ?")
+        .bind(persona_id).bind(remote_id).execute(sq(pool)).await?;
+    Ok(())
+}
+
+/// Delete follows from a specific persona to a remote account.
+pub async fn delete_follows_to_remote_scoped(pool: &fieldwork_db::db::Pool, persona_id: i64, remote_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM follows WHERE persona_id = ? AND followee_remote_id = ?")
+        .bind(persona_id).bind(remote_id).execute(sq(pool)).await?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Mentions and notifications for inbox processing
 // ---------------------------------------------------------------------------

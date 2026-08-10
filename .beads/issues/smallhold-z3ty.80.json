@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.80",
+  "title": "import id_from_timestamp can overflow to negative IDs",
+  "description": "import.rs:446-453. The id_from_timestamp function computes (published_ms as u64) \u003c\u003c 16 | (seq as u64 \u0026 0xFFFF)) as i64. For timestamps after ~2004 (ms \u003e 2^47), shifting left by 16 produces values \u003e i64::MAX, causing the cast to i64 to produce negative values. Current epoch is ~1.7e12 ms, shifted left 16 = ~1.1e17, which is safely positive. However, if the import archive contains posts from far in the future (crafted data), or if the code is used after year ~4147, IDs will wrap negative. More immediately, if seq overflows u32::MAX (4 billion posts with identical timestamps), the saturating_add prevents further increment but all such posts get the same ID.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:04:23.502149135Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:04:28.447687786Z",
+  "closed_at": "2026-08-10T01:04:28.447687786Z",
+  "close_reason": "Not practical. Overflow occurs in year 4147. Seq overflow requires 4B posts at identical ms. No real-world archive has this.",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.80",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:04:23.553465763Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

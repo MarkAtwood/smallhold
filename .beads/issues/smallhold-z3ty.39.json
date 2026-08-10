@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.39",
+  "title": "now_millis() truncates to i64 silently",
+  "description": "api.rs:50-52. The now_millis() function casts .as_millis() (u128) to i64. Currently this is safe because millis since epoch won't exceed i64::MAX until year 292,278,994. However, the same pattern in id.rs (via fieldwork) uses the millis value as a snowflake ID component shifted left by 16 bits. If millis * 65536 exceeds i64::MAX, IDs would wrap to negative. At the current epoch (~1.7e12 ms), shifted left 16 bits = ~1.1e17, well within i64::MAX (9.2e18). Not a current bug, documenting for completeness.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:38.261564195Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:44.29022185Z",
+  "closed_at": "2026-08-10T01:00:44.29022185Z",
+  "close_reason": "Not a real bug. i64 holds millis until year 292M. The snowflake shift is also safe for millennia. No engineering basis.",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.39",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:38.285925919Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

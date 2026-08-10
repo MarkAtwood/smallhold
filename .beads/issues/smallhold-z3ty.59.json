@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.59",
+  "title": "WebAuthn passkey implementation is production-quality",
+  "description": "src/webauthn.rs. The implementation covers registration, authentication, and credential counter updates (preventing replay). Challenge state is stored in the DB with TTL-based expiry. One-time passkey tokens use constant-time comparison (subtle::ConstantTimeEq) and are consumed after single use. The token store is in-memory (acceptable for 2-min TTL). Admin password is required for registration (prevents unauthorized passkey enrollment). Tests cover the security-critical paths: token consumption, expiry, rejection of invalid tokens.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:45.964792536Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.465886312Z",
+  "closed_at": "2026-08-10T03:17:39.465886312Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.59",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:45.985666344Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

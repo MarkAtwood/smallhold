@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.6",
+  "title": "SEEN_DIGESTS HashMap grows unbounded between purges",
+  "description": "src/inbox.rs:20-22. The SEEN_DIGESTS static HashMap is purged lazily during verify_and_fetch_actor (line 611), but only when a new delivery arrives. Under sustained traffic this is fine, but if traffic stops after a burst, entries linger until the next delivery. More importantly, retain() iterates the entire map on every inbound delivery — O(n) where n is the number of entries accumulated in the 10-minute window. For a single-user server receiving maybe dozens of deliveries per minute this is completely fine, but the growth pattern is worth noting. No action needed for current scale.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:29.9287569Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:45.991315295Z",
+  "closed_at": "2026-08-10T03:17:45.991315295Z",
+  "close_reason": "Duplicate of .1",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.6",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:29.951924733Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

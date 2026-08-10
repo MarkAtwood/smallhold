@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-z3ty.78",
+  "title": "GET /api/v1/media/{id} lacks authentication",
+  "description": "media.rs:367-382. The get_media endpoint has no auth requirement. Any unauthenticated user can query metadata (URL, description, blurhash, dimensions) for any media attachment by ID. Media IDs are snowflake IDs which are partially predictable (timestamp-based). An attacker can enumerate recent uploads by scanning IDs near the current timestamp. The URL field reveals the file path on disk. The Mastodon API specifies this endpoint as requiring authentication.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:04:03.23896617Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:04:03.23896617Z",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.78",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:04:03.274171782Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-z3ty.56",
+  "title": "Media file_path used in URLs without validation",
+  "description": "activitypub.rs:711-713, media.rs:57, posting.rs:810-811. Media file_path values from the database are interpolated directly into URL paths (e.g., format\\!(\"https://{domain}/media/{}\", m.file_path)). If a file_path contained path traversal sequences like '../../../etc/passwd', it would generate a URL pointing to arbitrary files. The file_path is set during upload (media.rs:221, format 'media/{prefix}/{id}.{ext}') where prefix and id are hex/numeric and ext comes from sniff_mime validation, so current write paths are safe. But imported media (import.rs:391) uses the original filename's extension. An archive with a crafted filename could produce an unexpected file_path.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:33.753997163Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:01:33.753997163Z",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.56",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:33.776969477Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

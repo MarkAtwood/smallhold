@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-z3ty.33",
+  "title": "DNS rebinding SSRF caveat buried in comment",
+  "description": "src/federation.rs:60-63. The comment at line 60 documents that DNS rebinding is NOT mitigated. This is an important security limitation — an attacker's domain can resolve to a public IP during validate_outbound_url() but re-resolve to a private IP during the actual reqwest connection. The comment is correct but should be elevated: a tracing::warn on startup or in the Config validation would make this visible in operator logs rather than only to source readers.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:29.93660082Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:29.93660082Z",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.33",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:29.96207535Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

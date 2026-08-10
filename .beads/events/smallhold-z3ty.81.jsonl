@@ -1,0 +1,4 @@
+{"id":"019fe933-3c0f-7b52-986b-aa1a22567e73","issue_id":"smallhold-z3ty.81","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:04:36.879742617Z"}
+{"id":"019fe933-3c12-7aaf-975d-a747c318fabe","issue_id":"smallhold-z3ty.81","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-08-10T01:04:36.882700684Z"}
+{"id":"019fe933-3c15-7ac5-88e3-1082ac8eb775","issue_id":"smallhold-z3ty.81","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:04:36.885706169Z"}
+{"id":"019fe933-5030-7a06-be45-f7f58b6a6d19","issue_id":"smallhold-z3ty.81","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already documented as accepted risk in federation.rs:60-63. Same DNS rebinding vector as federation, same mitigation status.","created_at":"2026-08-10T01:04:42.032659521Z"}

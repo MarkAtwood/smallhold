@@ -708,9 +708,7 @@ async fn ap_status(
     let attachments: Vec<Value> = media
         .iter()
         .map(|m| {
-            let media_url = format!("https://{domain}/media/{}/{}.{}",
-                persona.id, m.id,
-                m.mime_type.split('/').nth(1).unwrap_or("bin"));
+            let media_url = format!("https://{domain}/{}", m.file_path);
             json!({
                 "type": "Document",
                 "mediaType": m.mime_type,

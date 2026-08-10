@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.8",
+  "title": "OAuth tokens use thread_rng not OsRng",
+  "description": "api.rs:62-66,69-73. Both random_hex() and random_bytes_b64url() use rand::thread_rng() to generate OAuth client_id, client_secret, authorization codes, and access tokens. These are security-critical secrets. While rand 0.8 thread_rng is CSPRNG (ChaCha12 seeded from OsRng), best practice for security tokens is OsRng. The same issue exists in webauthn.rs:55-59 (challenge IDs and passkey tokens) and cli.rs:658 (minted tokens).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:36.240477038Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:49.245897805Z",
+  "closed_at": "2026-08-10T00:59:49.245897805Z",
+  "close_reason": "rand 0.8 thread_rng() is CSPRNG (ChaCha12 seeded from OsRng). No real confidentiality/integrity impact -- style preference only.",
+  "labels": [
+    "crypto-security",
+    "rng",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.8",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:36.2720766Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

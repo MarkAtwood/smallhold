@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.43",
+  "title": "Error type design is clean and consistent",
+  "description": "src/error.rs:1-96. AppError is a simple status+message struct with named constructors (bad_request, not_found, etc.) that maps cleanly to JSON error bodies via IntoResponse. The From\u003csqlx::Error\u003e and From\u003canyhow::Error\u003e impls log the real error but return a generic 'Internal server error' to the client — correct information hygiene. Every handler returns Result\u003c_, AppError\u003e. No unwrap() in request-reachable paths. This is a well-designed error boundary.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:52.597704533Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.3167689Z",
+  "closed_at": "2026-08-10T03:17:39.3167689Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.43",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:52.618608575Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

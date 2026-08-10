@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.47",
+  "title": "Replay protection bypassed on cached-key path",
+  "description": "inbox.rs:576-584. This is a duplicate/confirmation of smallhold-z3ty.2 from the crypto review perspective. When verify_and_fetch_actor succeeds via the cached key (lines 577-584), it returns early BEFORE the replay detection block at lines 602-616. This means a replayed HTTP POST to the inbox with an identical Date/Digest/Signature will be accepted as long as: (1) the remote actor's key is cached (common case), and (2) the Date is within the ±5 minute freshness window. The attacker need only capture and replay a legitimate signed request. This is an integrity issue: replayed Follow, Like, Announce activities will create duplicate notifications and state mutations. The replay detection hash (actor:date:digest) MUST be checked unconditionally before returning from verify_and_fetch_actor.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:00.519767083Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:01:04.666725545Z",
+  "closed_at": "2026-08-10T01:01:04.666725545Z",
+  "close_reason": "Duplicate of smallhold-z3ty.2. Confirmed from crypto review — same finding.",
+  "labels": [
+    "crypto-security",
+    "side-channel",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.47",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:00.547963382Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

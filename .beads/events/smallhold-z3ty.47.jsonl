@@ -1,0 +1,5 @@
+{"id":"019fe92f-eeeb-71d1-896c-1744d0aabc21","issue_id":"smallhold-z3ty.47","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:01:00.523119779Z"}
+{"id":"019fe92f-eeee-73cc-b5b4-2818f3a37b85","issue_id":"smallhold-z3ty.47","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: crypto-security","created_at":"2026-08-10T01:01:00.526249291Z"}
+{"id":"019fe92f-eef1-7065-b405-d4d25087aee0","issue_id":"smallhold-z3ty.47","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: side-channel","created_at":"2026-08-10T01:01:00.529026202Z"}
+{"id":"019fe92f-eef3-7aa4-b584-be158a55ce54","issue_id":"smallhold-z3ty.47","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:01:00.531697753Z"}
+{"id":"019fe92f-ff20-7bc6-8404-ed69f9db85b2","issue_id":"smallhold-z3ty.47","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of smallhold-z3ty.2. Confirmed from crypto review — same finding.","created_at":"2026-08-10T01:01:04.672772775Z"}

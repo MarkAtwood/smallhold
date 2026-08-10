@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.45",
+  "title": "Ponytail comments are genuinely useful engineering documentation",
+  "description": "Throughout the codebase (grep -c 'ponytail:' src/*.rs shows ~20 instances). Each ponytail comment names the specific simplification, states the known ceiling (e.g. 'O(n) scan is fine for single-digit passkey count'), and describes the upgrade path. These are not TODOs — they are architectural decision records inline at the decision site. This is the right way to document intentional technical debt.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:56.028724579Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.346907424Z",
+  "closed_at": "2026-08-10T03:17:39.346907424Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.45",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:56.05132006Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

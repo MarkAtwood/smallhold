@@ -1,0 +1,5 @@
+{"id":"019fe92e-9813-7e74-b441-0a3598e6b517","issue_id":"smallhold-z3ty.7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T00:59:32.755947981Z"}
+{"id":"019fe92e-9816-7933-afda-e2c8fd24c396","issue_id":"smallhold-z3ty.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: crypto-security","created_at":"2026-08-10T00:59:32.758603234Z"}
+{"id":"019fe92e-9819-74f8-b73d-3aa010cf680e","issue_id":"smallhold-z3ty.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rng","created_at":"2026-08-10T00:59:32.761326086Z"}
+{"id":"019fe92e-981c-7158-af7a-3bcf612fc91a","issue_id":"smallhold-z3ty.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T00:59:32.76408865Z"}
+{"id":"019fe92e-d6cf-722b-ad25-c4320dc08bb1","issue_id":"smallhold-z3ty.7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"rand 0.8 thread_rng() is CSPRNG (ChaCha12 seeded from OsRng). No real confidentiality/integrity impact -- style preference only.","created_at":"2026-08-10T00:59:48.815143019Z"}

@@ -103,13 +103,20 @@ async fn update_post(
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    // Auth: either valid edit token or authenticated user
+    // Auth: either valid edit token or authenticated owner
     let token_ok = match (&body.token, &article.edit_token) {
         (Some(provided), Some(stored)) => provided == stored,
         _ => false,
     };
-    if !token_ok && auth.is_none() {
-        return Err(AppError::unauthorized("Authentication required"));
+    if !token_ok {
+        match &auth {
+            Some(a) => {
+                if article.persona_id != a.account_id {
+                    return Err(AppError::forbidden("You do not own this post"));
+                }
+            }
+            None => return Err(AppError::unauthorized("Authentication required")),
+        }
     }
     if let Some(ref provided) = body.token {
         if article.edit_token.as_deref() != Some(provided) {
@@ -166,13 +173,20 @@ async fn delete_post(
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Post not found"))?;
 
-    // Auth: either valid edit token or authenticated user
+    // Auth: either valid edit token or authenticated owner
     let token_ok = match (&query.token, &article.edit_token) {
         (Some(provided), Some(stored)) => provided == stored,
         _ => false,
     };
-    if !token_ok && auth.is_none() {
-        return Err(AppError::unauthorized("Authentication required"));
+    if !token_ok {
+        match &auth {
+            Some(a) => {
+                if article.persona_id != a.account_id {
+                    return Err(AppError::forbidden("You do not own this post"));
+                }
+            }
+            None => return Err(AppError::unauthorized("Authentication required")),
+        }
     }
     if let Some(ref provided) = query.token {
         if article.edit_token.as_deref() != Some(provided) {

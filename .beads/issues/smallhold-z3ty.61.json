@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.61",
+  "title": "Media upload pipeline has solid security layering",
+  "description": "src/media.rs:161-295. The upload pipeline: (1) limits body size to configured max_media_mb, (2) sniffs MIME from magic bytes rather than trusting Content-Type, (3) re-encodes the image through fieldwork::media_processing which strips EXIF/metadata, (4) caps dimensions to 4096px, (5) generates blurhash server-side, (6) writes a .meta sidecar for recovery. Step 3 is the most important — re-encoding prevents polyglot attacks (JPEG that's also valid HTML/JS). This is defense in depth done right.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:53.65010293Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.496984182Z",
+  "closed_at": "2026-08-10T03:17:39.496984182Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.61",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:53.673893487Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

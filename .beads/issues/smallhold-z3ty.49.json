@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.49",
+  "title": "CORS allows any origin with credentials",
+  "description": "server.rs:29-33. The CorsLayer is configured with allow_origin(Any), allow_methods(Any), allow_headers(Any), expose_headers(Any). This allows any website to make credentialed requests to the API. While axum/tower-http's CorsLayer with Any origin will NOT set Access-Control-Allow-Credentials: true (it only reflects the origin when credentials are allowed), the overly broad CORS policy still allows any website to read public API responses (instance metadata, public posts, etc). For a fediverse server this is expected behavior, but it would also allow any website to perform authenticated requests if the browser sends cookies — though smallhold uses Bearer tokens, not cookies, so this is mitigated.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:07.781708825Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:01:14.566976012Z",
+  "closed_at": "2026-08-10T01:01:14.566976012Z",
+  "close_reason": "CORS Any is standard for Mastodon-compatible APIs. Clients like Elk, Phanpy, Ivory run on different origins. Bearer token auth means cookies are not at risk.",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.49",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:07.807130454Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

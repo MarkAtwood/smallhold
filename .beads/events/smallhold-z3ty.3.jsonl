@@ -1,0 +1,4 @@
+{"id":"019fe92e-51a0-7b05-886c-40ffbf87a728","issue_id":"smallhold-z3ty.3","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T00:59:14.720722832Z"}
+{"id":"019fe92e-51a3-7e5e-9ae4-fa269ffb4ede","issue_id":"smallhold-z3ty.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-08-10T00:59:14.723942028Z"}
+{"id":"019fe92e-51a6-7c39-8c27-2be35a5df3b3","issue_id":"smallhold-z3ty.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T00:59:14.726801619Z"}
+{"id":"019fe92e-6357-7640-8b90-a1a6e2989fa5","issue_id":"smallhold-z3ty.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Not a bug — the enforcement at lines 544-548 makes this path unreachable. The misleading comment is cosmetic, not a code review finding.","created_at":"2026-08-10T00:59:19.255410239Z"}

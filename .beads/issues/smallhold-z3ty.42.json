@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.42",
+  "title": "Defensive input handling in inbox is consistently applied",
+  "description": "src/inbox.rs:25-28, 129-141, 622-658. Length caps (MAX_CONTENT_LEN, MAX_SPOILER_LEN, MAX_URI_LEN, MAX_LANGUAGE_LEN) are defined as constants and applied at the boundary via truncate_str(). JSON depth is checked before parsing. HTML is sanitized via ammonia on ingest, not render. Visibility is derived from addressing rather than trusting the remote server's visibility field. These are exactly the right patterns for processing untrusted ActivityPub payloads.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:45.831865009Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.284034753Z",
+  "closed_at": "2026-08-10T03:17:39.284034753Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.42",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:45.858928559Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

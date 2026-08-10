@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.77",
+  "title": "get_list checks user_id but field is actually persona_id",
+  "description": "api.rs:1286. In get_list, the list ownership check is l.user_id == auth.account_id. The auth.account_id is the persona ID (from the token -\u003e persona mapping). If lists_db stores the persona_id in user_id column, this works correctly. But if user_id is the tenant user ID (DEFAULT_USER_ID = 1000000000001), the comparison will always fail since auth.account_id is a persona ID. The same pattern appears in get_list_accounts (line 1374), add_list_accounts (line 1412), remove_list_accounts (line 1444), delete_list (line 1350), update_list (line 1317), and filter operations. All depend on whether fieldwork stores persona_id or tenant user_id in the user_id column.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:03:41.847195012Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:03:56.037467941Z",
+  "closed_at": "2026-08-10T01:03:56.037467941Z",
+  "close_reason": "create_list and get_lists both use auth.account_id consistently. The ownership check is correct as long as fieldwork stores the same value in user_id that it filters by. The naming is confusing but not a bug.",
+  "labels": [
+    "risk",
+    "maintainer-burden",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.77",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:03:41.898342917Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -245,14 +245,21 @@ pub struct AuthenticatedAccount {
 impl AuthenticatedAccount {
     /// Check that the token's scopes include the required scope.
     /// A token with "read write" (full access) passes any check.
+    /// A parent scope also satisfies child checks (e.g. "write" satisfies "write:statuses").
     pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
-        if self.scopes.split(|c: char| c.is_whitespace() || c == ',').any(|s| s == scope) {
-            Ok(())
-        } else {
-            Err(AppError::forbidden(format!(
-                "This action requires the '{scope}' scope"
-            )))
+        let scopes = || self.scopes.split(|c: char| c.is_whitespace() || c == ',');
+        if scopes().any(|s| s == scope) {
+            return Ok(());
         }
+        // Check parent scope: "write:statuses" is satisfied by "write"
+        if let Some(parent) = scope.split(':').next() {
+            if parent != scope && scopes().any(|s| s == parent) {
+                return Ok(());
+            }
+        }
+        Err(AppError::forbidden(format!(
+            "This action requires the '{scope}' scope"
+        )))
     }
 }
 

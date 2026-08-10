@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-z3ty.34",
+  "title": "render_content XSS via mention/hashtag replacement in sanitized HTML",
+  "description": "posting.rs:388-415. The render_content function sanitizes HTML via ammonia (line 382), then does string replacements on the sanitized output to inject mention and hashtag links. The replacement at line 403 uses html.replacen() to inject \u003cspan\u003e and \u003ca\u003e tags with href values derived from mention.username and mention.domain. These values come from user input (the post text) and are not HTML-escaped before insertion into the href attribute. A crafted @username or #hashtag containing double-quote characters could break out of the href attribute. However, the regex patterns (parse_mentions on line 464, parse_hashtags on line 488) only match [a-zA-Z0-9_-] and [a-zA-Z0-9.-], preventing injection characters. The risk is that a future regex change could widen the character class.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:30.020899602Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:30.020899602Z",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.34",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:30.041195599Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

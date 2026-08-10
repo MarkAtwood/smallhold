@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.48",
+  "title": "SSRF protection is consistently applied across all outbound HTTP",
+  "description": "src/federation.rs:29-73, src/cards.rs:20-26,42, src/push.rs:264-268, src/delivery.rs:192-195. Every path that makes an outbound HTTP request goes through validate_outbound_url(): federation fetches, card fetches, push notification delivery, and activity delivery. The card client additionally disables redirects to prevent redirect-based SSRF bypass. The is_private_host() function covers IPv4 private ranges, IPv6 ULA, link-local, CGNAT (100.64/10), and loopback — comprehensive coverage.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:05.031320359Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.374922011Z",
+  "closed_at": "2026-08-10T03:17:39.374922011Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.48",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:05.052815106Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

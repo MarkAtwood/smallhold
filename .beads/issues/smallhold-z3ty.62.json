@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.62",
+  "title": "File-backed content with fallback is a good storage pattern",
+  "description": "src/posting.rs:22-83. Posts larger than 4KB have their content/HTML written to separate files (content/{prefix}/{id}.md and .html) with the DB row storing only the relative path. resolve_content() falls back to inline DB values on any read error. This gracefully degrades if files are lost, and the .meta sidecar alongside each content pair enables independent recovery. The threshold (4KB) is well-chosen — SQLite performance degrades for large TEXT columns.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:58.529854691Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.527136915Z",
+  "closed_at": "2026-08-10T03:17:39.527136915Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.62",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:58.55722018Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

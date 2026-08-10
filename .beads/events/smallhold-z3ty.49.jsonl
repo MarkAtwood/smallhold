@@ -1,0 +1,4 @@
+{"id":"019fe930-0b49-7277-9b56-c105d4c6fc6b","issue_id":"smallhold-z3ty.49","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:01:07.785162436Z"}
+{"id":"019fe930-0b4c-799d-8a4c-f984c27585da","issue_id":"smallhold-z3ty.49","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-08-10T01:01:07.788631045Z"}
+{"id":"019fe930-0b4f-771c-9a1c-824253c93877","issue_id":"smallhold-z3ty.49","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:01:07.791466498Z"}
+{"id":"019fe930-25ca-764c-9304-7705c1a1fc07","issue_id":"smallhold-z3ty.49","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"CORS Any is standard for Mastodon-compatible APIs. Clients like Elk, Phanpy, Ivory run on different origins. Bearer token auth means cookies are not at risk.","created_at":"2026-08-10T01:01:14.570413304Z"}

@@ -1,0 +1,4 @@
+{"id":"019fe92f-97f8-7896-b7a3-06953e86f678","issue_id":"smallhold-z3ty.39","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:00:38.26456345Z"}
+{"id":"019fe92f-97fb-7764-b919-0aa482f2d97e","issue_id":"smallhold-z3ty.39","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-08-10T01:00:38.267484872Z"}
+{"id":"019fe92f-97fe-7263-ac77-a858cf23bf05","issue_id":"smallhold-z3ty.39","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:00:38.27015677Z"}
+{"id":"019fe92f-af87-77fe-b480-124034efb250","issue_id":"smallhold-z3ty.39","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Not a real bug. i64 holds millis until year 292M. The snowflake shift is also safe for millennia. No engineering basis.","created_at":"2026-08-10T01:00:44.295524468Z"}

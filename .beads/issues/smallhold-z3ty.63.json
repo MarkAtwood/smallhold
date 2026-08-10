@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.63",
+  "title": "Duplicate mention notifications for tag+DM recipients",
+  "description": "inbox.rs:1000-1061,1082-1139. When handling a Create activity for a 'direct' visibility Note, the code first processes tags (lines 1001-1061) creating mention notifications for local users found in Mention tags, then processes to/cc recipients (lines 1082-1139) also creating mention notifications. The DM path at line 1091 checks mention_notification_exists to avoid duplicates, but insert_remote_mention at line 1088 is called without dedup — if the same persona was already mentioned via the tag array, a duplicate mention row is inserted (unless there's a unique constraint). The notification dedup on line 1091 prevents double notifications, but the duplicate mention row could cause issues in mention-count queries.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:59.979931105Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:58.905048268Z",
+  "closed_at": "2026-08-10T03:22:58.905048268Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.63",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:02:00.005805803Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

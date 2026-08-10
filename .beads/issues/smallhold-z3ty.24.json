@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.24",
+  "title": "require_scope does not check parent scopes",
+  "description": "api.rs:248-256. The require_scope method checks for exact string match of the scope. A token with scope 'read write' will match checks for 'read' or 'write' (individual words). But a check for 'write:statuses' will fail because the scope string only contains 'write', not 'write:statuses'. The Mastodon API uses hierarchical scopes where 'write' grants all 'write:*' sub-scopes. Currently no callers use sub-scopes (all checks are for 'write' or 'read'), but when a contributor adds a check for 'write:statuses' or 'read:accounts', it will incorrectly reject tokens with the parent scope.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:10.495224408Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:58.786028659Z",
+  "closed_at": "2026-08-10T03:22:58.786028659Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.24",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:10.520460774Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

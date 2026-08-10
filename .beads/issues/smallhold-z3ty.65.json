@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.65",
+  "title": "Streaming SSE/WS leak data across personas",
+  "description": "streaming.rs:86,128-133. The resolve_channel function maps 'public' to the literal channel 'public'. The SSE handler at line 128-133 filters events by channel == resolved. But publish() in inbox.rs:992-997 publishes to channel 'public' for any visibility=='public' post from any remote actor. The streaming user sees all public-timeline events regardless of which persona they authenticated as. For a single-user server this is fine, but if multiple personas are configured, one persona's authenticated streaming client sees events published for all personas' timelines. The 'user:{account_id}' channel is correctly scoped, but the 'public' channel is global.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:02:08.986200224Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:02:14.124960929Z",
+  "closed_at": "2026-08-10T01:02:14.124960929Z",
+  "close_reason": "This is correct Mastodon behavior. The public timeline shows all public posts from all users. This is by design in the Mastodon streaming API.",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.65",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:02:09.013732762Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.5",
+  "title": "VAPID key uses thread_rng not OsRng",
+  "description": "push.rs:65. SigningKey::random(\u0026mut rand::thread_rng()) generates the long-lived VAPID signing key using thread_rng() instead of OsRng. While rand 0.8 thread_rng is CSPRNG (ChaCha12 seeded from OsRng), the VAPID private key is a persistent server identity key stored in the database. Best practice for long-lived key generation is to use OsRng directly, matching the pattern already used in did.rs:8 and cli.rs:496. The ephemeral key generation at push.rs:347 (EphemeralSecret::random) is also thread_rng but is less concerning since those are per-message ephemeral keys.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:29.888182685Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:48.030432193Z",
+  "closed_at": "2026-08-10T00:59:48.030432193Z",
+  "close_reason": "rand 0.8 thread_rng() is CSPRNG (ChaCha12 seeded from OsRng). No real confidentiality/integrity impact -- style preference only.",
+  "labels": [
+    "crypto-security",
+    "rng",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.5",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:29.915039588Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

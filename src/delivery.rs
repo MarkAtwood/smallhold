@@ -348,11 +348,11 @@ async fn create_scheduled_post(
             .map(|i| i + 1)
             .unwrap_or_else(|| text.len().min(200));
         let end = first_sentence_end.min(200);
-        let truncated: String = text.chars().take(end).collect();
+        let truncated = &text[..end]; // byte slice — safe because find() returns byte offsets on ASCII delimiters
         if truncated.len() < text.len() {
             Some(format!("{truncated}..."))
         } else {
-            Some(truncated)
+            Some(truncated.to_string())
         }
     } else {
         None

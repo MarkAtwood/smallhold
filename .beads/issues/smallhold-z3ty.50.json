@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.50",
+  "title": "Circuit breaker in delivery worker prevents thundering herd",
+  "description": "src/delivery.rs:37,147-153,233-257. The delivery worker uses a fieldwork CircuitBreaker to track failing domains. Deliveries to domains with open circuit breakers are skipped entirely (line 149), preventing retry storms against down servers. Success resets the breaker; client errors get one retry then mark dead; server errors use backoff. 410 Gone correctly does not trigger the circuit breaker (it's resource-specific, not domain-wide). This is production-quality delivery behavior.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:09.300193829Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.403025517Z",
+  "closed_at": "2026-08-10T03:17:39.403025517Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.50",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:09.320900253Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

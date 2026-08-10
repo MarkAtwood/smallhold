@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.3",
+  "title": "Digest verification only when signature lists digest",
+  "description": "inbox.rs:381-398. The build_signed_string function only verifies the Digest header when 'digest' appears in the signature's headers_list. However, verify_and_fetch_actor at lines 544-548 already enforces that 'digest' must be in the headers_list. The real issue is the logic at lines 389-398: when the Digest header IS present, the code recomputes the digest and compares — but then uses the *computed* digest (not the header value) in the signed string. This is correct for verification but means that if a Digest header is absent (which can't happen due to line 544-548 enforcement), the computed value would still be used. This is fine in current code but the comment on line 382-383 is misleading — it says 'recompute and use that; if a Digest header is present, we verify it matches' implying the header might be absent.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:14.717750118Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:19.251832032Z",
+  "closed_at": "2026-08-10T00:59:19.251832032Z",
+  "close_reason": "Not a bug — the enforcement at lines 544-548 makes this path unreachable. The misleading comment is cosmetic, not a code review finding.",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.3",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:14.740864886Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

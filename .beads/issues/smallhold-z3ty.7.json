@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.7",
+  "title": "server secret_key uses thread_rng",
+  "description": "cli.rs:306-310. generate_secret_key() uses rand::thread_rng().fill_bytes() to generate the server secret_key written to the config file. This is a long-lived server secret that should use OsRng directly. While rand 0.8 thread_rng is CSPRNG, using OsRng for long-lived key material is the standard practice (already followed in did.rs and cli.rs persona key generation).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:32.752591579Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:48.809485807Z",
+  "closed_at": "2026-08-10T00:59:48.809485807Z",
+  "close_reason": "rand 0.8 thread_rng() is CSPRNG (ChaCha12 seeded from OsRng). No real confidentiality/integrity impact -- style preference only.",
+  "labels": [
+    "crypto-security",
+    "rng",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.7",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:32.784714894Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

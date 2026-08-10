@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-z3ty.9",
+  "title": "ap_context() clones large JSON Value on every call",
+  "description": "src/activitypub.rs:56-58. ap_context() returns AP_CONTEXT.clone(), which deep-clones a multi-level serde_json::Value tree on every actor/outbox/featured response. The AP context is ~20 nested JSON objects. Since serde_json::Value::clone() recursively allocates, this is a non-trivial allocation in the hot path of every AP endpoint. Consider returning a reference or using Arc\u003cValue\u003e to avoid the deep clone.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:37.416804123Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:37.416804123Z",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.9",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:37.445594098Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

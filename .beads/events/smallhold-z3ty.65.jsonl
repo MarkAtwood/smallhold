@@ -1,0 +1,4 @@
+{"id":"019fe930-fa5d-790e-813d-114bf61eec9d","issue_id":"smallhold-z3ty.65","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:02:08.989594013Z"}
+{"id":"019fe930-fa60-7597-be08-f3d346d2a2c5","issue_id":"smallhold-z3ty.65","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: risk","created_at":"2026-08-10T01:02:08.992366851Z"}
+{"id":"019fe930-fa63-73e0-8391-2e2b64decebb","issue_id":"smallhold-z3ty.65","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:02:08.99525433Z"}
+{"id":"019fe931-0e70-7ee3-b272-cb78d450bd68","issue_id":"smallhold-z3ty.65","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"This is correct Mastodon behavior. The public timeline shows all public posts from all users. This is by design in the Mastodon streaming API.","created_at":"2026-08-10T01:02:14.128976249Z"}

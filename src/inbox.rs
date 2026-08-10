@@ -572,6 +572,26 @@ async fn verify_and_fetch_actor(
 
     let signed_string = build_signed_string(&sig_params.headers_list, headers, body, request_path)?;
 
+    // Replay protection: reject duplicate (actor, date, digest) within window.
+    // Must run before the cached-key early return so both paths are protected.
+    let date_str = headers.get("date").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let digest_str = headers.get("digest").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let replay_key = crate::api::hex_encode(&sha2::Sha256::digest(
+        format!("{actor_uri}:{date_str}:{digest_str}").as_bytes(),
+    ));
+    {
+        let now = crate::api::now_millis();
+        let mut seen = SEEN_DIGESTS.lock().unwrap();
+        seen.retain(|_, exp| *exp > now); // purge expired
+        if seen.len() > 10_000 {
+            seen.clear(); // ponytail: cap unbounded growth; losing entries just means one duplicate may slip through
+        }
+        if seen.contains_key(&replay_key) {
+            return Err(AppError::conflict("Duplicate delivery rejected"));
+        }
+        seen.insert(replay_key, now + REPLAY_WINDOW_MS);
+    }
+
     // Try cached key first.
     if let Some(cached) = lookup_by_key_id(&state.pool, &sig_params.key_id).await? {
         if verify_rsa_sha256(
@@ -598,22 +618,6 @@ async fn verify_and_fetch_actor(
         signed_string.as_bytes(),
         &sig_params.signature_bytes,
     )?;
-
-    // Replay protection: reject duplicate (actor, date, digest) within window
-    let date_str = headers.get("date").and_then(|v| v.to_str().ok()).unwrap_or("");
-    let digest_str = headers.get("digest").and_then(|v| v.to_str().ok()).unwrap_or("");
-    let replay_key = crate::api::hex_encode(&sha2::Sha256::digest(
-        format!("{actor_uri}:{date_str}:{digest_str}").as_bytes(),
-    ));
-    {
-        let now = crate::api::now_millis();
-        let mut seen = SEEN_DIGESTS.lock().unwrap();
-        seen.retain(|_, exp| *exp > now); // purge expired
-        if seen.contains_key(&replay_key) {
-            return Err(AppError::conflict("Duplicate delivery rejected"));
-        }
-        seen.insert(replay_key, now + REPLAY_WINDOW_MS);
-    }
 
     Ok(account)
 }
@@ -998,6 +1002,7 @@ async fn handle_create(
 
     // Process mentions in the tag array.
     let domain = &state.config.server.domain;
+    let mut notified_personas: std::collections::HashSet<i64> = std::collections::HashSet::new();
     if let Some(tags) = object["tag"].as_array() {
         for tag in tags {
             if tag["type"].as_str() != Some("Mention") {
@@ -1031,6 +1036,8 @@ async fn handle_create(
                             read_at: None,
                         },
                     ).await?;
+
+                    notified_personas.insert(persona_id);
 
                     publish(StreamEvent {
                         event_type: "notification".into(),
@@ -1086,6 +1093,11 @@ async fn handle_create(
                 resolve_local_account(&state.pool, domain, uri).await?
             {
                 crate::db_extras::insert_remote_mention(&state.pool, post_id, persona_id).await?;
+
+                // Skip if this persona was already notified via tag processing above.
+                if notified_personas.contains(&persona_id) {
+                    continue;
+                }
 
                 // Check if notification already exists for this account+post before inserting.
                 let exists = crate::db_extras::mention_notification_exists(&state.pool, persona_id, post_id).await?;
@@ -1439,19 +1451,26 @@ async fn handle_announce(
 
 /// Handle a Block activity.
 ///
-/// Remove the blocking actor from our followers table, and remove any follow
-/// we have on them from the follows table.
+/// Extract the target persona from the activity's `object` field and remove
+/// follow relationships only for that persona, not all local accounts.
 async fn handle_block(
     state: &AppState,
-    _activity: &Value,
+    activity: &Value,
     remote: &RemoteAccountRow,
 ) -> Result<(), AppError> {
-    // Remove them as a follower of any local account.
-    crate::db_extras::delete_followers_by_remote(&state.pool, remote.id).await?;
-    crate::db_extras::delete_follows_to_remote(&state.pool, remote.id).await?;
-    crate::db_extras::delete_follow_requests_from_remote(&state.pool, remote.id).await?;
+    let domain = &state.config.server.domain;
+    let object_uri = object_id(&activity["object"])
+        .ok_or_else(|| AppError::bad_request("Block missing object"))?;
 
-    tracing::info!(actor = %remote.actor_uri, "blocked by remote actor");
+    if let Some((persona_id, _, _)) = resolve_local_account(&state.pool, domain, object_uri).await? {
+        crate::db_extras::delete_follower_scoped(&state.pool, persona_id, remote.id).await?;
+        crate::db_extras::delete_follows_to_remote_scoped(&state.pool, persona_id, remote.id).await?;
+        crate::db_extras::delete_follow_request_by_remote(&state.pool, remote.id, persona_id).await?;
+    } else {
+        tracing::warn!(object = object_uri, "Block target is not a local account");
+    }
+
+    tracing::info!(actor = %remote.actor_uri, object = object_uri, "blocked by remote actor");
 
     Ok(())
 }

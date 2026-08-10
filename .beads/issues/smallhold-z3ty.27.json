@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.27",
+  "title": "keyword_matches whole_word uses byte-level boundary check on lowercased UTF-8",
+  "description": "src/posting.rs:200-232. keyword_matches() lowercases both strings, then uses is_ascii_alphanumeric() for word boundary detection on the lowercased bytes. This works correctly for ASCII hashtag/keyword patterns (the typical case), but would fail to identify word boundaries around non-ASCII alphabetic characters (e.g. accented letters). The function should document this limitation: 'Word boundary detection is ASCII-only; non-ASCII alphanumeric characters are treated as non-word characters.' This matches Mastodon's behavior, so it's correct but not obvious.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:19.120042836Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:46.069886767Z",
+  "closed_at": "2026-08-10T03:17:46.069886767Z",
+  "close_reason": "Duplicate of .28",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.27",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:19.148479889Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

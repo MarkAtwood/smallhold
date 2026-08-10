@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.71",
+  "title": "Move activity handler validates alsoKnownAs correctly",
+  "description": "src/inbox.rs:1463-1595. The Move handler verifies that the old actor's alsoKnownAs includes the target URI by re-fetching the old actor document (not trusting the inbound payload). The target URI is validated against SSRF before fetching. Follow migration properly enqueues new Follow activities to the target actor. This is one of the more complex AP flows and it's handled correctly, including the SSRF validation that many implementations miss on Move targets.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:02:30.072390024Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.585598252Z",
+  "closed_at": "2026-08-10T03:17:39.585598252Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.71",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:02:30.094143924Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

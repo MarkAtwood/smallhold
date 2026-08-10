@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.46",
+  "title": "handle_block ignores activity object, blocks by actor only",
+  "description": "inbox.rs:1444-1457. The handle_block function ignores _activity entirely and removes all followers/follows/requests for the remote actor across ALL local accounts. The Block activity's 'object' field identifies WHICH local account is being blocked, but this is never examined. If a remote user blocks persona A, persona B also loses their follower/follow relationship with that remote user.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:59.795215558Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:58.822067148Z",
+  "closed_at": "2026-08-10T03:22:58.822067148Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.46",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:59.818916795Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

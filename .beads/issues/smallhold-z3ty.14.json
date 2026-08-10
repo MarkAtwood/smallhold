@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.14",
+  "title": "link.parse().unwrap() in network handlers",
+  "description": "posting.rs:2530,2634,2683,2759,2879. Five instances of link.parse().unwrap() when inserting Link pagination headers into HTTP responses. The link string is built from pagination_link_header() which constructs URLs from user-controlled data (post IDs). If an ID string contains characters invalid for HTTP header values, this will panic. Since these are in request handlers reachable from network requests, panics violate the AGENTS.md rule 'No .unwrap() in any code path reachable from a network request.' Should use .parse().ok() or map_err.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:49.227657659Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T00:59:49.227657659Z",
+  "labels": [
+    "idiomatic-rust",
+    "error-handling",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.14",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:49.255193604Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

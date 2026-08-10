@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.72",
+  "title": "write_content_files does synchronous I/O in async handler",
+  "description": "posting.rs:28-62. The write_content_files function performs std::fs::create_dir_all and std::fs::write inside an async handler context (called from create_status which is an async axum handler). Blocking I/O in async context blocks the tokio runtime thread. For small files (\u003e4KB threshold) this is unlikely to cause visible latency, but on a slow or network-mounted filesystem it could block the entire worker thread. Compare with media.rs which correctly uses tokio::fs::create_dir_all and tokio::fs::write.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:02:37.305953726Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:02:37.305953726Z",
+  "labels": [
+    "risk",
+    "maintainer-burden",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.72",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:02:37.334239022Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

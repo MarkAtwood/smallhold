@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.40",
+  "title": "HTTP Signature verification is thorough and correct",
+  "description": "src/inbox.rs:500-619. The signature verification flow is well-structured: Date freshness check (5-min window), required headers ((request-target), digest, date, host), keyId-to-actor anti-spoofing, cached key with re-fetch on failure (handles key rotation), and replay protection via HMAC of (actor, date, digest). This is a carefully layered defense. The replay window is scoped to 10 minutes matching the date freshness window. The re-fetch path prevents cache poisoning from blocking legitimate key rotations.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:40.456078036Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:17:39.252519075Z",
+  "closed_at": "2026-08-10T03:17:39.252519075Z",
+  "close_reason": "Decision/acknowledgment — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.40",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:40.473931973Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.82",
+  "title": "WriteFreely update_post auth bypass: token_ok=false and auth.is_none() required",
+  "description": "writefreely_api.rs:107-118 and 169-181. Both update_post and delete_post have the same auth bypass. The auth logic checks: (1) if token matches, pass; (2) if no token AND no auth, reject; (3) if token provided but wrong, reject. But if no token is provided and any authenticated user makes the request, it passes — there is no ownership check verifying the authenticated user owns the article. Any authenticated user can update or delete any WriteFreely article by omitting the token parameter.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:05:05.664079522Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:59.026966761Z",
+  "closed_at": "2026-08-10T03:22:59.026966761Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.82",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:05:05.688746579Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

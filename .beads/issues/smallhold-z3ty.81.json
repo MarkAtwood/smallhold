@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.81",
+  "title": "push endpoint SSRF: validates URL but follows internal DNS",
+  "description": "push.rs:264-268. The push notification sender validates the endpoint URL via validate_outbound_url, which checks for private IP addresses and non-HTTPS schemes. However, as noted in federation.rs:60-63, DNS rebinding is NOT mitigated. An attacker could register a push subscription with an endpoint URL that resolves to a public IP during validation, then re-resolves to 169.254.x.x or 10.x.x.x during the actual POST. Since push notifications carry server-generated payloads (not user-controlled), the SSRF impact is limited to network scanning/probing rather than data exfiltration. This is the same DNS rebinding issue documented for federation but with a different attack vector.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:04:36.876577893Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:04:41.969532256Z",
+  "closed_at": "2026-08-10T01:04:41.969532256Z",
+  "close_reason": "Already documented as accepted risk in federation.rs:60-63. Same DNS rebinding vector as federation, same mitigation status.",
+  "labels": [
+    "risk",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.81",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:04:36.900660166Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-z3ty.58",
+  "title": "ap_status builds media URL with wrong path format",
+  "description": "activitypub.rs:711-713. The ap_status function builds media URLs as format\\!(\"https://{domain}/media/{}/{}.{}\", persona.id, m.id, m.mime_type.split('/').nth(1).unwrap_or(\"bin\")). But the actual media upload path (media.rs:221) stores files as 'media/{hex_prefix}/{id}.{ext}'. The URL format in ap_status doesn't match the file storage format — it uses persona.id as the prefix instead of the hex prefix. Unless there's a separate route handler that maps /media/{persona_id}/{id}.{ext} to the actual file, these URLs will 404. Compare with posting.rs:1407 which correctly uses format\\!(\"https://{domain}/media/{file_path}\") using the stored file_path.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:01:42.760939628Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T03:22:58.861524695Z",
+  "closed_at": "2026-08-10T03:22:58.861524695Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.58",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:01:42.785976244Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

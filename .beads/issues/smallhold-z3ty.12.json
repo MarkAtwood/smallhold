@@ -1,0 +1,29 @@
+{
+  "id": "smallhold-z3ty.12",
+  "title": "SQL injection in test_set_admin_password",
+  "description": "db.rs:119-122. The test_set_admin_password function uses format\\!() to interpolate the Argon2 password hash directly into a raw_sql string: raw_sql(\u0026format\\!(\"INSERT OR REPLACE INTO admin ... VALUES (1, '{}', 0)\", hash)). Argon2 hashes contain dollar signs and could theoretically contain single quotes in edge cases. While this is #[cfg(test)]-only code, it establishes a bad pattern that could be copied into production code. Should use parameterized queries (sqlx::query().bind()) instead.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T00:59:43.996527054Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:59.187948549Z",
+  "closed_at": "2026-08-10T01:00:59.187948549Z",
+  "close_reason": "Duplicate of smallhold-z3ty.10",
+  "labels": [
+    "idiomatic-rust",
+    "error-handling",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.12",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T00:59:44.02906517Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

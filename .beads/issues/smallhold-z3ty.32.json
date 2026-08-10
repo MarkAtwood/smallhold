@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-z3ty.32",
+  "title": "Plaintext private keys in DB: RSA + VAPID",
+  "description": "federation.rs/push.rs/db_extras.rs. RSA private keys (personas.private_key_pem) and VAPID P-256 private keys (push_db::set_vapid_keys) are stored as plaintext PEM in SQLite. An attacker with read access to the database file (backup theft, directory traversal, SQLi) obtains all signing keys. RSA private keys enable impersonating the server's ActivityPub actors and forging HTTP Signatures. The VAPID key enables forging push notification JWTs. Mitigation: encrypt private keys at rest using the server's secret_key (config.server.secret_key) via AES-GCM before DB storage, or use OS keychain/KMS.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T01:00:29.514194831Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T01:00:29.514194831Z",
+  "labels": [
+    "crypto-security",
+    "storage",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-z3ty.32",
+      "depends_on_id": "smallhold-z3ty",
+      "type": "parent-child",
+      "created_at": "2026-08-10T01:00:29.546731391Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -388,8 +388,15 @@ async fn import_outbox(
                     if src.exists() {
                         let media_id = crate::id::generate_id();
                         let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+                        let id_hex = format!("{media_id:x}");
+                        let prefix = &id_hex[..2.min(id_hex.len())];
+                        let prefix_dir = media_dir.join(prefix);
+                        if let Err(e) = std::fs::create_dir_all(&prefix_dir) {
+                            tracing::warn!("Failed to create media prefix dir {}: {e}", prefix_dir.display());
+                            continue;
+                        }
                         let dest_filename = format!("{media_id}.{ext}");
-                        let dest_path = media_dir.join(&dest_filename);
+                        let dest_path = prefix_dir.join(&dest_filename);
 
                         if let Err(e) = std::fs::copy(&src, &dest_path) {
                             tracing::warn!("Failed to copy media {}: {e}", src.display());
@@ -424,9 +431,10 @@ async fn import_outbox(
                             );
                         }
 
+                        let rel_path = format!("media/{prefix}/{media_id}.{ext}");
                         let _ = crate::db_extras::import_insert_media(
                             &mut tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
-                            &dest_filename, media_type, file_size, description, published_ms,
+                            &rel_path, media_type, file_size, description, published_ms,
                         ).await;
 
                         stats.media_imported += 1;
