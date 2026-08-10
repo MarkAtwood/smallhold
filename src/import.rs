@@ -7,9 +7,11 @@ pub struct ImportStats {
     pub posts_imported: usize,
     pub posts_skipped: usize,
     pub media_imported: usize,
-    pub follows_found: usize,
-    pub blocks_found: usize,
-    pub mutes_found: usize,
+    pub avatar_imported: bool,
+    pub header_imported: bool,
+    pub follow_commands: Vec<String>,
+    pub domains_blocked: usize,
+    pub muted_accounts: Vec<String>,
     pub profile_updated: bool,
 }
 
@@ -30,33 +32,44 @@ pub async fn import_mastodon_archive(
     // Find the root — some archives nest everything under a subdirectory
     let extract_root = find_extract_root(tmp_dir.path());
 
+    let media_dir = Path::new(&config.storage.media_dir);
+    std::fs::create_dir_all(media_dir)
+        .with_context(|| format!("Failed to create media dir: {}", media_dir.display()))?;
+
     let mut stats = ImportStats {
         posts_imported: 0,
         posts_skipped: 0,
         media_imported: 0,
-        follows_found: 0,
-        blocks_found: 0,
-        mutes_found: 0,
+        avatar_imported: false,
+        header_imported: false,
+        follow_commands: Vec::new(),
+        domains_blocked: 0,
+        muted_accounts: Vec::new(),
         profile_updated: false,
     };
 
-    // 1. Parse and apply actor.json
+    let mut tx = crate::db::begin_tx(pool).await?;
+
+    // 1. Parse and apply actor.json (profile + avatar + header)
     let actor_path = extract_root.join("actor.json");
     if actor_path.exists() {
-        stats.profile_updated = apply_actor_profile(pool, account_id, &actor_path).await?;
+        apply_actor_profile(
+            &mut tx, account_id, &actor_path, &extract_root, media_dir, &mut stats,
+        )
+        .await?;
     }
 
     // 2. Parse and import outbox.json
     let outbox_path = extract_root.join("outbox.json");
     if outbox_path.exists() {
         import_outbox(
-            pool,
-            config,
+            &mut tx,
             account_id,
             username,
             domain,
             &extract_root,
             &outbox_path,
+            media_dir,
             &mut stats,
         )
         .await?;
@@ -65,20 +78,22 @@ pub async fn import_mastodon_archive(
     // 3. Parse following_accounts.csv
     let following_path = extract_root.join("following_accounts.csv");
     if following_path.exists() {
-        stats.follows_found = count_csv_rows(&following_path)?;
+        stats.follow_commands = parse_following_csv(&following_path, username)?;
     }
 
-    // 4. Parse blocked_accounts.csv
+    // 4. Parse and import blocked_accounts.csv as domain blocks
     let blocked_path = extract_root.join("blocked_accounts.csv");
     if blocked_path.exists() {
-        stats.blocks_found = count_csv_rows(&blocked_path)?;
+        stats.domains_blocked = import_blocked_accounts(&mut tx, &blocked_path).await?;
     }
 
-    // 5. Parse muted_accounts.csv
+    // 5. Parse muted_accounts.csv (print for manual action)
     let muted_path = extract_root.join("muted_accounts.csv");
     if muted_path.exists() {
-        stats.mutes_found = count_csv_rows(&muted_path)?;
+        stats.muted_accounts = parse_account_csv(&muted_path)?;
     }
+
+    tx.commit().await?;
 
     Ok(stats)
 }
@@ -163,7 +178,14 @@ fn find_extract_root(base: &Path) -> std::path::PathBuf {
     base.to_path_buf()
 }
 
-async fn apply_actor_profile(pool: &fieldwork_db::db::Pool, account_id: i64, path: &Path) -> Result<bool> {
+async fn apply_actor_profile(
+    tx: &mut crate::sqlx::Transaction<'static, crate::sqlx::Sqlite>,
+    account_id: i64,
+    path: &Path,
+    extract_root: &Path,
+    media_dir: &Path,
+    stats: &mut ImportStats,
+) -> Result<bool> {
     let data = std::fs::read_to_string(path).context("Failed to read actor.json")?;
     let actor: serde_json::Value = serde_json::from_str(&data).context("Invalid actor.json")?;
 
@@ -197,20 +219,97 @@ async fn apply_actor_profile(pool: &fieldwork_db::db::Pool, account_id: i64, pat
         "[]".into()
     };
 
-    crate::db_extras::update_persona_profile_import(pool, account_id, &display_name, &bio, &bio_html, &fields_json).await?;
+    crate::db_extras::import_update_persona_profile(
+        tx, account_id, &display_name, &bio, &bio_html, &fields_json,
+    )
+    .await?;
+    stats.profile_updated = true;
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+
+    // Import avatar (icon)
+    if let Some(icon_url) = actor.get("icon").and_then(|v| v.get("url")).and_then(|v| v.as_str()) {
+        if let Some(media_id) = copy_profile_image(tx, account_id, icon_url, extract_root, media_dir, now_ms).await? {
+            crate::db_extras::import_set_persona_avatar(tx, account_id, media_id).await?;
+            stats.avatar_imported = true;
+        }
+    }
+
+    // Import header (image)
+    if let Some(image_url) = actor.get("image").and_then(|v| v.get("url")).and_then(|v| v.as_str()) {
+        if let Some(media_id) = copy_profile_image(tx, account_id, image_url, extract_root, media_dir, now_ms).await? {
+            crate::db_extras::import_set_persona_header(tx, account_id, media_id).await?;
+            stats.header_imported = true;
+        }
+    }
 
     Ok(true)
 }
 
+/// Copy a profile image (avatar or header) from the archive to the media dir,
+/// insert a media row, and return the media ID.
+async fn copy_profile_image(
+    tx: &mut crate::sqlx::Transaction<'static, crate::sqlx::Sqlite>,
+    account_id: i64,
+    url: &str,
+    extract_root: &Path,
+    media_dir: &Path,
+    now_ms: i64,
+) -> Result<Option<i64>> {
+    let src = match resolve_media_path(extract_root, url) {
+        Some(p) if p.exists() => p,
+        _ => return Ok(None),
+    };
+
+    let media_id = crate::id::generate_id();
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+    let id_hex = format!("{media_id:x}");
+    let prefix = &id_hex[..2.min(id_hex.len())];
+    let prefix_dir = media_dir.join(prefix);
+    std::fs::create_dir_all(&prefix_dir)
+        .with_context(|| format!("Failed to create media prefix dir: {}", prefix_dir.display()))?;
+
+    let dest_filename = format!("{media_id}.{ext}");
+    let dest_path = prefix_dir.join(&dest_filename);
+    std::fs::copy(&src, &dest_path)
+        .with_context(|| format!("Failed to copy profile image: {}", src.display()))?;
+
+    let file_size = std::fs::metadata(&dest_path)
+        .map(|m| m.len() as i64)
+        .unwrap_or(0);
+
+    let mime_type = mime_from_ext(ext);
+    let rel_path = format!("media/{prefix}/{media_id}.{ext}");
+
+    crate::db_extras::import_insert_media_no_post(
+        tx, media_id, crate::db::DEFAULT_USER_ID, account_id,
+        &rel_path, mime_type, file_size, "", now_ms,
+    )
+    .await?;
+
+    Ok(Some(media_id))
+}
+
+fn mime_from_ext(ext: &str) -> &'static str {
+    match ext.to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn import_outbox(
-    pool: &fieldwork_db::db::Pool,
-    config: &Config,
+    tx: &mut crate::sqlx::Transaction<'static, crate::sqlx::Sqlite>,
     account_id: i64,
     username: &str,
     domain: &str,
     extract_root: &Path,
     outbox_path: &Path,
+    media_dir: &Path,
     stats: &mut ImportStats,
 ) -> Result<()> {
     let data = std::fs::read_to_string(outbox_path).context("Failed to read outbox.json")?;
@@ -249,15 +348,9 @@ async fn import_outbox(
             .unwrap_or(0)
     });
 
-    let media_dir = Path::new(&config.storage.media_dir);
-    std::fs::create_dir_all(media_dir)
-        .with_context(|| format!("Failed to create media dir: {}", media_dir.display()))?;
-
     // Track last timestamp for sequence deduplication
     let mut last_ms: i64 = 0;
     let mut last_seq: u32 = 0;
-
-    let mut tx = crate::db::begin_tx(pool).await?;
 
     for item in &notes {
         let object = item.get("object").unwrap(); // safe: filtered above
@@ -334,7 +427,7 @@ async fn import_outbox(
 
         // Insert the post
         let result = crate::db_extras::import_insert_post(
-            &mut tx, id, crate::db::DEFAULT_USER_ID, account_id, &ap_id,
+            tx, id, crate::db::DEFAULT_USER_ID, account_id, &ap_id,
             in_reply_to_uri.as_deref(), &context_url, &content_clean, &content_html,
             &spoiler_text, &visibility, sensitive, language.as_deref(), published_ms,
         ).await;
@@ -360,19 +453,19 @@ async fn import_outbox(
                         .collect::<String>()
                         .to_lowercase();
                     if !tag_name.is_empty() {
-                        let _ = crate::db_extras::import_insert_tag(&mut tx, id, &tag_name).await;
+                        let _ = crate::db_extras::import_insert_tag(tx, id, &tag_name).await;
                     }
                 }
 
                 // Best-effort mention insertion
                 if tag_type == "Mention" {
                     if let Some(href) = tag.get("href").and_then(|v| v.as_str()) {
-                        let remote = crate::db_extras::import_find_remote_by_uri(&mut tx, href)
+                        let remote = crate::db_extras::import_find_remote_by_uri(tx, href)
                             .await
                             .unwrap_or(None);
 
                         if let Some(remote_id) = remote {
-                            let _ = crate::db_extras::import_insert_mention(&mut tx, id, remote_id).await;
+                            let _ = crate::db_extras::import_insert_mention(tx, id, remote_id).await;
                         }
                     }
                 }
@@ -446,7 +539,7 @@ async fn import_outbox(
 
                         let rel_path = format!("media/{prefix}/{media_id}.{ext}");
                         let _ = crate::db_extras::import_insert_media(
-                            &mut tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
+                            tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
                             &rel_path, media_type, file_size, description, published_ms,
                         ).await;
 
@@ -459,9 +552,63 @@ async fn import_outbox(
         stats.posts_imported += 1;
     }
 
-    tx.commit().await?;
-
     Ok(())
+}
+
+/// Parse following_accounts.csv and return `smallhold follow` commands.
+/// Format: `Account address,Show boosts,Notify on new posts,Languages`
+/// Automated follow resolution requires federation handshake (server must be running).
+fn parse_following_csv(path: &Path, username: &str) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let mut commands = Vec::new();
+    for line in content.lines().skip(1) {
+        let acct = line.split(',').next().unwrap_or("").trim();
+        if !acct.is_empty() && acct.contains('@') {
+            commands.push(format!("smallhold follow {username} {acct}"));
+        }
+    }
+    Ok(commands)
+}
+
+/// Parse a CSV of account addresses (first column is `Account address`).
+/// Returns the list of `user@domain` values.
+fn parse_account_csv(path: &Path) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let mut accounts = Vec::new();
+    for line in content.lines().skip(1) {
+        let acct = line.split(',').next().unwrap_or("").trim();
+        if !acct.is_empty() && acct.contains('@') {
+            accounts.push(acct.to_string());
+        }
+    }
+    Ok(accounts)
+}
+
+/// Import blocked accounts as domain-level blocks.
+/// Per-account blocking requires federation (remote_account_id lookup); domain-level
+/// is a reasonable default for archive import.
+async fn import_blocked_accounts(
+    tx: &mut crate::sqlx::Transaction<'static, crate::sqlx::Sqlite>,
+    path: &Path,
+) -> Result<usize> {
+    let accounts = parse_account_csv(path)?;
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut blocked_domains = std::collections::HashSet::new();
+
+    for acct in &accounts {
+        if let Some(domain) = acct.split('@').nth(1) {
+            if blocked_domains.insert(domain.to_string()) {
+                crate::db_extras::import_add_domain_block(
+                    tx, domain, "suspend", false, "imported from Mastodon archive", now,
+                )
+                .await?;
+            }
+        }
+    }
+
+    Ok(blocked_domains.len())
 }
 
 fn id_from_timestamp(published_ms: i64, last_ms: i64, last_seq: u32) -> (i64, u32) {
@@ -561,12 +708,4 @@ fn find_file_recursive(dir: &Path, filename: &str) -> Option<std::path::PathBuf>
         }
     }
     None
-}
-
-fn count_csv_rows(path: &Path) -> Result<usize> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    // Subtract 1 for header row, handle empty files
-    let lines: usize = content.lines().count();
-    Ok(lines.saturating_sub(1))
 }

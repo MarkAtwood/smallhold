@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-xtyj.2",
+  "title": "Import following/blocks/mutes from Mastodon CSV files",
+  "description": "Parse following_accounts.csv, blocked_accounts.csv, muted_accounts.csv. For follows: store as pending outbound follows (resolve via federation on next serve). For blocks/mutes: insert into domain_blocks and muted_accounts tables.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T17:08:54.775289288Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T17:15:58.561993827Z",
+  "started_at": "2026-08-10T17:09:03.567551355Z",
+  "closed_at": "2026-08-10T17:15:58.561993827Z",
+  "close_reason": "Implemented and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xtyj.2",
+      "depends_on_id": "smallhold-xtyj",
+      "type": "parent-child",
+      "created_at": "2026-08-10T17:08:54.794109702Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

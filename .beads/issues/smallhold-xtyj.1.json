@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-xtyj.1",
+  "title": "Import avatar and header images from Mastodon archive",
+  "description": "Read icon and image fields from actor.json, copy the referenced files to media dir, update persona avatar_url and header_url in DB.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T17:08:54.703911551Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T17:15:58.530085811Z",
+  "started_at": "2026-08-10T17:09:03.516322185Z",
+  "closed_at": "2026-08-10T17:15:58.530085811Z",
+  "close_reason": "Implemented and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xtyj.1",
+      "depends_on_id": "smallhold-xtyj",
+      "type": "parent-child",
+      "created_at": "2026-08-10T17:08:54.721370007Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

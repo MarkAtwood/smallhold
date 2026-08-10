@@ -939,21 +939,35 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
                 stats.posts_imported, stats.posts_skipped
             );
             eprintln!("  Media: {} files", stats.media_imported);
-            eprintln!(
-                "  Follows: {} found (resolve with `smallhold follow` commands)",
-                stats.follows_found
-            );
-            if stats.blocks_found > 0 {
-                eprintln!(
-                    "  Blocks: {} found (not yet implemented)",
-                    stats.blocks_found
-                );
-            }
-            if stats.mutes_found > 0 {
-                eprintln!("  Mutes: {} found (not yet implemented)", stats.mutes_found);
-            }
             if stats.profile_updated {
                 eprintln!("  Profile: updated");
+            }
+            if stats.avatar_imported {
+                eprintln!("  Avatar: imported");
+            }
+            if stats.header_imported {
+                eprintln!("  Header: imported");
+            }
+            if !stats.follow_commands.is_empty() {
+                eprintln!(
+                    "  Follows: {} accounts. Run these commands after starting the server:",
+                    stats.follow_commands.len()
+                );
+                for cmd in &stats.follow_commands {
+                    eprintln!("    {cmd}");
+                }
+            }
+            if stats.domains_blocked > 0 {
+                eprintln!("  Blocks: {} domain blocks imported", stats.domains_blocked);
+            }
+            if !stats.muted_accounts.is_empty() {
+                eprintln!(
+                    "  Mutes: {} accounts (manual action needed):",
+                    stats.muted_accounts.len()
+                );
+                for acct in &stats.muted_accounts {
+                    eprintln!("    {acct}");
+                }
             }
         }
     }

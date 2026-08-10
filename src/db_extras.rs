@@ -1435,28 +1435,6 @@ pub async fn get_persona_id_for_import(pool: &fieldwork_db::db::Pool, username: 
     Ok(row.map(|(id,)| id))
 }
 
-/// Update persona profile from import.
-pub async fn update_persona_profile_import(
-    pool: &fieldwork_db::db::Pool,
-    account_id: i64,
-    display_name: &str,
-    bio: &str,
-    bio_html: &str,
-    fields_json: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE personas SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
-    )
-    .bind(display_name)
-    .bind(bio)
-    .bind(bio_html)
-    .bind(fields_json)
-    .bind(account_id)
-    .execute(sq(pool))
-    .await?;
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // Import transaction queries (operate on Transaction)
 // ---------------------------------------------------------------------------
@@ -1519,6 +1497,110 @@ pub async fn import_insert_media<'a>(
     )
     .bind(id).bind(user_id).bind(account_id).bind(post_id)
     .bind(file_path).bind(mime_type).bind(file_size).bind(description).bind(created_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Set persona avatar_media_id during import (transaction).
+pub async fn import_set_persona_avatar<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>,
+    persona_id: i64,
+    media_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE personas SET avatar_media_id = ? WHERE id = ?")
+        .bind(media_id)
+        .bind(persona_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+/// Set persona header_media_id during import (transaction).
+pub async fn import_set_persona_header<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>,
+    persona_id: i64,
+    media_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE personas SET header_media_id = ? WHERE id = ?")
+        .bind(media_id)
+        .bind(persona_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+/// Insert a domain block during import (transaction).
+pub async fn import_add_domain_block<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>,
+    domain: &str,
+    severity: &str,
+    reject_media: bool,
+    reason: &str,
+    now: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO domain_blocks (domain, severity, reject_media, reason, created_at) \
+         VALUES (?, ?, ?, ?, ?) ON CONFLICT(domain) DO UPDATE SET \
+         severity = excluded.severity, reject_media = excluded.reject_media, reason = excluded.reason",
+    )
+    .bind(domain)
+    .bind(severity)
+    .bind(reject_media as i32)
+    .bind(reason)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Insert a media row during import with optional post_id (transaction).
+/// Used for avatar/header media that aren't attached to a post.
+pub async fn import_insert_media_no_post<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>,
+    id: i64,
+    user_id: i64,
+    account_id: i64,
+    file_path: &str,
+    mime_type: &str,
+    file_size: i64,
+    description: &str,
+    created_at: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO media (id, user_id, persona_id, file_path, mime_type, file_size, description, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(account_id)
+    .bind(file_path)
+    .bind(mime_type)
+    .bind(file_size)
+    .bind(description)
+    .bind(created_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Update persona profile during import (transaction).
+pub async fn import_update_persona_profile<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>,
+    account_id: i64,
+    display_name: &str,
+    bio: &str,
+    bio_html: &str,
+    fields_json: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE personas SET display_name = ?, bio = ?, bio_html = ?, fields_json = ? WHERE id = ?",
+    )
+    .bind(display_name)
+    .bind(bio)
+    .bind(bio_html)
+    .bind(fields_json)
+    .bind(account_id)
     .execute(&mut **tx)
     .await?;
     Ok(())
