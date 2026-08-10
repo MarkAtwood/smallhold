@@ -1546,6 +1546,12 @@ async fn create_status(
         let _ = search.index_post(post_id, &text, auth.account_id).await;
     }
 
+    crate::webhooks::dispatch_webhook_event(
+        state.pool.clone(),
+        "status.created",
+        json!({ "event": "status.created", "object": { "id": post_id.to_string(), "content": &text } }),
+    );
+
     Ok((StatusCode::OK, Json(status)).into_response())
 }
 
@@ -1638,6 +1644,12 @@ async fn delete_status(
         payload: id.clone(),
         channel: format!("user:{}", auth.account_id),
     });
+
+    crate::webhooks::dispatch_webhook_event(
+        state.pool.clone(),
+        "status.deleted",
+        json!({ "event": "status.deleted", "object": { "id": id } }),
+    );
 
     Ok((StatusCode::OK, Json(status)).into_response())
 }
@@ -1875,6 +1887,12 @@ async fn edit_status(
     if let Some(ref search) = state.search {
         let _ = search.index_post(post_id, &text, auth.account_id).await;
     }
+
+    crate::webhooks::dispatch_webhook_event(
+        state.pool.clone(),
+        "status.updated",
+        json!({ "event": "status.updated", "object": { "id": post_id.to_string(), "content": &text } }),
+    );
 
     Ok(Json(status))
 }

@@ -1,0 +1,26 @@
+{
+  "id": "smallhold-hhxj.1",
+  "title": "Schema + CRUD for webhook registrations",
+  "description": "DB table for webhooks (id, url, events, secret, enabled, created_at). Admin API endpoints GET/POST/PUT/DELETE /api/v1/admin/webhooks. CLI command for webhook management.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T15:55:51.006564701Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T16:03:40.986147747Z",
+  "started_at": "2026-08-10T15:55:56.683763709Z",
+  "closed_at": "2026-08-10T16:03:40.986147747Z",
+  "close_reason": "Implemented and tested",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-hhxj.1",
+      "depends_on_id": "smallhold-hhxj",
+      "type": "parent-child",
+      "created_at": "2026-08-10T15:55:51.026399285Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

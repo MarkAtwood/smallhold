@@ -79,11 +79,31 @@ pub enum Commands {
     #[command(subcommand)]
     Did(DidCommands),
 
+    /// Manage webhooks
+    #[command(subcommand)]
+    Webhook(WebhookCommands),
+
     /// Rebuild media DB index from sidecar .meta files
     RebuildMediaIndex,
 
     /// Backfill media sidecars and externalize long post content
     MigrateStorage,
+}
+
+#[derive(Subcommand)]
+pub enum WebhookCommands {
+    /// List registered webhooks
+    List,
+    /// Add a webhook
+    Add {
+        url: String,
+        #[arg(long)]
+        events: String,
+    },
+    /// Remove a webhook
+    Remove { id: String },
+    /// Test a webhook by sending a test event
+    Test { id: String },
 }
 
 #[derive(Subcommand)]
@@ -240,6 +260,7 @@ impl Cli {
             Commands::Census => cmd_census(&self.config).await,
             Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
             Commands::Did(cmd) => cmd_did(cmd, &self.config).await,
+            Commands::Webhook(cmd) => cmd_webhook(cmd, &self.config).await,
             Commands::RebuildMediaIndex => cmd_rebuild_media_index(&self.config).await,
             Commands::MigrateStorage => cmd_migrate_storage(&self.config).await,
         }
@@ -1110,6 +1131,25 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
                     eprintln!("  {actor_uri} [{state}]");
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_webhook(cmd: WebhookCommands, config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+
+    match cmd {
+        WebhookCommands::List => crate::webhooks::cmd_webhook_list(&pool).await?,
+        WebhookCommands::Add { url, events } => {
+            crate::webhooks::cmd_webhook_add(&pool, &url, &events).await?;
+        }
+        WebhookCommands::Remove { id } => {
+            crate::webhooks::cmd_webhook_remove(&pool, &id).await?;
+        }
+        WebhookCommands::Test { id } => {
+            crate::webhooks::cmd_webhook_test(&pool, &id).await?;
         }
     }
     Ok(())

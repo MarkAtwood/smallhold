@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-hhxj",
+  "title": "[epic] Webhook callbacks for status events",
+  "description": "Fire async HTTP POST callbacks to configured URLs when events happen. Events: status.created, status.updated, status.deleted, account.follow. Fire-and-forget via tokio::spawn, with SSRF validation on target URLs.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T15:55:42.190801649Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T16:03:41.055151515Z",
+  "closed_at": "2026-08-10T16:03:41.055151515Z",
+  "close_reason": "Implemented and tested"
+}

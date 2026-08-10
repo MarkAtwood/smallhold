@@ -845,6 +845,18 @@ async fn handle_follow(
             target = username,
             "follow accepted"
         );
+
+        crate::webhooks::dispatch_webhook_event(
+            state.pool.clone(),
+            "account.follow",
+            serde_json::json!({
+                "event": "account.follow",
+                "object": {
+                    "account": &remote.actor_uri,
+                    "target": &username,
+                }
+            }),
+        );
     }
 
     Ok(())

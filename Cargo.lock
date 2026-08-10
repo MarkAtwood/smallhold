@@ -3487,6 +3487,7 @@ dependencies = [
  "flate2",
  "futures",
  "hkdf",
+ "hmac",
  "multibase",
  "p256",
  "pulldown-cmark",

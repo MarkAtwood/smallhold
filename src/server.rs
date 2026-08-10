@@ -52,6 +52,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(crate::funkwhale_api::routes())
         .merge(crate::bookwyrm_api::routes())
         .merge(crate::writefreely_api::routes())
+        .merge(crate::webhooks::routes())
         .route("/health", get(health))
         .layer(middleware::from_fn(security_headers))
         .layer(cors)
