@@ -1549,7 +1549,7 @@ async fn create_status(
     crate::webhooks::dispatch_webhook_event(
         state.pool.clone(),
         "status.created",
-        json!({ "event": "status.created", "object": { "id": post_id.to_string(), "content": &text } }),
+        json!({ "event": "status.created", "object": status }),
     );
 
     Ok((StatusCode::OK, Json(status)).into_response())
@@ -1891,7 +1891,7 @@ async fn edit_status(
     crate::webhooks::dispatch_webhook_event(
         state.pool.clone(),
         "status.updated",
-        json!({ "event": "status.updated", "object": { "id": post_id.to_string(), "content": &text } }),
+        json!({ "event": "status.updated", "object": status }),
     );
 
     Ok(Json(status))

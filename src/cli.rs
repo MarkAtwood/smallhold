@@ -104,6 +104,15 @@ pub enum WebhookCommands {
     Remove { id: String },
     /// Test a webhook by sending a test event
     Test { id: String },
+    /// Enable a webhook
+    Enable { id: String },
+    /// Disable a webhook
+    Disable { id: String },
+    /// Show webhook delivery log
+    Log {
+        /// Webhook ID to filter by (optional)
+        id: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1150,6 +1159,15 @@ async fn cmd_webhook(cmd: WebhookCommands, config_path: &Path) -> Result<()> {
         }
         WebhookCommands::Test { id } => {
             crate::webhooks::cmd_webhook_test(&pool, &id).await?;
+        }
+        WebhookCommands::Enable { id } => {
+            crate::webhooks::cmd_webhook_enable(&pool, &id).await?;
+        }
+        WebhookCommands::Disable { id } => {
+            crate::webhooks::cmd_webhook_disable(&pool, &id).await?;
+        }
+        WebhookCommands::Log { id } => {
+            crate::webhooks::cmd_webhook_log(&pool, id.as_deref()).await?;
         }
     }
     Ok(())
