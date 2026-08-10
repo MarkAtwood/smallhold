@@ -61,8 +61,7 @@ struct SubscriptionRow {
 /// server; the SQLite database file should be permission-restricted (0600).
 /// A proper key encryption scheme would require a key management system.
 pub async fn get_or_create_vapid_key(pool: &fieldwork_db::db::Pool) -> anyhow::Result<(String, String)> {
-    let fwp = pool.clone();
-    if let Some((pem, pub_b64)) = fieldwork_db::push_db::get_vapid_keys(&fwp).await? {
+    if let Some((pem, pub_b64)) = fieldwork_db::push_db::get_vapid_keys(pool).await? {
         return Ok((pem, pub_b64));
     }
 
@@ -78,7 +77,7 @@ pub async fn get_or_create_vapid_key(pool: &fieldwork_db::db::Pool) -> anyhow::R
     let pub_bytes = EncodedPoint::from(verifying_key);
     let pub_b64 = URL_SAFE_NO_PAD.encode(pub_bytes.as_bytes());
 
-    fieldwork_db::push_db::set_vapid_keys(&fwp, pem.as_str(), &pub_b64).await?;
+    fieldwork_db::push_db::set_vapid_keys(pool, pem.as_str(), &pub_b64).await?;
 
     Ok((pem.to_string(), pub_b64))
 }

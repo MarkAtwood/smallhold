@@ -2,3 +2,4 @@
 {"id":"019fe92f-86ca-79a2-8e81-f2196d8d646d","issue_id":"smallhold-z3ty.36","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: idiomatic-rust","created_at":"2026-08-10T01:00:33.866631832Z"}
 {"id":"019fe92f-86cd-75be-877a-fb0ca6c73fcf","issue_id":"smallhold-z3ty.36","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: clippy","created_at":"2026-08-10T01:00:33.869376921Z"}
 {"id":"019fe92f-86d0-7278-b001-941a842b8a68","issue_id":"smallhold-z3ty.36","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:00:33.872162239Z"}
+{"id":"019fe9ce-dde2-799a-8804-1967f9f78812","issue_id":"smallhold-z3ty.36","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed or accepted","created_at":"2026-08-10T03:54:36.386629861Z"}

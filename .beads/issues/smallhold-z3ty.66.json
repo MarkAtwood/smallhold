@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.66",
   "title": "search index commits on every single post index",
   "description": "src/search.rs:49-59. index_post() acquires the writer mutex, deletes the old term, adds the document, and commits — all for a single post. Tantivy commits are expensive (they flush segments to disk). For normal posting this is fine (one post at a time), but during bulk operations (import, scheduled post batch) this could be slow. reindex_all() correctly batches the commit to after all documents are added. Consider a batch_index_posts method or deferring commit to a periodic flush.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:02:10.970154959Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:02:10.970154959Z",
+  "updated_at": "2026-08-10T03:54:36.774829854Z",
+  "closed_at": "2026-08-10T03:54:36.774829854Z",
+  "close_reason": "Fixed or accepted",
   "labels": [
     "elegance",
     "review"

@@ -28,6 +28,11 @@ const MAX_URI_LEN: usize = 2048;
 const MAX_LANGUAGE_LEN: usize = 10;
 
 /// Pre-check JSON nesting depth without fully parsing.
+///
+/// This is a depth-only pre-filter, not a JSON validator. It may accept
+/// malformed JSON (e.g. mismatched brackets). The actual JSON parsing by
+/// `serde_json::from_slice` immediately after this call catches any
+/// structural errors.
 fn check_json_depth(bytes: &[u8], max_depth: usize) -> bool {
     let mut depth = 0usize;
     let mut in_string = false;
@@ -488,10 +493,7 @@ async fn fetch_and_upsert_actor(
 ) -> Result<RemoteAccountRow, AppError> {
     let (signing_key_pem, signing_key_id) = get_signing_credentials(state).await?;
 
-    let fed_client = FederationClient::new(&state.config)
-        .map_err(|e| AppError::internal(format!("federation client: {e}")))?;
-
-    let actor_data: RemoteActorData = fed_client
+    let actor_data: RemoteActorData = state.federation_client
         .fetch_actor(actor_uri, &signing_key_pem, &signing_key_id)
         .await
         .map_err(|e| {
@@ -699,6 +701,29 @@ async fn resolve_local_account(
     Ok(persona.map(|p| (p.id, p.username, p.is_locked)))
 }
 
+/// Fire-and-forget push notification in a background task.
+fn spawn_push_notification(
+    pool: fieldwork_db::db::Pool,
+    persona_id: i64,
+    kind: &'static str,
+    title: &'static str,
+    actor_uri: String,
+    domain: String,
+) {
+    tokio::spawn(async move {
+        crate::push::send_push_notification(
+            &pool,
+            persona_id,
+            kind,
+            title,
+            &actor_uri,
+            None,
+            &domain,
+        )
+        .await;
+    });
+}
+
 /// Enqueue an activity for delivery to a remote inbox.
 async fn enqueue_activity(
     pool: &fieldwork_db::db::Pool,
@@ -717,12 +742,11 @@ async fn is_blocked_or_muted(
     persona_id: i64,
     remote_account_id: i64,
 ) -> Result<bool, AppError> {
-    let fwp = pool;
-    let blocked = fieldwork_db::interactions_db::is_blocked(fwp, persona_id, None, Some(remote_account_id)).await?;
+    let blocked = fieldwork_db::interactions_db::is_blocked(pool, persona_id, None, Some(remote_account_id)).await?;
     if blocked {
         return Ok(true);
     }
-    let muted = fieldwork_db::interactions_db::is_muted(fwp, persona_id, None, Some(remote_account_id)).await?;
+    let muted = fieldwork_db::interactions_db::is_muted(pool, persona_id, None, Some(remote_account_id)).await?;
     Ok(muted)
 }
 
@@ -793,23 +817,10 @@ async fn handle_follow(
                 },
             ).await?;
 
-            // Fire-and-forget push notification
-            let pool = state.pool.clone();
-            let actor = remote.actor_uri.clone();
-            let push_domain = domain.clone();
-            let push_account_id = account_id;
-            tokio::spawn(async move {
-                crate::push::send_push_notification(
-                    &pool,
-                    push_account_id,
-                    "follow",
-                    "New follower",
-                    &actor,
-                    None,
-                    &push_domain,
-                )
-                .await;
-            });
+            spawn_push_notification(
+                state.pool.clone(), account_id, "follow", "New follower",
+                remote.actor_uri.clone(), domain.clone(),
+            );
         }
 
         // Send Accept back.
@@ -1064,23 +1075,10 @@ async fn handle_create(
                         channel: format!("user:{}", persona_id),
                     });
 
-                    // Fire-and-forget push notification
-                    let pool = state.pool.clone();
-                    let actor = remote.actor_uri.clone();
-                    let push_domain = domain.clone();
-                    let push_persona_id = persona_id;
-                    tokio::spawn(async move {
-                        crate::push::send_push_notification(
-                            &pool,
-                            push_persona_id,
-                            "mention",
-                            "New mention",
-                            &actor,
-                            None,
-                            &push_domain,
-                        )
-                        .await;
-                    });
+                    spawn_push_notification(
+                        state.pool.clone(), persona_id, "mention", "New mention",
+                        remote.actor_uri.clone(), domain.clone(),
+                    );
                 }
             }
         }
@@ -1147,23 +1145,10 @@ async fn handle_create(
                         channel: format!("user:{}", persona_id),
                     });
 
-                    // Fire-and-forget push notification
-                    let pool = state.pool.clone();
-                    let actor = remote.actor_uri.clone();
-                    let push_domain = domain.clone();
-                    let push_persona_id = persona_id;
-                    tokio::spawn(async move {
-                        crate::push::send_push_notification(
-                            &pool,
-                            push_persona_id,
-                            "mention",
-                            "New mention",
-                            &actor,
-                            None,
-                            &push_domain,
-                        )
-                        .await;
-                    });
+                    spawn_push_notification(
+                        state.pool.clone(), persona_id, "mention", "New mention",
+                        remote.actor_uri.clone(), domain.clone(),
+                    );
                 }
             }
         }
@@ -1368,25 +1353,10 @@ async fn handle_like(
                     },
                 ).await?;
 
-                {
-                    // Fire-and-forget push notification
-                    let pool = state.pool.clone();
-                    let actor = remote.actor_uri.clone();
-                    let push_domain = state.config.server.domain.clone();
-                    let push_account_id = account_id;
-                    tokio::spawn(async move {
-                        crate::push::send_push_notification(
-                            &pool,
-                            push_account_id,
-                            "favourite",
-                            "New favourite",
-                            &actor,
-                            None,
-                            &push_domain,
-                        )
-                        .await;
-                    });
-                }
+                spawn_push_notification(
+                    state.pool.clone(), account_id, "favourite", "New favourite",
+                    remote.actor_uri.clone(), state.config.server.domain.clone(),
+                );
             }
         }
 
@@ -1436,25 +1406,10 @@ async fn handle_announce(
                     },
                 ).await?;
 
-                {
-                    // Fire-and-forget push notification
-                    let pool = state.pool.clone();
-                    let actor = remote.actor_uri.clone();
-                    let push_domain = state.config.server.domain.clone();
-                    let push_account_id = account_id;
-                    tokio::spawn(async move {
-                        crate::push::send_push_notification(
-                            &pool,
-                            push_account_id,
-                            "reblog",
-                            "New boost",
-                            &actor,
-                            None,
-                            &push_domain,
-                        )
-                        .await;
-                    });
-                }
+                spawn_push_notification(
+                    state.pool.clone(), account_id, "reblog", "New boost",
+                    remote.actor_uri.clone(), state.config.server.domain.clone(),
+                );
             }
         }
 
@@ -1538,10 +1493,7 @@ async fn handle_move(
         FederationClient::sign_get_headers(&signing_key_pem, &signing_key_id, &old_actor_url)
             .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
 
-    let fed_client = FederationClient::new(&state.config)
-        .map_err(|e| AppError::internal(format!("federation client: {e}")))?;
-
-    let resp = fed_client
+    let resp = state.federation_client
         .client()
         .get(old_actor_url.as_str())
         .headers(get_headers)
@@ -1597,7 +1549,7 @@ async fn handle_move(
     let new_get_headers =
         FederationClient::sign_get_headers(&signing_key_pem, &signing_key_id, &new_actor_url)
             .map_err(|e| AppError::internal(format!("sign headers: {e}")))?;
-    let new_resp = fed_client
+    let new_resp = state.federation_client
         .client()
         .get(new_actor_url.as_str())
         .headers(new_get_headers)

@@ -289,8 +289,7 @@ async fn process_scheduled_posts(pool: &fieldwork_db::db::Pool, config: &Config)
     let now_ms = chrono::Utc::now().timestamp_millis();
     let domain = &config.server.domain;
 
-    let fwp = pool.clone();
-    let due_posts = fieldwork_db::scheduled_db::fetch_due(&fwp, now_ms).await?;
+    let due_posts = fieldwork_db::scheduled_db::fetch_due(pool, now_ms).await?;
 
     for sched in due_posts {
         if let Err(e) = create_scheduled_post(pool, domain, sched.persona_id, &sched.params_json, now_ms).await
@@ -299,7 +298,7 @@ async fn process_scheduled_posts(pool: &fieldwork_db::db::Pool, config: &Config)
             // Delete the row anyway to avoid infinite retry of a broken scheduled post
         }
 
-        fieldwork_db::scheduled_db::delete_scheduled(&fwp, sched.id).await?;
+        fieldwork_db::scheduled_db::delete_scheduled(pool, sched.id).await?;
     }
 
     Ok(())
@@ -415,19 +414,18 @@ async fn create_scheduled_post(
     fieldwork_db::post_tags_db::add_tags(pool, post_id, &rendered.tags).await?;
 
     // Insert mentions
-    let fwp = pool.clone();
     for m in &rendered.mentions {
         match &m.domain {
             None => {
-                let local = fieldwork_db::persona_db::get_persona_by_username(&fwp, &m.username).await?;
+                let local = fieldwork_db::persona_db::get_persona_by_username(pool, &m.username).await?;
                 if let Some(p) = local {
-                    fieldwork_db::mentions_db::add_mention(&fwp, post_id, None, Some(p.id)).await?;
+                    fieldwork_db::mentions_db::add_mention(pool, post_id, None, Some(p.id)).await?;
                 }
             }
             Some(mention_domain) => {
-                let remote = fieldwork_db::actor_cache::get_by_webfinger(&fwp, &m.username, mention_domain).await?;
+                let remote = fieldwork_db::actor_cache::get_by_webfinger(pool, &m.username, mention_domain).await?;
                 if let Some(r) = remote {
-                    fieldwork_db::mentions_db::add_mention(&fwp, post_id, Some(r.id), None).await?;
+                    fieldwork_db::mentions_db::add_mention(pool, post_id, Some(r.id), None).await?;
                 }
             }
         }
@@ -474,23 +472,8 @@ async fn create_scheduled_post(
     let note_id = format!("{actor}/statuses/{post_id}");
     let followers_url = format!("{actor}/followers");
     let published = millis_to_iso(now_ms);
-    let public = "https://www.w3.org/ns/activitystreams#Public";
 
-    let (to, cc) = match visibility {
-        "public" => (
-            vec![serde_json::json!(public)],
-            vec![serde_json::json!(&followers_url)],
-        ),
-        "unlisted" => (
-            vec![serde_json::json!(&followers_url)],
-            vec![serde_json::json!(public)],
-        ),
-        "private" => (vec![serde_json::json!(&followers_url)], vec![]),
-        _ => (
-            vec![serde_json::json!(public)],
-            vec![serde_json::json!(&followers_url)],
-        ),
-    };
+    let (to, cc) = crate::posting::visibility_to_cc(visibility, &followers_url);
 
     let activity = serde_json::json!({
         "@context": "https://www.w3.org/ns/activitystreams",

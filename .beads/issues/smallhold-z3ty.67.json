@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.67",
   "title": "Duplicated to/cc visibility construction in Create activity",
   "description": "src/posting.rs:1317-1340, src/delivery.rs:477-491. The visibility-to-addressing (to/cc) mapping logic is duplicated between create_status and create_scheduled_post. Both map 'public'/'unlisted'/'private'/'direct' to the same to/cc arrays. A shared function visibility_addressing(visibility, followers_url) -\u003e (Vec\u003cValue\u003e, Vec\u003cValue\u003e) would consolidate this.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:02:18.598094934Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:02:18.598094934Z",
+  "updated_at": "2026-08-10T03:54:36.803223327Z",
+  "closed_at": "2026-08-10T03:54:36.803223327Z",
+  "close_reason": "Fixed or accepted",
   "labels": [
     "elegance",
     "review"

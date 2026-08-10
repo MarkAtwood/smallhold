@@ -83,6 +83,9 @@ pub async fn import_mastodon_archive(
     Ok(stats)
 }
 
+/// Maximum total extracted bytes before aborting (zip bomb protection).
+const MAX_EXTRACTED_BYTES: u64 = 1_073_741_824; // 1 GB
+
 fn extract_archive(archive_path: &Path, dest: &Path) -> Result<()> {
     let file = std::fs::File::open(archive_path)
         .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
@@ -92,12 +95,22 @@ fn extract_archive(archive_path: &Path, dest: &Path) -> Result<()> {
         .canonicalize()
         .with_context(|| format!("Failed to canonicalize dest: {}", dest.display()))?;
 
+    let mut total_bytes: u64 = 0;
+
     for entry_result in archive.entries().context("Failed to read tar entries")? {
         let mut entry = entry_result.context("Failed to read tar entry")?;
         let entry_path = entry
             .path()
             .context("Failed to read entry path")?
             .into_owned();
+
+        // Zip bomb protection: track total extracted size.
+        total_bytes = total_bytes.saturating_add(entry.size());
+        if total_bytes > MAX_EXTRACTED_BYTES {
+            anyhow::bail!(
+                "archive exceeds {MAX_EXTRACTED_BYTES} byte extraction limit (zip bomb protection)"
+            );
+        }
 
         // Reject absolute paths and entries with path traversal components.
         if entry_path.is_absolute()

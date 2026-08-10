@@ -160,19 +160,18 @@ pub async fn fetch_and_cache_card(
     url: &str,
     own_domain: &str,
 ) -> Result<()> {
-    let fwp = pool.clone();
     let now = crate::api::now_secs();
 
     // Check if already cached and fresh (< 24h)
-    if let Some(cached) = fieldwork_db::cards_db::get_card_by_url(&fwp, url).await? {
+    if let Some(cached) = fieldwork_db::cards_db::get_card_by_url(pool, url).await? {
         if !cached.failed && (now - cached.fetched_at) < 24 * 60 * 60 {
-            fieldwork_db::cards_db::link_card_to_post(&fwp, post_id, url).await?;
+            fieldwork_db::cards_db::link_card_to_post(pool, post_id, url).await?;
             return Ok(());
         }
     }
 
     // Check if URL failed recently (< 1h)
-    if fieldwork_db::cards_db::is_recent_failure(&fwp, url, 3600).await? {
+    if fieldwork_db::cards_db::is_recent_failure(pool, url, 3600).await? {
         bail!("URL failed recently, not retrying");
     }
 
@@ -180,7 +179,7 @@ pub async fn fetch_and_cache_card(
     match fetch_card(url, own_domain).await {
         Ok(card) => {
             fieldwork_db::cards_db::upsert_card(
-                &fwp,
+                pool,
                 &fieldwork_db::cards_db::CardRow {
                     id: 0,
                     url: card.url.clone(),
@@ -201,11 +200,11 @@ pub async fn fetch_and_cache_card(
             )
             .await?;
 
-            fieldwork_db::cards_db::link_card_to_post(&fwp, post_id, &card.url).await?;
+            fieldwork_db::cards_db::link_card_to_post(pool, post_id, &card.url).await?;
         }
         Err(_) => {
             fieldwork_db::cards_db::upsert_card(
-                &fwp,
+                pool,
                 &fieldwork_db::cards_db::CardRow {
                     id: 0,
                     url: url.to_string(),
@@ -271,10 +270,9 @@ pub async fn load_cards_for_posts(pool: &fieldwork_db::db::Pool, post_ids: &[i64
     // ponytail: iterates per-post via fieldwork_db::cards_db::cards_for_post.
     // Timeline pages are <=40 posts so N+1 is acceptable. Upgrade to batch
     // query if this becomes a bottleneck.
-    let fwp = pool.clone();
     let mut map = HashMap::new();
     for &post_id in post_ids {
-        if let Ok(cards) = fieldwork_db::cards_db::cards_for_post(&fwp, post_id).await {
+        if let Ok(cards) = fieldwork_db::cards_db::cards_for_post(pool, post_id).await {
             if let Some(c) = cards.into_iter().next() {
                 map.insert(
                     post_id,

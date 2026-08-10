@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.51",
   "title": "autolink_bare_urls uses byte-level anchor detection that can miss edge cases",
   "description": "src/posting.rs:508-555. autolink_bare_urls() scans for '\u003ca ' at byte positions to split HTML into anchor/non-anchor segments, then linkifies non-anchor segments. The detection checks bytes[i+2] for space or '\u003e' but doesn't handle cases like '\u003ca\\n' (newline after tag name) or '\u003cA ' (uppercase). In practice pulldown-cmark and ammonia always produce lowercase '\u003ca ' so this is correct for the actual input domain, but the implicit dependency on upstream output format is fragile. A comment noting this would help.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:01:18.179154718Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:01:18.179154718Z",
+  "updated_at": "2026-08-10T03:54:36.651862525Z",
+  "closed_at": "2026-08-10T03:54:36.651862525Z",
+  "close_reason": "Fixed or accepted",
   "labels": [
     "elegance",
     "review"

@@ -59,6 +59,27 @@ impl SearchIndex {
         Ok(())
     }
 
+    /// Stage a post for indexing without committing. Call `commit` once after
+    /// a batch of `add_post` calls to make them searchable.
+    pub async fn add_post(&self, post_id: i64, content: &str, account_id: i64) -> Result<()> {
+        let writer = self.writer.lock().await;
+        let id_term = Term::from_field_text(self.id_field, &post_id.to_string());
+        writer.delete_term(id_term);
+        writer.add_document(doc!(
+            self.id_field => post_id.to_string(),
+            self.content_field => content,
+            self.account_id_field => account_id.to_string(),
+        ))?;
+        Ok(())
+    }
+
+    /// Commit pending changes to the index.
+    pub async fn commit(&self) -> Result<()> {
+        let mut writer = self.writer.lock().await;
+        writer.commit()?;
+        Ok(())
+    }
+
     pub async fn delete_post(&self, post_id: i64) -> Result<()> {
         let mut writer = self.writer.lock().await;
         let id_term = Term::from_field_text(self.id_field, &post_id.to_string());

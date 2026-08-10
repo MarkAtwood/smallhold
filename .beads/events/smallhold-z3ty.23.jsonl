@@ -2,3 +2,4 @@
 {"id":"019fe92f-2274-7499-b174-c2d49230c3af","issue_id":"smallhold-z3ty.23","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: idiomatic-rust","created_at":"2026-08-10T01:00:08.180302213Z"}
 {"id":"019fe92f-2277-722b-8b94-443bdafde1a5","issue_id":"smallhold-z3ty.23","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: ownership","created_at":"2026-08-10T01:00:08.183143124Z"}
 {"id":"019fe92f-2279-7f04-aa55-1e2722435a46","issue_id":"smallhold-z3ty.23","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:00:08.185984784Z"}
+{"id":"019fe9ce-dda5-7e42-870b-f122b170e330","issue_id":"smallhold-z3ty.23","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed or accepted","created_at":"2026-08-10T03:54:36.325934885Z"}

@@ -95,10 +95,13 @@ media_dir = "/tmp/smallhold-test-media"
 "#,
     )
     .unwrap();
+    let federation_client = crate::federation::FederationClient::new(&config)
+        .expect("failed to build federation client");
     std::sync::Arc::new(crate::server::AppState {
         config,
         pool,
         search: None,
+        federation_client,
     })
 }
 

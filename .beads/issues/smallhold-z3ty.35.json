@@ -2,13 +2,15 @@
   "id": "smallhold-z3ty.35",
   "title": "load_extra_css OnceLock means config reload requires restart",
   "description": "src/activitypub.rs:215-225. load_extra_css() caches the result in a static OnceLock, meaning custom CSS and theme tokens are loaded exactly once and never refreshed. If the operator edits their CSS file, they must restart the server to see changes. This is a reasonable trade-off (avoids repeated disk I/O and regex parsing on every page load), but the OnceLock behavior is non-obvious and should have a comment noting that a server restart is required to pick up CSS changes.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T01:00:31.903040623Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T01:00:31.903040623Z",
+  "updated_at": "2026-08-10T03:54:36.625821401Z",
+  "closed_at": "2026-08-10T03:54:36.625821401Z",
+  "close_reason": "Fixed or accepted",
   "labels": [
     "readability",
     "review"

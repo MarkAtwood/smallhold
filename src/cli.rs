@@ -412,10 +412,13 @@ async fn cmd_serve(config_path: &Path) -> Result<()> {
         }
     };
 
+    let federation_client = crate::federation::FederationClient::new(&config)
+        .context("Failed to create federation client")?;
     let state = std::sync::Arc::new(crate::server::AppState {
         config: config.clone(),
         pool: pool.clone(),
         search,
+        federation_client,
     });
 
     // Start delivery worker

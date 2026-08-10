@@ -1,3 +1,4 @@
 {"id":"019fe931-021d-76d9-95be-ec653ed82c50","issue_id":"smallhold-z3ty.66","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T01:02:10.973449548Z"}
 {"id":"019fe931-0220-73c7-abce-4575d9dda4a9","issue_id":"smallhold-z3ty.66","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: elegance","created_at":"2026-08-10T01:02:10.976248207Z"}
 {"id":"019fe931-0223-7341-906a-62ea3f7151a2","issue_id":"smallhold-z3ty.66","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T01:02:10.979213838Z"}
+{"id":"019fe9ce-df69-7234-8a92-84103ba1dee0","issue_id":"smallhold-z3ty.66","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed or accepted","created_at":"2026-08-10T03:54:36.77714507Z"}

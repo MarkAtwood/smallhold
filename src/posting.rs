@@ -21,6 +21,21 @@ use std::sync::{Arc, LazyLock};
 /// stored inline in the database row.
 const FILE_BACKED_THRESHOLD: usize = 4096;
 
+/// Build ActivityPub `to` and `cc` arrays from visibility.
+///
+/// For "direct" visibility, returns empty arrays — the caller must populate
+/// `to` from the mention list.
+pub(crate) fn visibility_to_cc(visibility: &str, followers_url: &str) -> (Vec<Value>, Vec<Value>) {
+    let public = "https://www.w3.org/ns/activitystreams#Public";
+    match visibility {
+        "public" => (vec![json!(public)], vec![json!(followers_url)]),
+        "unlisted" => (vec![json!(followers_url)], vec![json!(public)]),
+        "private" => (vec![json!(followers_url)], vec![]),
+        "direct" => (vec![], vec![]),
+        _ => (vec![json!(public)], vec![json!(followers_url)]),
+    }
+}
+
 /// Write content and HTML to files under `{media_dir}/content/{prefix}/`.
 ///
 /// Returns the relative content path (e.g. `"content/ab/12345"`) without
@@ -164,8 +179,7 @@ async fn load_active_filters(
     // and the filter has not expired.
     // ponytail: LIKE on JSON array is fine for small cardinality contexts
     // (home, notifications, public, thread, account). Upgrade: json_each().
-    let fwp = pool;
-    let all_filters = fieldwork_db::filters_db::get_filters(&fwp, account_id).await?;
+    let all_filters = fieldwork_db::filters_db::get_filters(pool, account_id).await?;
 
     let mut filters = Vec::new();
     for f in all_filters {
@@ -179,7 +193,7 @@ async fn load_active_filters(
             }
         }
 
-        let kw_rows = fieldwork_db::filters_db::get_keywords(&fwp, f.id).await?;
+        let kw_rows = fieldwork_db::filters_db::get_keywords(pool, f.id).await?;
         let keywords = kw_rows
             .into_iter()
             .map(|kw| ActiveKeyword {
@@ -525,6 +539,11 @@ fn parse_hashtags(text: &str) -> Vec<String> {
 }
 
 /// Wrap bare `http://` and `https://` URLs that aren't already inside `<a>` tags.
+// ponytail: the `<a` tag detection below uses byte-level comparisons.  This is
+// safe because `<`, `a`, ` `, and `>` are all single-byte ASCII, so they
+// cannot appear as continuation bytes of a multi-byte UTF-8 character.
+// The regex operates on the &str slices between anchor spans, which are
+// guaranteed valid UTF-8 by Rust's string invariant.
 fn autolink_bare_urls(html: &str) -> String {
     // Match URLs that are NOT preceded by href=" or src=" or >
     // Strategy: split on existing <a>...</a> segments, only linkify in non-anchor text.
@@ -640,15 +659,13 @@ pub fn fw_to_local_post(p: fieldwork_db::posts_db::PostRow, media_dir: &str) -> 
 
 /// Fetch a local post by ID using fieldwork, returning our local PostRow.
 pub async fn get_local_post(pool: &fieldwork_db::db::Pool, id: i64, media_dir: &str) -> Result<Option<PostRow>, AppError> {
-    let fwp = pool;
-    let fw_post = fieldwork_db::posts_db::get_post(&fwp, id).await?;
+    let fw_post = fieldwork_db::posts_db::get_post(pool, id).await?;
     Ok(fw_post.map(|p| fw_to_local_post(p, media_dir)))
 }
 
 /// Fetch a local post by AP ID using fieldwork.
 pub async fn get_local_post_by_ap_id(pool: &fieldwork_db::db::Pool, ap_id: &str, media_dir: &str) -> Result<Option<PostRow>, AppError> {
-    let fwp = pool;
-    let fw_post = fieldwork_db::posts_db::get_post_by_ap_id(&fwp, ap_id).await?;
+    let fw_post = fieldwork_db::posts_db::get_post_by_ap_id(pool, ap_id).await?;
     Ok(fw_post.map(|p| fw_to_local_post(p, media_dir)))
 }
 
@@ -819,8 +836,7 @@ pub async fn load_status(
     let account_json = account_to_json(&account, domain);
 
     // Fetch media attachments
-    let fwp_media = pool.clone();
-    let media = fieldwork_db::media_db::attachments_for_post(&fwp_media, post.id).await?;
+    let media = fieldwork_db::media_db::attachments_for_post(pool, post.id).await?;
 
     let media_values: Vec<Value> = media
         .iter()
@@ -844,13 +860,11 @@ pub async fn load_status(
         .collect();
 
     // Fetch tags
-    let fwp_tags = pool.clone();
-    let tag_strings = fieldwork_db::post_tags_db::get_tags(&fwp_tags, post.id).await?;
+    let tag_strings = fieldwork_db::post_tags_db::get_tags(pool, post.id).await?;
     let tag_vals = tag_values_for_post(&tag_strings, domain);
 
     // Fetch mentions for display
-    let fwp_mentions = pool.clone();
-    let fw_mentions = fieldwork_db::mentions_db::get_mentions(&fwp_mentions, post.id).await?;
+    let fw_mentions = fieldwork_db::mentions_db::get_mentions(pool, post.id).await?;
     let mention_rows: Vec<(Option<i64>, Option<i64>)> = fw_mentions
         .into_iter()
         .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
@@ -1316,13 +1330,12 @@ async fn create_status(
     }
 
     // Insert tags
-    let fwp = state.pool.clone();
-    fieldwork_db::post_tags_db::add_tags(&fwp, post_id, &rendered.tags).await?;
+    fieldwork_db::post_tags_db::add_tags(&state.pool, post_id, &rendered.tags).await?;
 
     // Store idempotency key
     if let Some(idem_key) = headers.get("Idempotency-Key").and_then(|v| v.to_str().ok()) {
         let key_hash = sha256_hex(idem_key.as_bytes());
-        fieldwork_db::idempotency_db::store_key(&fwp, &key_hash, auth.account_id, post_id, now).await?;
+        fieldwork_db::idempotency_db::store_key(&state.pool, &key_hash, auth.account_id, post_id, now).await?;
     }
 
     crate::db_extras::touch_persona_last_status(&state.pool, auth.account_id, now).await?;
@@ -1333,32 +1346,23 @@ async fn create_status(
         let note_id = format!("{actor}/statuses/{post_id}");
         let followers_url = format!("{actor}/followers");
         let published = millis_to_iso(now);
-        let public = "https://www.w3.org/ns/activitystreams#Public";
 
-        let (to, cc) = match visibility.as_str() {
-            "public" => (vec![json!(public)], vec![json!(&followers_url)]),
-            "unlisted" => (vec![json!(&followers_url)], vec![json!(public)]),
-            "private" => (vec![json!(&followers_url)], vec![]),
-            "direct" => {
-                let mut to_addrs: Vec<Value> = Vec::new();
-                for m in &rendered.mentions {
-                    match &m.domain {
-                        None => {
-                            to_addrs.push(json!(format!("https://{domain}/users/{}", m.username)));
-                        }
-                        Some(mention_domain) => {
-                            // Look up the remote account's actor_uri for the AP `to` field
-                            let remote_uri = crate::db_extras::get_remote_actor_uri_by_webfinger(&state.pool, &m.username, mention_domain).await?;
-                            if let Some(actor_uri) = remote_uri {
-                                to_addrs.push(json!(actor_uri));
-                            }
+        let (mut to, cc) = visibility_to_cc(&visibility, &followers_url);
+        if visibility == "direct" {
+            for m in &rendered.mentions {
+                match &m.domain {
+                    None => {
+                        to.push(json!(format!("https://{domain}/users/{}", m.username)));
+                    }
+                    Some(mention_domain) => {
+                        let remote_uri = crate::db_extras::get_remote_actor_uri_by_webfinger(&state.pool, &m.username, mention_domain).await?;
+                        if let Some(actor_uri) = remote_uri {
+                            to.push(json!(actor_uri));
                         }
                     }
                 }
-                (to_addrs, vec![])
             }
-            _ => (vec![json!(public)], vec![json!(&followers_url)]),
-        };
+        }
 
         // Build mention tags for the Note
         let mut mention_tags: Vec<Value> = Vec::new();
@@ -1410,8 +1414,7 @@ async fn create_status(
         };
 
         // Query media attachments for the AP Note
-        let fwp_apm = state.pool.clone();
-        let ap_media_rows = fieldwork_db::media_db::attachments_for_post(&fwp_apm, post_id).await?;
+        let ap_media_rows = fieldwork_db::media_db::attachments_for_post(&state.pool, post_id).await?;
         let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
             ap_media_rows.iter().map(|m| (
                 m.file_path.clone(), m.mime_type.clone(),
@@ -1592,8 +1595,7 @@ async fn delete_status(
     // Query media files before deletion so we can clean up from disk
     let media_paths: Vec<(String,)> =
         {
-            let fwp_md = state.pool.clone();
-            let media_rows = fieldwork_db::media_db::attachments_for_post(&fwp_md, post_id).await?;
+            let media_rows = fieldwork_db::media_db::attachments_for_post(&state.pool, post_id).await?;
             media_rows.into_iter().map(|m| (m.file_path,)).collect()
         };
 
@@ -1706,29 +1708,27 @@ async fn edit_status(
     crate::db_extras::update_post_full(&state.pool, post_id, &db_content, &db_content_html, &spoiler_text, sensitive, &language, now, &content_path).await?;
 
     // Delete old mentions and tags, re-insert new ones
-    let fwp_del = state.pool.clone();
-    fieldwork_db::mentions_db::remove_mentions(&fwp_del, post_id).await?;
-    fieldwork_db::post_tags_db::remove_tags(&fwp_del, post_id).await?;
+    fieldwork_db::mentions_db::remove_mentions(&state.pool, post_id).await?;
+    fieldwork_db::post_tags_db::remove_tags(&state.pool, post_id).await?;
 
-    let fwp_edit = state.pool.clone();
     for m in &rendered.mentions {
         match &m.domain {
             None => {
-                let local = fieldwork_db::persona_db::get_persona_by_username(&fwp_edit, &m.username).await?;
+                let local = fieldwork_db::persona_db::get_persona_by_username(&state.pool, &m.username).await?;
                 if let Some(p) = local {
-                    fieldwork_db::mentions_db::add_mention(&fwp_edit, post_id, None, Some(p.id)).await?;
+                    fieldwork_db::mentions_db::add_mention(&state.pool, post_id, None, Some(p.id)).await?;
                 }
             }
             Some(mention_domain) => {
-                let remote = fieldwork_db::actor_cache::get_by_webfinger(&fwp_edit, &m.username, mention_domain).await?;
+                let remote = fieldwork_db::actor_cache::get_by_webfinger(&state.pool, &m.username, mention_domain).await?;
                 if let Some(r) = remote {
-                    fieldwork_db::mentions_db::add_mention(&fwp_edit, post_id, Some(r.id), None).await?;
+                    fieldwork_db::mentions_db::add_mention(&state.pool, post_id, Some(r.id), None).await?;
                 }
             }
         }
     }
 
-    fieldwork_db::post_tags_db::add_tags(&fwp_edit, post_id, &rendered.tags).await?;
+    fieldwork_db::post_tags_db::add_tags(&state.pool, post_id, &rendered.tags).await?;
 
     // Enqueue outbound Update{Note} for federation
     {
@@ -1737,14 +1737,8 @@ async fn edit_status(
         let followers_url = format!("{actor}/followers");
         let published = millis_to_iso(post.created_at);
         let updated = millis_to_iso(now);
-        let public = "https://www.w3.org/ns/activitystreams#Public";
 
-        let (to, cc) = match post.visibility.as_str() {
-            "public" => (vec![json!(public)], vec![json!(&followers_url)]),
-            "unlisted" => (vec![json!(&followers_url)], vec![json!(public)]),
-            "private" => (vec![json!(&followers_url)], vec![]),
-            _ => (vec![json!(public)], vec![json!(&followers_url)]),
-        };
+        let (to, cc) = visibility_to_cc(&post.visibility, &followers_url);
 
         // Build mention tags for the Note
         let mut mention_tags: Vec<Value> = Vec::new();
@@ -1790,8 +1784,7 @@ async fn edit_status(
         let in_reply_to_uri = reply_post.in_reply_to_uri;
 
         // Query media attachments for the AP Note
-        let fwp_apm = state.pool.clone();
-        let ap_media_rows = fieldwork_db::media_db::attachments_for_post(&fwp_apm, post_id).await?;
+        let ap_media_rows = fieldwork_db::media_db::attachments_for_post(&state.pool, post_id).await?;
         let ap_media: Vec<(String, String, Option<i32>, Option<i32>, Option<String>, String)> =
             ap_media_rows.iter().map(|m| (
                 m.file_path.clone(), m.mime_type.clone(),
@@ -3203,8 +3196,7 @@ async fn conversation_participants(
         accounts.push(account_to_json(&author, domain));
     }
     // Add mentioned accounts (excluding current user)
-    let fwp_cp = pool.clone();
-    let cp_mentions = fieldwork_db::mentions_db::get_mentions(&fwp_cp, post.id).await?;
+    let cp_mentions = fieldwork_db::mentions_db::get_mentions(pool, post.id).await?;
     let mention_rows: Vec<(Option<i64>, Option<i64>)> = cp_mentions
         .into_iter()
         .map(|m| (m.mentioned_persona_id, m.mentioned_remote_id))
@@ -3346,8 +3338,7 @@ async fn mark_conversation_read(
     }
 
     let is_involved = post.persona_id == auth.account_id || {
-        let fwp_m = state.pool.clone();
-        let m_rows = fieldwork_db::mentions_db::get_mentions(&fwp_m, post_id).await?;
+        let m_rows = fieldwork_db::mentions_db::get_mentions(&state.pool, post_id).await?;
         m_rows.iter().any(|m| m.mentioned_persona_id == Some(auth.account_id))
     };
 

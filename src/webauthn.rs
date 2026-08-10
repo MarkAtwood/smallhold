@@ -103,13 +103,12 @@ async fn store_challenge(
     let state_json = serde_json::to_string(state)
         .map_err(|e| AppError::internal(format!("serialize challenge state: {e}")))?;
     let now = now_millis();
-    let fwp = pool.clone();
 
     // Clean up expired challenges while we're here
     let cutoff = now - CHALLENGE_TTL_MS;
-    let _ = fieldwork_db::webauthn_db::purge_old_challenges(&fwp, cutoff).await;
+    let _ = fieldwork_db::webauthn_db::purge_old_challenges(pool, cutoff).await;
 
-    fieldwork_db::webauthn_db::store_challenge(&fwp, challenge_id, &state_json, now).await?;
+    fieldwork_db::webauthn_db::store_challenge(pool, challenge_id, &state_json, now).await?;
 
     Ok(())
 }
@@ -120,14 +119,13 @@ async fn consume_challenge<T: serde::de::DeserializeOwned>(
 ) -> Result<T, AppError> {
     let now = now_millis();
     let cutoff = now - CHALLENGE_TTL_MS;
-    let fwp = pool.clone();
 
-    let state_json = fieldwork_db::webauthn_db::get_challenge(&fwp, challenge_id)
+    let state_json = fieldwork_db::webauthn_db::get_challenge(pool, challenge_id)
         .await?
         .ok_or_else(|| AppError::bad_request("Invalid or expired challenge"))?;
 
     // Delete the consumed challenge
-    fieldwork_db::webauthn_db::delete_challenge(&fwp, challenge_id).await?;
+    fieldwork_db::webauthn_db::delete_challenge(pool, challenge_id).await?;
 
     // Verify it hasn't expired (get_challenge doesn't filter by created_at)
     // ponytail: webauthn_db doesn't expose created_at in get_challenge.

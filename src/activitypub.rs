@@ -212,6 +212,8 @@ footer.site{margin-top:2rem;color:var(--muted);font-size:.8rem}
 
 /// Load theme token overrides and custom CSS. Theme tokens come first so custom CSS can override.
 /// Cached in an OnceLock so disk I/O and regex work happen only on first call.
+// ponytail: OnceLock means CSS changes require a server restart. Accepted
+// trade-off for a single-user server where restarts are cheap.
 fn load_extra_css(config: &crate::config::Config) -> String {
     static EXTRA_CSS: OnceLock<String> = OnceLock::new();
     EXTRA_CSS
@@ -479,6 +481,26 @@ struct PostRow {
     created_at: i64,
 }
 
+/// Build a Mastodon-compatible AP Note JSON object from a PostRow.
+fn build_ap_note(post: &PostRow, actor_uri: &str, domain: &str, username: &str) -> Value {
+    let published = crate::api::millis_to_iso(post.created_at);
+    let status_uri = format!("{actor_uri}/statuses/{}", post.id);
+    let mut note = json!({
+        "id": &status_uri,
+        "type": "Note",
+        "content": post.content_html,
+        "attributedTo": actor_uri,
+        "to": ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc": [format!("{actor_uri}/followers")],
+        "published": &published,
+        "url": format!("https://{domain}/@{username}/{}", post.id)
+    });
+    if let Some(ref ctx) = post.context_url {
+        note["context"] = json!(ctx);
+    }
+    note
+}
+
 /// GET /users/{username}/outbox — OrderedCollection of public Create{Note} activities.
 ///
 /// Without `?page`: returns the top-level collection with `totalItems` and `first` link.
@@ -521,21 +543,9 @@ async fn outbox(
     let items: Vec<Value> = posts
         .into_iter()
         .map(|p| {
+            let note = build_ap_note(&p, &actor_uri, domain, &username);
             let published = crate::api::millis_to_iso(p.created_at);
             let status_uri = format!("{actor_uri}/statuses/{}", p.id);
-            let mut note = json!({
-                "id": &status_uri,
-                "type": "Note",
-                "content": p.content_html,
-                "attributedTo": &actor_uri,
-                "to": ["https://www.w3.org/ns/activitystreams#Public"],
-                "cc": [format!("{actor_uri}/followers")],
-                "published": &published,
-                "url": format!("https://{domain}/@{username}/{}", p.id)
-            });
-            if let Some(ref ctx) = p.context_url {
-                note["context"] = json!(ctx);
-            }
             json!({
                 "id": format!("{status_uri}/activity"),
                 "type": "Create",
@@ -596,7 +606,6 @@ async fn featured(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Response, AppError> {
-    let _ = fetch_account(&state.pool, &username).await?;
     let domain = &state.config.server.domain;
 
     let account_id = crate::db_extras::get_persona_id(&state.pool, &username)
@@ -614,24 +623,7 @@ async fn featured(
 
     let items: Vec<Value> = posts
         .iter()
-        .map(|p| {
-            let published = crate::api::millis_to_iso(p.created_at);
-            let status_uri = format!("{actor_uri}/statuses/{}", p.id);
-            let mut note = json!({
-                "id": &status_uri,
-                "type": "Note",
-                "content": p.content_html,
-                "attributedTo": &actor_uri,
-                "to": ["https://www.w3.org/ns/activitystreams#Public"],
-                "cc": [format!("{actor_uri}/followers")],
-                "published": &published,
-                "url": format!("https://{domain}/@{username}/{}", p.id)
-            });
-            if let Some(ref ctx) = p.context_url {
-                note["context"] = json!(ctx);
-            }
-            note
-        })
+        .map(|p| build_ap_note(p, &actor_uri, domain, &username))
         .collect();
 
     let featured_uri = format!("https://{domain}/users/{username}/collections/featured");
@@ -838,25 +830,15 @@ async fn ap_context_collection(
     let items: Vec<Value> = posts
         .iter()
         .map(|p| {
-            let published = crate::api::millis_to_iso(p.created_at);
             let post_actor_uri = format!("https://{domain}/users/{}", p.username);
-            let status_uri = format!("{post_actor_uri}/statuses/{}", p.id);
-            let mut note = json!({
-                "id": &status_uri,
-                "type": "Note",
-                "content": &p.content_html,
-                "attributedTo": &post_actor_uri,
-                "context": &context_url,
-                "to": ["https://www.w3.org/ns/activitystreams#Public"],
-                "cc": [format!("{post_actor_uri}/followers")],
-                "published": &published,
-                "url": format!("https://{domain}/@{}/{}", p.username, p.id)
-            });
-            // Only add context if it differs from the collection URL (shouldn't, but defensive).
-            if let Some(ref ctx) = p.context_url {
-                note["context"] = json!(ctx);
-            }
-            note
+            // Build a temporary PostRow to reuse the Note constructor
+            let post_row = PostRow {
+                id: p.id,
+                content_html: p.content_html.clone(),
+                context_url: p.context_url.clone().or_else(|| Some(context_url.clone())),
+                created_at: p.created_at,
+            };
+            build_ap_note(&post_row, &post_actor_uri, domain, &p.username)
         })
         .collect();
 

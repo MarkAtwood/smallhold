@@ -4,7 +4,6 @@ use crate::api::{
 };
 use crate::delivery::{enqueue_delivery, enqueue_to_followers};
 use crate::error::AppError;
-use crate::federation::FederationClient;
 use crate::id::generate_id;
 use crate::posting::render_content;
 use crate::server::AppState;
@@ -29,8 +28,6 @@ async fn build_relationship(
     source_account_id: i64,
     target_persona_id: i64,
 ) -> Result<Value, AppError> {
-    let fwp = pool;
-
     // REMAINING: relationship queries use follow/block/mute tables with local persona IDs.
     // fieldwork has is_following_remote but not is_following_local. These queries check
     // local-to-local relationships which fieldwork doesn't fully cover.
@@ -43,15 +40,15 @@ async fn build_relationship(
         .await?.unwrap_or(false);
 
     let blocking = fieldwork_db::interactions_db::is_blocked(
-        &fwp, source_account_id, Some(target_persona_id), None,
+        pool, source_account_id, Some(target_persona_id), None,
     ).await?;
 
     let blocked_by = fieldwork_db::interactions_db::is_blocked(
-        &fwp, target_persona_id, Some(source_account_id), None,
+        pool, target_persona_id, Some(source_account_id), None,
     ).await?;
 
     let muting = fieldwork_db::interactions_db::is_muted(
-        &fwp, source_account_id, Some(target_persona_id), None,
+        pool, source_account_id, Some(target_persona_id), None,
     ).await?;
 
     // Follow requested (pending)
@@ -83,25 +80,23 @@ async fn build_relationship_remote(
     source_account_id: i64,
     target_remote_id: i64,
 ) -> Result<Value, AppError> {
-    let fwp = pool;
-
     let following = fieldwork_db::follows_db::is_following_remote(
-        &fwp, source_account_id, target_remote_id,
+        pool, source_account_id, target_remote_id,
     ).await?;
 
     let followed_by = fieldwork_db::followers_db::is_following(
-        &fwp, source_account_id, target_remote_id,
+        pool, source_account_id, target_remote_id,
     ).await?;
 
     let showing_reblogs = crate::db_extras::get_follow_show_reblogs_remote(pool, source_account_id, target_remote_id)
         .await?.unwrap_or(true);
 
     let blocking = fieldwork_db::interactions_db::is_blocked(
-        &fwp, source_account_id, None, Some(target_remote_id),
+        pool, source_account_id, None, Some(target_remote_id),
     ).await?;
 
     let muting = fieldwork_db::interactions_db::is_muted(
-        &fwp, source_account_id, None, Some(target_remote_id),
+        pool, source_account_id, None, Some(target_remote_id),
     ).await?;
 
     Ok(json!({
@@ -122,6 +117,45 @@ async fn build_relationship_remote(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: build Mastodon API JSON for a remote account
+// ---------------------------------------------------------------------------
+
+/// Build the Mastodon API account JSON for a remote account from its fields.
+pub(crate) fn remote_account_json(
+    id: i64,
+    username: &str,
+    domain: &str,
+    display_name: &str,
+    bio_html: &str,
+    is_locked: bool,
+    bot: bool,
+) -> Value {
+    json!({
+        "id": id.to_string(),
+        "username": username,
+        "acct": format!("{username}@{domain}"),
+        "display_name": display_name,
+        "locked": is_locked,
+        "bot": bot,
+        "discoverable": true,
+        "created_at": "1970-01-01T00:00:00.000Z",
+        "note": bio_html,
+        "url": format!("https://{domain}/@{username}"),
+        "uri": format!("https://{domain}/users/{username}"),
+        "avatar": "",
+        "avatar_static": "",
+        "header": "",
+        "header_static": "",
+        "followers_count": 0,
+        "following_count": 0,
+        "statuses_count": 0,
+        "last_status_at": null,
+        "emojis": [],
+        "fields": []
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Helper: determine if target ID is local or remote
 // ---------------------------------------------------------------------------
 
@@ -136,18 +170,15 @@ enum TargetAccount {
 }
 
 async fn resolve_target(pool: &fieldwork_db::db::Pool, id_str: &str) -> Result<TargetAccount, AppError> {
-    // Parse ID as i64 first
     let id: i64 = id_str.parse().map_err(|_| AppError::not_found("Account not found"))?;
-    let fwp = pool;
-    let local = fieldwork_db::persona_db::get_persona_by_id(&fwp, id).await?;
+
+    // Check local first
+    let local = fieldwork_db::persona_db::get_persona_by_id(pool, id).await?;
     if let Some(persona) = local {
         return Ok(TargetAccount::Local(persona.id));
     }
 
     // Check remote (remote_accounts.id is INTEGER)
-    let id: i64 = id_str
-        .parse()
-        .map_err(|_| AppError::not_found("Account not found"))?;
     let remote: Option<(i64, String, String, Option<String>)> = crate::db_extras::get_remote_account_full(pool, id).await?;
 
     match remote {
@@ -321,29 +352,7 @@ async fn followers_list(
         .collect();
 
     for (rid, username, rdomain, display_name, bio_html) in &remote_followers {
-        accounts.push(json!({
-            "id": rid.to_string(),
-            "username": username,
-            "acct": format!("{username}@{rdomain}"),
-            "display_name": display_name,
-            "locked": false,
-            "bot": false,
-            "discoverable": true,
-            "created_at": "1970-01-01T00:00:00.000Z",
-            "note": bio_html,
-            "url": format!("https://{rdomain}/@{username}"),
-            "uri": format!("https://{rdomain}/users/{username}"),
-            "avatar": "",
-            "avatar_static": "",
-            "header": "",
-            "header_static": "",
-            "followers_count": 0,
-            "following_count": 0,
-            "statuses_count": 0,
-            "last_status_at": null,
-            "emojis": [],
-            "fields": []
-        }));
+        accounts.push(remote_account_json(*rid, username, rdomain, display_name, bio_html, false, false));
     }
 
     Ok(Json(json!(accounts)))
@@ -379,29 +388,7 @@ async fn following_list(
         .collect();
 
     for (rid, username, rdomain, display_name, bio_html) in &remote_following {
-        accounts.push(json!({
-            "id": rid.to_string(),
-            "username": username,
-            "acct": format!("{username}@{rdomain}"),
-            "display_name": display_name,
-            "locked": false,
-            "bot": false,
-            "discoverable": true,
-            "created_at": "1970-01-01T00:00:00.000Z",
-            "note": bio_html,
-            "url": format!("https://{rdomain}/@{username}"),
-            "uri": format!("https://{rdomain}/users/{username}"),
-            "avatar": "",
-            "avatar_static": "",
-            "header": "",
-            "header_static": "",
-            "followers_count": 0,
-            "following_count": 0,
-            "statuses_count": 0,
-            "last_status_at": null,
-            "emojis": [],
-            "fields": []
-        }));
+        accounts.push(remote_account_json(*rid, username, rdomain, display_name, bio_html, false, false));
     }
 
     Ok(Json(json!(accounts)))
@@ -744,29 +731,7 @@ async fn follow_requests(
         let remote: Option<(i64, String, String, String, String)> = crate::db_extras::get_remote_account_by_id(&state.pool, *remote_id).await?;
 
         if let Some((rid, username, rdomain, display_name, bio_html)) = remote {
-            accounts.push(json!({
-                "id": rid.to_string(),
-                "username": username,
-                "acct": format!("{username}@{rdomain}"),
-                "display_name": display_name,
-                "locked": false,
-                "bot": false,
-                "discoverable": true,
-                "created_at": "1970-01-01T00:00:00.000Z",
-                "note": bio_html,
-                "url": format!("https://{rdomain}/@{username}"),
-                "uri": format!("https://{rdomain}/users/{username}"),
-                "avatar": "",
-                "avatar_static": "",
-                "header": "",
-                "header_static": "",
-                "followers_count": 0,
-                "following_count": 0,
-                "statuses_count": 0,
-                "last_status_at": null,
-                "emojis": [],
-                "fields": []
-            }));
+            accounts.push(remote_account_json(rid, &username, &rdomain, &display_name, &bio_html, false, false));
         }
     }
 
@@ -915,17 +880,14 @@ async fn search(
         if resolve && query.contains('@') {
             let acct = query.strip_prefix('@').unwrap_or(query);
             if let Some((_user, _remote_domain)) = acct.split_once('@') {
-                let fed_client = FederationClient::new(&state.config)
-                    .map_err(|e| AppError::internal(format!("federation client: {e}")))?;
-
-                match fed_client.resolve_webfinger(acct).await {
+                match state.federation_client.resolve_webfinger(acct).await {
                     Ok(actor_uri) => {
                         // Get signing credentials
                         let signing: Option<(String, String)> = crate::db_extras::get_persona_signing_key(&state.pool, auth.account_id).await?;
 
                         if let Some((username, private_key_pem)) = signing {
                             let key_id = format!("https://{domain}/users/{username}#main-key");
-                            match fed_client
+                            match state.federation_client
                                 .fetch_actor(&actor_uri, &private_key_pem, &key_id)
                                 .await
                             {
@@ -1001,29 +963,7 @@ async fn search(
             crate::db_extras::search_remote_accounts(&state.pool, &like_pattern, limit).await?;
 
         for (rid, username, rdomain, display_name, bio_html, is_locked, bot) in &remote_matches {
-            result_accounts.push(json!({
-                "id": rid.to_string(),
-                "username": username,
-                "acct": format!("{username}@{rdomain}"),
-                "display_name": display_name,
-                "locked": is_locked,
-                "bot": bot,
-                "discoverable": true,
-                "created_at": "1970-01-01T00:00:00.000Z",
-                "note": bio_html,
-                "url": format!("https://{rdomain}/@{username}"),
-                "uri": format!("https://{rdomain}/users/{username}"),
-                "avatar": "",
-                "avatar_static": "",
-                "header": "",
-                "header_static": "",
-                "followers_count": 0,
-                "following_count": 0,
-                "statuses_count": 0,
-                "last_status_at": null,
-                "emojis": [],
-                "fields": []
-            }));
+            result_accounts.push(remote_account_json(*rid, username, rdomain, display_name, bio_html, *is_locked, *bot));
         }
 
         // Truncate to limit
@@ -1175,11 +1115,10 @@ async fn get_tag(
         .and_then(|v| v.strip_prefix("Bearer "))
     {
         let token_hash = crate::api::hex_encode(&Sha256::digest(auth_header.as_bytes()));
-        let fwp = state.pool.clone();
-        let token_info = fieldwork_db::oauth_db::verify_token(&fwp, &token_hash).await?;
+        let token_info = fieldwork_db::oauth_db::verify_token(&state.pool, &token_hash).await?;
 
         if let Some((aid, _username, _scopes)) = token_info {
-            fieldwork_db::followed_tags_db::is_following_tag(&fwp, aid, &tag).await?
+            fieldwork_db::followed_tags_db::is_following_tag(&state.pool, aid, &tag).await?
         } else {
             false
         }

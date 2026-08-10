@@ -1,17 +1,17 @@
 {
   "id": "smallhold-z3ty",
   "title": "Review: smallhold 2026-08-09",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-10T00:57:30.484443375Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-10T00:57:34.774135206Z",
+  "updated_at": "2026-08-10T03:54:44.534724333Z",
   "started_at": "2026-08-10T00:57:34.774135206Z",
-  "lease_expires_at": "2026-08-10T01:02:34.774135206Z",
-  "heartbeat_at": "2026-08-10T00:57:34.774135206Z",
+  "closed_at": "2026-08-10T03:54:44.534724333Z",
+  "close_reason": "All 68 findings addressed (fixed, accepted, or documented)",
   "labels": [
     "review"
   ]

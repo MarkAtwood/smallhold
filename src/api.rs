@@ -169,22 +169,21 @@ pub fn account_to_json_with_counts(
 }
 
 pub async fn fetch_account_counts(pool: &fieldwork_db::db::Pool, account_id: i64) -> (i64, i64, i64) {
-    let fwp = pool;
-    let followers = fieldwork_db::followers_db::follower_count(&fwp, account_id)
+    let followers = fieldwork_db::followers_db::follower_count(pool, account_id)
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(account_id, error = %e, "failed to fetch follower count");
             0
         });
 
-    let following = fieldwork_db::follows_db::following_count(&fwp, account_id)
+    let following = fieldwork_db::follows_db::following_count(pool, account_id)
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(account_id, error = %e, "failed to fetch following count");
             0
         });
 
-    let statuses = fieldwork_db::posts_db::posts_count(&fwp, account_id)
+    let statuses = fieldwork_db::posts_db::posts_count(pool, account_id)
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(account_id, error = %e, "failed to fetch statuses count");
@@ -195,8 +194,7 @@ pub async fn fetch_account_counts(pool: &fieldwork_db::db::Pool, account_id: i64
 }
 
 pub async fn fetch_account_row(pool: &fieldwork_db::db::Pool, id: i64) -> Result<AccountRow, AppError> {
-    let fwp = pool;
-    let persona = fieldwork_db::persona_db::get_persona_by_id(&fwp, id).await?
+    let persona = fieldwork_db::persona_db::get_persona_by_id(pool, id).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona_to_account_row(&persona))
 }
@@ -221,15 +219,13 @@ async fn fetch_account_row_by_username(
     pool: &fieldwork_db::db::Pool,
     username: &str,
 ) -> Result<AccountRow, AppError> {
-    let fwp = pool;
-    let persona = fieldwork_db::persona_db::get_persona_by_username(&fwp, username).await?
+    let persona = fieldwork_db::persona_db::get_persona_by_username(pool, username).await?
         .ok_or_else(|| AppError::not_found("Account not found"))?;
     Ok(persona_to_account_row(&persona))
 }
 
 async fn load_contact_account(pool: &fieldwork_db::db::Pool, domain: &str) -> Result<Value, AppError> {
-    let fwp = pool;
-    let personas = fieldwork_db::persona_db::list_personas(&fwp).await?;
+    let personas = fieldwork_db::persona_db::list_personas(pool).await?;
     let row = personas.first().map(persona_to_account_row);
     match row {
         Some(r) => {
@@ -430,8 +426,7 @@ async fn authorize_form(
         }
     }
 
-    let fwp = state.pool.clone();
-    let personas = fieldwork_db::persona_db::list_personas(&fwp).await?;
+    let personas = fieldwork_db::persona_db::list_personas(&state.pool).await?;
     let accounts: Vec<(i64, String, String)> = personas
         .iter()
         .map(|p| (p.id, p.username.clone(), p.display_name.clone()))
@@ -654,8 +649,7 @@ async fn authorize_submit(
     }
 
     // Verify account exists
-    let fwp_ae = state.pool.clone();
-    let account_exists = fieldwork_db::persona_db::get_persona_by_id(&fwp_ae, form.account_id).await?;
+    let account_exists = fieldwork_db::persona_db::get_persona_by_id(&state.pool, form.account_id).await?;
     if account_exists.is_none() {
         return Err(AppError::bad_request("Account not found"));
     }
@@ -663,8 +657,7 @@ async fn authorize_submit(
     // Verify app exists and redirect_uri matches registered URI
     let app_row: Option<(i64, String)> =
         {
-            let fwp_oa = state.pool.clone();
-            let app = fieldwork_db::oauth_db::get_app_by_client_id(&fwp_oa, &form.client_id).await?;
+            let app = fieldwork_db::oauth_db::get_app_by_client_id(&state.pool, &form.client_id).await?;
             app.map(|a| (a.id, a.redirect_uri))
         };
     let (app_id, registered_uri) =
@@ -1267,8 +1260,7 @@ async fn get_lists(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedAccount,
 ) -> Result<Json<Value>, AppError> {
-    let fwp_l = state.pool.clone();
-    let list_rows = fieldwork_db::lists_db::get_lists(&fwp_l, auth.account_id).await?;
+    let list_rows = fieldwork_db::lists_db::get_lists(&state.pool, auth.account_id).await?;
     let rows: Vec<(i64, String, String)> = list_rows.iter().map(|l| (l.id, l.title.clone(), l.replies_policy.clone())).collect();
 
     let lists: Vec<Value> = rows
@@ -1412,8 +1404,7 @@ async fn get_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = state.pool.clone();
-            let l = fieldwork_db::lists_db::get_list(&fwp_lv, list_id).await?;
+            let l = fieldwork_db::lists_db::get_list(&state.pool, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
 
@@ -1450,8 +1441,7 @@ async fn add_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = state.pool.clone();
-            let l = fieldwork_db::lists_db::get_list(&fwp_lv, list_id).await?;
+            let l = fieldwork_db::lists_db::get_list(&state.pool, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
 
@@ -1482,8 +1472,7 @@ async fn remove_list_accounts(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_lv = state.pool.clone();
-            let l = fieldwork_db::lists_db::get_list(&fwp_lv, list_id).await?;
+            let l = fieldwork_db::lists_db::get_list(&state.pool, list_id).await?;
             l.filter(|l| l.user_id == auth.account_id).map(|l| (l.id,))
         };
 
@@ -1589,8 +1578,7 @@ async fn list_filters_v2(
 ) -> Result<Json<Value>, AppError> {
     let filter_ids: Vec<(i64,)> =
         {
-            let fwp_fl = state.pool.clone();
-            let filters = fieldwork_db::filters_db::get_filters(&fwp_fl, auth.account_id).await?;
+            let filters = fieldwork_db::filters_db::get_filters(&state.pool, auth.account_id).await?;
             filters.into_iter().map(|f| (f.id,)).collect::<Vec<_>>()
         };
 
@@ -1636,8 +1624,7 @@ async fn get_filter_v2(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = state.pool.clone();
-            let f = fieldwork_db::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            let f = fieldwork_db::filters_db::get_filter(&state.pool, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };
     if exists.is_none() {
@@ -1714,7 +1701,6 @@ async fn delete_filter_v2(
     fieldwork_db::filters_db::delete_filter(
         &state.pool, filter_id,
     ).await?;
-    let _rows_affected = if del_filter.is_some() { 1u64 } else { 0u64 };
     Ok(StatusCode::OK)
 }
 
@@ -1730,8 +1716,7 @@ async fn list_filter_keywords(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = state.pool.clone();
-            let f = fieldwork_db::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            let f = fieldwork_db::filters_db::get_filter(&state.pool, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };
     if exists.is_none() {
@@ -1766,8 +1751,7 @@ async fn add_filter_keyword(
 
     let exists: Option<(i64,)> =
         {
-            let fwp_fc = state.pool.clone();
-            let f = fieldwork_db::filters_db::get_filter(&fwp_fc, filter_id).await?;
+            let f = fieldwork_db::filters_db::get_filter(&state.pool, filter_id).await?;
             f.filter(|f| f.user_id == auth.account_id).map(|f| (f.id,))
         };
     if exists.is_none() {

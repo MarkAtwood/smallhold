@@ -138,12 +138,11 @@ async fn nodeinfo(State(state): State<Arc<AppState>>) -> Result<Response, AppErr
     // ponytail: nodeinfo needs global counts across all personas. No single
     // fieldwork function covers this; posts_count requires a persona_id and
     // list_personas returns all personas but doesn't count them.
-    let fwp = state.pool.clone();
-    let personas = fieldwork_db::persona_db::list_personas(&fwp).await?;
+    let personas = fieldwork_db::persona_db::list_personas(&state.pool).await?;
     let user_count = personas.len() as i64;
     let mut local_posts = 0i64;
     for p in &personas {
-        local_posts += fieldwork_db::posts_db::posts_count(&fwp, p.id).await?;
+        local_posts += fieldwork_db::posts_db::posts_count(&state.pool, p.id).await?;
     }
 
     let body = serde_json::json!({
