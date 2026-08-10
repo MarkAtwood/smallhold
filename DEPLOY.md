@@ -283,6 +283,88 @@ Drop a CSS file and set `branding.custom_css_path` in config:
 body { font-family: "Helvetica Neue", sans-serif; }
 ```
 
+## Webhooks
+
+Fire HTTP callbacks when events happen. Use for bridging to other platforms, notifications, or automation.
+
+### Register a webhook
+
+```bash
+# Via CLI
+smallhold webhook add https://example.com/hook --events=status.created,status.updated
+
+# Via API
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hook","events":["status.created"]}' \
+  https://your.domain/api/v1/admin/webhooks
+```
+
+### Available events
+
+| Event | Fires when |
+|-------|-----------|
+| `status.created` | New post published |
+| `status.updated` | Post edited |
+| `status.deleted` | Post deleted |
+| `account.follow` | Someone follows a persona |
+
+### Payload format
+
+```http
+POST /hook HTTP/1.1
+Content-Type: application/json
+X-Webhook-Signature: sha256=a1b2c3d4...
+
+{"event":"status.created","object":{...full Mastodon Status JSON...}}
+```
+
+Verify the signature by computing `HMAC-SHA256(secret, request_body)` and comparing to the `sha256=` value in the header.
+
+### Management
+
+```bash
+smallhold webhook list            # show registered webhooks
+smallhold webhook enable <id>     # enable a webhook
+smallhold webhook disable <id>    # disable without deleting
+smallhold webhook test <id>       # send a test payload
+smallhold webhook log             # recent delivery attempts
+smallhold webhook log <id>        # filter by webhook
+smallhold webhook remove <id>     # delete a webhook
+```
+
+### Retry behavior
+
+Failed deliveries retry with exponential backoff: 1 minute, then 5 minutes, then 15 minutes. After 3 failures, the delivery is discarded (logged for review via `webhook log`).
+
+### Protocol bridging
+
+Webhooks are the universal adapter for cross-protocol integration. Point a webhook at an external bridge service to publish to nostr, Bluesky, Matrix, Slack, or any other platform — without adding protocol-specific code to smallhold.
+
+## Storage management
+
+### Media files
+
+Media files are stored on disk at `{media_dir}/{prefix}/{id}.{ext}` with a `.meta` JSON sidecar file alongside each one. The sidecar contains metadata (MIME type, dimensions, blurhash, alt text) for recovery.
+
+If the database is lost or corrupted, rebuild the media index from sidecar files:
+
+```bash
+smallhold rebuild-media-index
+```
+
+### Long-form content
+
+Posts exceeding 4KB are automatically stored as files on disk instead of inline in SQLite. Source markdown at `{media_dir}/content/{prefix}/{id}.md`, rendered HTML at `.html`. Short posts remain inline.
+
+To migrate existing long posts to file-backed storage:
+
+```bash
+smallhold migrate-storage
+```
+
+This also backfills `.meta` sidecar files for any media missing them. Safe to re-run.
+
 ## Monitoring
 
 The `/health` endpoint returns `{"status":"ok"}` when the server is running. Point your uptime monitor at it.

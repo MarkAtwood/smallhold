@@ -85,6 +85,17 @@ Put a reverse proxy (Caddy or nginx) in front for TLS. See [DEPLOY.md](DEPLOY.md
 **Search:**
 - Full-text search via tantivy
 
+**Webhooks:**
+- Fire-and-forget HTTP POST on status.created, status.updated, status.deleted, account.follow
+- HMAC-SHA256 signed payloads, SSRF-validated target URLs
+- Retry with exponential backoff (3 attempts), delivery log
+- Bridge to any protocol (nostr, Bluesky, Matrix, Slack) via external webhook receivers
+
+**Storage:**
+- Media files on disk with `.meta` JSON sidecar files
+- Long-form content (>4KB) stored as files, short posts inline in SQLite
+- `rebuild-media-index` and `migrate-storage` CLI for recovery/migration
+
 ---
 
 ## Architecture
@@ -101,7 +112,8 @@ smallhold binary  (axum, tokio)
   ├── Full-text search (tantivy)
   ├── SQLite via sqlx (WAL mode)
   ├── Streaming (SSE + WebSocket)
-  └── Delivery worker (retry, circuit breaker)
+  ├── Delivery worker (retry, circuit breaker)
+  └── Webhooks (event dispatch, retry, HMAC signing)
 ```
 
 ---
