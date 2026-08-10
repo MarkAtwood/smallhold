@@ -1,0 +1,4 @@
+{"id":"019fe9d2-a033-74c1-8bac-48bfb5e84a70","issue_id":"smallhold-xmpo.8","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T03:58:42.739312433Z"}
+{"id":"019fe9d2-a036-786b-b379-adad0d337377","issue_id":"smallhold-xmpo.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: readability","created_at":"2026-08-10T03:58:42.742552824Z"}
+{"id":"019fe9d2-a039-79eb-aa5e-cb673a3a3296","issue_id":"smallhold-xmpo.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T03:58:42.745650813Z"}
+{"id":"019fe9d6-c314-7356-836d-1a8d8b6c6a60","issue_id":"smallhold-xmpo.8","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Superseded by smallhold-xmpo.7 which correctly identifies this as a P0 panic bug, not a P3 readability issue","created_at":"2026-08-10T04:03:13.812220632Z"}

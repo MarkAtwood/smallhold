@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.12",
+  "title": "resolve_content does sync file I/O on request path",
+  "description": "posting.rs:85-101. `resolve_content()` calls `std::fs::read_to_string()` (synchronous) and is invoked from async request handlers across 15+ call sites (activitypub.rs, api.rs, posting.rs, feeds.rs, etc.). This blocks the Tokio runtime thread for the duration of the disk read. The first review fixed `write_content_files` (smallhold-z3ty.72) to use `tokio::fs`, but the read path was not addressed. For short posts this is a no-op (content_path is None). For file-backed posts, this blocks on I/O. Fix: use `tokio::fs::read_to_string` and make `resolve_content` async, or use `spawn_blocking`.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:56.839448164Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:03:06.005729835Z",
+  "closed_at": "2026-08-10T04:03:06.005729835Z",
+  "close_reason": "Duplicate of smallhold-xmpo.1 (same issue, filed earlier in this review)",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.12",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:56.86745062Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

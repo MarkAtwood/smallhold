@@ -192,6 +192,25 @@ async fn resolve_target(pool: &fieldwork_db::db::Pool, id_str: &str) -> Result<T
     }
 }
 
+/// Look up the relationship between `source_account_id` and a target
+/// identified by string ID. Dispatches to local or remote relationship
+/// builder as appropriate.
+pub async fn lookup_relationship(
+    pool: &fieldwork_db::db::Pool,
+    source_account_id: i64,
+    id_str: &str,
+) -> Result<Value, AppError> {
+    let target = resolve_target(pool, id_str).await?;
+    match target {
+        TargetAccount::Local(target_id) => {
+            build_relationship(pool, source_account_id, target_id).await
+        }
+        TargetAccount::Remote { id: remote_id, .. } => {
+            build_relationship_remote(pool, source_account_id, remote_id).await
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/v1/accounts/:id/follow
 // ---------------------------------------------------------------------------
@@ -267,6 +286,7 @@ async fn unfollow(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    auth.require_scope("write")?;
     let domain = &state.config.server.domain;
 
     let target = resolve_target(&state.pool, &id).await?;
@@ -480,7 +500,7 @@ async fn unblock(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-
+    auth.require_scope("write")?;
     let target = resolve_target(&state.pool, &id).await?;
 
     match target {
@@ -556,7 +576,7 @@ async fn unmute(
     auth: AuthenticatedAccount,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-
+    auth.require_scope("write")?;
     let target = resolve_target(&state.pool, &id).await?;
 
     match target {

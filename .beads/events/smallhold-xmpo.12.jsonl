@@ -1,0 +1,4 @@
+{"id":"019fe9d2-d74a-79ce-a4e0-a149ce7a667b","issue_id":"smallhold-xmpo.12","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T03:58:56.842644076Z"}
+{"id":"019fe9d2-d74d-78c4-af16-19ca87fff39f","issue_id":"smallhold-xmpo.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: correctness","created_at":"2026-08-10T03:58:56.845575232Z"}
+{"id":"019fe9d2-d750-7874-a923-55b555899db9","issue_id":"smallhold-xmpo.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T03:58:56.848554807Z"}
+{"id":"019fe9d6-a498-7e2c-ac72-20c7d8ffe2f2","issue_id":"smallhold-xmpo.12","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of smallhold-xmpo.1 (same issue, filed earlier in this review)","created_at":"2026-08-10T04:03:06.008929339Z"}

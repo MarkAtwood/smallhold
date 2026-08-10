@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.4",
+  "title": "unblock and unmute missing write scope check",
+  "description": "interactions.rs: unblock (line 478) and unmute (line 554) do not call auth.require_scope(\"write\"), while their counterparts block (line 406) and mute (line 517) do. Similarly, unfollow (line 265) is missing the scope check while follow (line 204) has it. These are state-mutating write operations and should require the write scope, matching the Mastodon API specification. A read-only token could currently unblock/unmute/unfollow.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:16.224251186Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:33.037995886Z",
+  "closed_at": "2026-08-10T04:12:33.037995886Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.4",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:16.247799526Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

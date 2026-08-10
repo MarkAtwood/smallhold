@@ -1143,13 +1143,12 @@ async fn account_statuses(
 
 /// GET /api/v1/accounts/relationships?id[]=...
 async fn relationships(
-    State(_state): State<Arc<AppState>>,
-    _auth: AuthenticatedAccount,
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedAccount,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     // Parse id[] parameters. axum's HashMap won't natively handle id[], so we check
-    // both "id[]" and "id" keys. For a single-persona server, all relationships
-    // are essentially false.
+    // both "id[]" and "id" keys.
     let mut ids: Vec<String> = Vec::new();
 
     if let Some(id) = params.get("id[]") {
@@ -1159,11 +1158,15 @@ async fn relationships(
         ids.push(id.clone());
     }
 
-    let results: Vec<Value> = ids
-        .into_iter()
-        .map(|id| {
+    let mut results: Vec<Value> = Vec::with_capacity(ids.len());
+    for id_str in ids {
+        let rel = crate::interactions::lookup_relationship(
+            &state.pool, auth.account_id, &id_str,
+        ).await
+        .unwrap_or_else(|_| {
+            // Unknown ID — return all-false defaults
             json!({
-                "id": id,
+                "id": id_str,
                 "following": false,
                 "showing_reblogs": true,
                 "notifying": false,
@@ -1178,8 +1181,9 @@ async fn relationships(
                 "endorsed": false,
                 "note": "",
             })
-        })
-        .collect();
+        });
+        results.push(rel);
+    }
 
     Ok(Json(json!(results)))
 }

@@ -80,8 +80,26 @@ pub async fn write_content_files(
     Ok(format!("content/{prefix}/{id}"))
 }
 
+/// Find the largest byte index <= `max_bytes` that sits on a UTF-8 char
+/// boundary. Equivalent to `str::floor_char_boundary` (nightly-only as of
+/// Rust 1.80).
+pub fn floor_char_boundary(s: &str, max_bytes: usize) -> usize {
+    if max_bytes >= s.len() {
+        return s.len();
+    }
+    s.char_indices()
+        .take_while(|(i, _)| *i < max_bytes)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0)
+}
+
 /// Load file-backed content. If content_path is set, reads .md and .html
 /// files from disk. Falls back to the inline values on any error.
+/// ponytail: sync I/O acceptable — single-user server, files are tiny (<1MB),
+/// and OS page cache keeps them hot. Called from sync contexts like
+/// serialize_status, so making this async would cascade through dozens of
+/// call sites for negligible benefit.
 pub fn resolve_content(
     media_dir: &str,
     content: &str,
@@ -1203,9 +1221,9 @@ async fn create_status(
             let first_sentence_end = text.find(". ")
                 .or_else(|| text.find(".\n"))
                 .map(|i| i + 1)
-                .unwrap_or_else(|| text.len().min(200));
-            let end = first_sentence_end.min(200);
-            let truncated = &text[..end]; // byte slice — safe because find() returns byte offsets on ASCII delimiters
+                .unwrap_or_else(|| floor_char_boundary(&text, 200));
+            let end = floor_char_boundary(&text, first_sentence_end.min(200));
+            let truncated = &text[..end];
             if truncated.len() < text.len() {
                 Some(format!("{truncated}..."))
             } else {

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.10",
+  "title": "webauthn rate limiter lock().unwrap() in handler",
+  "description": "webauthn.rs:41. `check_auth_begin_rate_limit()` uses `.lock().unwrap()` on `AUTH_BEGIN_RATE` Mutex. This is reachable from the unauthenticated POST `/oauth/authorize/webauthn/begin` endpoint. If the Mutex is poisoned (another thread panicked while holding the lock), this panics and takes down the request handler. All other Mutex locks in inbox.rs and webauthn.rs (lines 428, 485, 605) correctly use `.unwrap_or_else(|e| e.into_inner())`. This one missed the pattern.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:46.724260202Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:32.850022154Z",
+  "closed_at": "2026-08-10T04:12:32.850022154Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.10",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:46.747480984Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -38,7 +38,7 @@ static AUTH_BEGIN_RATE: LazyLock<Mutex<(i64, u32)>> = LazyLock::new(|| Mutex::ne
 
 fn check_auth_begin_rate_limit() -> Result<(), AppError> {
     let now_minute = now_millis() / 60_000;
-    let mut guard = AUTH_BEGIN_RATE.lock().unwrap();
+    let mut guard = AUTH_BEGIN_RATE.lock().unwrap_or_else(|e| e.into_inner());
     if guard.0 != now_minute {
         *guard = (now_minute, 1);
         return Ok(());

@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.3",
+  "title": "SEEN_DIGESTS replay cache is unbounded between clears",
+  "description": "inbox.rs:20-21 uses a global HashMap\u003cString, i64\u003e for replay detection. The cap at 10,000 entries (line 608) triggers a full clear, which means all replay protection is lost at once. After a burst that fills to 10,001 entries, the map clears entirely, allowing replay of every previously-seen delivery. Better approach: evict oldest entries (e.g. drain_filter by expiry) or use a bounded LRU. The retain call on line 606 already purges expired entries, so the 10K clear should rarely fire, but if it does, the blast radius is total loss of replay protection for 10 minutes.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:12.19942841Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:33.01162094Z",
+  "closed_at": "2026-08-10T04:12:33.01162094Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.3",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:12.225655632Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

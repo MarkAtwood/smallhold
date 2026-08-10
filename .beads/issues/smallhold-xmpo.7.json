@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.7",
+  "title": "abstract_text byte-slice panics on multi-byte UTF-8",
+  "description": "delivery.rs:352 and posting.rs:1208. The abstract_text auto-generation uses `text[..end]` where `end` can be `text.len().min(200)` — a raw byte count. If the text contains multi-byte UTF-8 characters and byte 200 falls mid-character, this panics. The comment 'safe because find() returns byte offsets on ASCII delimiters' only applies when find() succeeds; the `unwrap_or_else(|| text.len().min(200))` fallback is NOT an ASCII delimiter position. Fix: use `text.floor_char_boundary(200)` or a loop to find the nearest char boundary \u003c= 200.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:38.106166308Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:32.818355387Z",
+  "closed_at": "2026-08-10T04:12:32.818355387Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "correctness",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.7",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:38.129709435Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

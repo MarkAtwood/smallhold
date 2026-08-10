@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.15",
+  "title": "object tag array iterated twice in handle_create",
+  "description": "inbox.rs handle_create iterates object['tag'].as_array() twice: once at line 1036-1085 for Mention processing, and again at line 1088-1102 for FEP-e232 Link/quote processing. These could be a single pass through the tags array. Not a performance issue (tag arrays are small), but the second iteration block looks like it was added without noticing the first already had access to the same array. A single loop dispatching on tag type would be clearer.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:59:56.615369068Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:33.131566643Z",
+  "closed_at": "2026-08-10T04:12:33.131566643Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.15",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:59:56.639596338Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

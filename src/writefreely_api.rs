@@ -121,16 +121,6 @@ async fn update_post(
             None => return Err(AppError::unauthorized("Authentication required")),
         }
     }
-    if let Some(ref provided) = body.token {
-        let matches: bool = article
-            .edit_token
-            .as_deref()
-            .map(|s| provided.as_bytes().ct_eq(s.as_bytes()).into())
-            .unwrap_or(false);
-        if !matches {
-            return Err(AppError::unauthorized("Invalid edit token"));
-        }
-    }
 
     let body_html = body.body.as_deref().map(render_markdown);
     let now = now_secs();
@@ -196,16 +186,6 @@ async fn delete_post(
                 }
             }
             None => return Err(AppError::unauthorized("Authentication required")),
-        }
-    }
-    if let Some(ref provided) = query.token {
-        let matches: bool = article
-            .edit_token
-            .as_deref()
-            .map(|s| provided.as_bytes().ct_eq(s.as_bytes()).into())
-            .unwrap_or(false);
-        if !matches {
-            return Err(AppError::unauthorized("Invalid edit token"));
         }
     }
 
@@ -275,6 +255,13 @@ async fn update_collection(
     Json(body): Json<UpdateCollectionRequest>,
 ) -> Result<Json<WfResponse<CollectionResponse>>, AppError> {
     auth.require_scope("write")?;
+    let col = fieldwork_db::articles_db::get_collection(&state.pool, &alias)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Collection not found"))?;
+    if auth.account_id != col.persona_id {
+        return Err(AppError::forbidden("You do not own this collection"));
+    }
     fieldwork_db::articles_db::update_collection(
         &state.pool,
         &alias,
@@ -305,6 +292,13 @@ async fn delete_collection(
     Path(alias): Path<String>,
 ) -> Result<axum::http::StatusCode, AppError> {
     auth.require_scope("write")?;
+    let col = fieldwork_db::articles_db::get_collection(&state.pool, &alias)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Collection not found"))?;
+    if auth.account_id != col.persona_id {
+        return Err(AppError::forbidden("You do not own this collection"));
+    }
     fieldwork_db::articles_db::delete_collection(&state.pool, &alias)
         .await
         .map_err(AppError::from)?;

@@ -604,9 +604,9 @@ async fn verify_and_fetch_actor(
         let now = crate::api::now_millis();
         let mut seen = SEEN_DIGESTS.lock().unwrap_or_else(|e| e.into_inner());
         seen.retain(|_, exp| *exp > now); // purge expired
-        if seen.len() > 10_000 {
-            seen.clear(); // ponytail: cap unbounded growth; losing entries just means one duplicate may slip through
-        }
+        // ponytail: after time-based retain, the map is bounded by the number
+        // of unique deliveries within REPLAY_WINDOW_MS (~10 min). In practice
+        // this never exceeds a few thousand, so no further cap needed.
         if seen.contains_key(&replay_key) {
             return Err(AppError::conflict("Duplicate delivery rejected"));
         }
@@ -1030,73 +1030,70 @@ async fn handle_create(
         });
     }
 
-    // Process mentions in the tag array.
+    // Process mentions and quote-link tags in a single pass.
     let domain = &state.config.server.domain;
     let mut notified_personas: std::collections::HashSet<i64> = std::collections::HashSet::new();
     if let Some(tags) = object["tag"].as_array() {
         for tag in tags {
-            if tag["type"].as_str() != Some("Mention") {
-                continue;
-            }
-            let href = match tag["href"].as_str() {
-                Some(h) => h,
-                None => continue,
-            };
+            match tag["type"].as_str() {
+                Some("Mention") => {
+                    let href = match tag["href"].as_str() {
+                        Some(h) => h,
+                        None => continue,
+                    };
 
-            if let Some((persona_id, _, _)) =
-                resolve_local_account(&state.pool, domain, href).await?
-            {
-                crate::db_extras::insert_remote_mention(&state.pool, post_id, persona_id).await?;
+                    if let Some((persona_id, _, _)) =
+                        resolve_local_account(&state.pool, domain, href).await?
+                    {
+                        crate::db_extras::insert_remote_mention(&state.pool, post_id, persona_id).await?;
 
-                // Create a mention notification (unless blocked/muted).
-                if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
-                    let notif_id = generate_id();
-                    fieldwork_db::notifications_db::create_notification(
-                        &state.pool,
-                        &fieldwork_db::notifications_db::NotificationRow {
-                            id: notif_id,
-                            user_id: crate::db::DEFAULT_USER_ID,
-                            persona_id: persona_id,
-                            kind: "mention".to_string(),
-                            from_persona_id: None,
-                            from_remote_account_id: Some(remote.id),
-                            post_id: None,
-                            remote_post_id: Some(post_id),
-                            created_at: now,
-                            read_at: None,
-                        },
-                    ).await?;
+                        // Create a mention notification (unless blocked/muted).
+                        if !is_blocked_or_muted(&state.pool, persona_id, remote.id).await? {
+                            let notif_id = generate_id();
+                            fieldwork_db::notifications_db::create_notification(
+                                &state.pool,
+                                &fieldwork_db::notifications_db::NotificationRow {
+                                    id: notif_id,
+                                    user_id: crate::db::DEFAULT_USER_ID,
+                                    persona_id: persona_id,
+                                    kind: "mention".to_string(),
+                                    from_persona_id: None,
+                                    from_remote_account_id: Some(remote.id),
+                                    post_id: None,
+                                    remote_post_id: Some(post_id),
+                                    created_at: now,
+                                    read_at: None,
+                                },
+                            ).await?;
 
-                    notified_personas.insert(persona_id);
+                            notified_personas.insert(persona_id);
 
-                    publish(StreamEvent {
-                        event_type: "notification".into(),
-                        payload: notif_id.to_string(),
-                        channel: format!("user:{}", persona_id),
-                    });
+                            publish(StreamEvent {
+                                event_type: "notification".into(),
+                                payload: notif_id.to_string(),
+                                channel: format!("user:{}", persona_id),
+                            });
 
-                    spawn_push_notification(
-                        state.pool.clone(), persona_id, "mention", "New mention",
-                        remote.actor_uri.clone(), domain.clone(),
-                    );
-                }
-            }
-        }
-    }
-
-    // FEP-e232: Log any Object Link (quote) tags from the inbound Note.
-    if let Some(tags) = object["tag"].as_array() {
-        for tag in tags {
-            if tag["type"].as_str() == Some("Link") {
-                let media_type = tag["mediaType"].as_str().unwrap_or("");
-                if media_type.contains("application/ld+json")
-                    || media_type.contains("application/activity+json")
-                {
-                    let href = tag["href"].as_str().unwrap_or("");
-                    if !href.is_empty() {
-                        tracing::debug!(quote_uri = href, "inbound post quotes another post");
+                            spawn_push_notification(
+                                state.pool.clone(), persona_id, "mention", "New mention",
+                                remote.actor_uri.clone(), domain.clone(),
+                            );
+                        }
                     }
                 }
+                // FEP-e232: Log any Object Link (quote) tags from the inbound Note.
+                Some("Link") => {
+                    let media_type = tag["mediaType"].as_str().unwrap_or("");
+                    if media_type.contains("application/ld+json")
+                        || media_type.contains("application/activity+json")
+                    {
+                        let href = tag["href"].as_str().unwrap_or("");
+                        if !href.is_empty() {
+                            tracing::debug!(quote_uri = href, "inbound post quotes another post");
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -1479,11 +1476,7 @@ async fn handle_move(
         return Ok(());
     }
 
-    // Fetch the old actor to verify alsoKnownAs.
-    let old_actor = fetch_and_upsert_actor(state, &remote.actor_uri).await?;
-    let _ = old_actor; // We just need the fetch to succeed; verification uses the raw document.
-
-    // Re-fetch the old actor document to check alsoKnownAs.
+    // Fetch the old actor document to check alsoKnownAs.
     let (signing_key_pem, signing_key_id) = get_signing_credentials(state).await?;
     let old_actor_url: url::Url = remote
         .actor_uri

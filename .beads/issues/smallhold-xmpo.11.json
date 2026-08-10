@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xmpo.11",
+  "title": "Good: HTTP signature verification design",
+  "description": "inbox.rs verify_and_fetch_actor (lines 521-644) implements a well-structured HTTP signature verification flow: Date header freshness check (5 min window), mandatory (request-target)/digest/date/host in signed headers, keyId-to-actor anti-spoofing, replay detection with digest-based dedup, cached key with re-fetch on failure for key rotation support, and SSRF validation on outbound fetches. The separation of parse_signature_header, build_signed_string, and verify_rsa_sha256 is clean and testable. The only concern (SEEN_DIGESTS bulk clear) is filed separately.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:56.336244467Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:04:03.484233691Z",
+  "closed_at": "2026-08-10T04:04:03.484233691Z",
+  "close_reason": "Decision — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.11",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:56.361522777Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

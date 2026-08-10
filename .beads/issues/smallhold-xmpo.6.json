@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.6",
+  "title": "WriteFreely update_post has redundant auth check",
+  "description": "writefreely_api.rs update_post (line 96-161) checks the edit token twice. Lines 108-113 check token_ok and, if false, fall through to owner auth. Then lines 124-133 check the token AGAIN, this time returning 401 on mismatch. If the first check already authenticated via owner auth (lines 115-123), the second token check can incorrectly reject an owner who provided an invalid token alongside valid bearer auth. The same pattern appears in delete_post (lines 185-210). The intent appears to be: accept either a valid token OR valid owner auth, but the double check means providing a bad token blocks even authenticated owners.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:31.441928612Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:33.097889805Z",
+  "closed_at": "2026-08-10T04:12:33.097889805Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "elegance",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.6",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:31.464997564Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

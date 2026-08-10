@@ -347,9 +347,9 @@ async fn create_scheduled_post(
         let first_sentence_end = text.find(". ")
             .or_else(|| text.find(".\n"))
             .map(|i| i + 1)
-            .unwrap_or_else(|| text.len().min(200));
-        let end = first_sentence_end.min(200);
-        let truncated = &text[..end]; // byte slice — safe because find() returns byte offsets on ASCII delimiters
+            .unwrap_or_else(|| crate::posting::floor_char_boundary(&text, 200));
+        let end = crate::posting::floor_char_boundary(&text, first_sentence_end.min(200));
+        let truncated = &text[..end];
         if truncated.len() < text.len() {
             Some(format!("{truncated}..."))
         } else {

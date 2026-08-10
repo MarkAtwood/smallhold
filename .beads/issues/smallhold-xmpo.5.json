@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.5",
+  "title": "handle_move does redundant actor fetches",
+  "description": "inbox.rs handle_move (line 1456-1637) fetches the old actor twice: first via fetch_and_upsert_actor (line 1483), then immediately re-fetches the raw document with a manual HTTP GET (lines 1487-1506) to check alsoKnownAs. The first fetch is discarded (line 1484: let _ = old_actor). The same pattern repeats for the new actor: fetch_and_upsert_actor (line 1541) followed by another manual GET (lines 1549-1562). fetch_actor already parses the JSON document -- the alsoKnownAs check could be done on the already-fetched data if RemoteActorData carried that field, eliminating 2 redundant HTTP round trips per Move.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:25.30005402Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:33.06929301Z",
+  "closed_at": "2026-08-10T04:12:33.06929301Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "elegance",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.5",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:25.327236885Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

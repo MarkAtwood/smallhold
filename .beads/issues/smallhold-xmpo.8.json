@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.8",
+  "title": "abstract truncation may split multi-byte UTF-8",
+  "description": "posting.rs lines 1202-1217 and delivery.rs lines 346-360 auto-generate post abstracts by slicing text at byte offset 200: let truncated = \u0026text[..end]. The end value comes from find('. ') or find('.\\n') which return byte offsets on ASCII delimiters, so the find result is safe. However, the .min(200) fallback path (when no sentence boundary is found) slices at byte 200, which can split a multi-byte UTF-8 character and panic. The text variable is \u0026str from user input and may contain emoji or CJK characters. Use floor_char_boundary(200) (available since Rust 1.73) or iterate chars.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:42.735571099Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:03:13.763245356Z",
+  "closed_at": "2026-08-10T04:03:13.763245356Z",
+  "close_reason": "Superseded by smallhold-xmpo.7 which correctly identifies this as a P0 panic bug, not a P3 readability issue",
+  "labels": [
+    "readability",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.8",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:42.767424114Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

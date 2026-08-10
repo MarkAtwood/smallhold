@@ -1,0 +1,27 @@
+{
+  "id": "smallhold-xmpo.9",
+  "title": "Good: defense-in-depth re-sanitization pattern",
+  "description": "activitypub.rs consistently re-sanitizes HTML at output time (lines 333, 347, 350, 425, 466) with ammonia::clean even though content_html was already sanitized at write time. This is a genuine defense-in-depth practice -- if a bug in the write path or a database corruption introduces malicious HTML, the output path catches it. The pattern is applied consistently across profile_page, post_page, and the OG description extraction. Well done.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:45.001927102Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:04:03.447711555Z",
+  "closed_at": "2026-08-10T04:04:03.447711555Z",
+  "close_reason": "Decision — no action needed",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.9",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:45.026912694Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

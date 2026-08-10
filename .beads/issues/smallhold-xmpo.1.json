@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.1",
+  "title": "resolve_content does sync I/O on async paths",
+  "description": "resolve_content (posting.rs:85-102) uses std::fs::read_to_string for file-backed content, which blocks the async runtime. This is called from load_status (posting.rs:828), account_statuses (api.rs:1080), the outbox handler (activitypub.rs:538), profile_page (activitypub.rs:322), and every timeline endpoint. On a busy timeline request with file-backed posts, this could block the tokio worker thread for the duration of multiple disk reads. Should use tokio::fs::read_to_string and make resolve_content async, or use spawn_blocking.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:57:58.721005839Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:32.949853777Z",
+  "closed_at": "2026-08-10T04:12:32.949853777Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.1",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:57:58.74475648Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

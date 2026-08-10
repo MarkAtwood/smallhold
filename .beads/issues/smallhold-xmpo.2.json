@@ -1,0 +1,28 @@
+{
+  "id": "smallhold-xmpo.2",
+  "title": "relationships endpoint ignores real data",
+  "description": "GET /api/v1/accounts/relationships (api.rs:1144-1185) returns hardcoded false for all relationship fields, even though interactions.rs has fully functional build_relationship and build_relationship_remote functions that query follows, blocks, and mutes. Mastodon clients (Ivory, Ice Cubes, Elk) rely on this endpoint to render follow/block/mute button states. The hardcoded response makes all buttons show the wrong state. This was presumably a stub that was never replaced once the real implementation landed in interactions.rs.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T03:58:02.494577595Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:12:32.982133237Z",
+  "closed_at": "2026-08-10T04:12:32.982133237Z",
+  "close_reason": "Fixed",
+  "labels": [
+    "efficiency",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "smallhold-xmpo.2",
+      "depends_on_id": "smallhold-xmpo",
+      "type": "parent-child",
+      "created_at": "2026-08-10T03:58:02.520018532Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
