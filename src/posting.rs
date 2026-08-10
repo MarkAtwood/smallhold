@@ -80,19 +80,6 @@ pub async fn write_content_files(
     Ok(format!("content/{prefix}/{id}"))
 }
 
-/// Find the largest byte index <= `max_bytes` that sits on a UTF-8 char
-/// boundary. Equivalent to `str::floor_char_boundary` (nightly-only as of
-/// Rust 1.80).
-pub fn floor_char_boundary(s: &str, max_bytes: usize) -> usize {
-    if max_bytes >= s.len() {
-        return s.len();
-    }
-    s.char_indices()
-        .take_while(|(i, _)| *i < max_bytes)
-        .last()
-        .map(|(i, c)| i + c.len_utf8())
-        .unwrap_or(0)
-}
 
 /// Load file-backed content. If content_path is set, reads .md and .html
 /// files from disk. Falls back to the inline values on any error.
@@ -1221,8 +1208,8 @@ async fn create_status(
             let first_sentence_end = text.find(". ")
                 .or_else(|| text.find(".\n"))
                 .map(|i| i + 1)
-                .unwrap_or_else(|| floor_char_boundary(&text, 200));
-            let end = floor_char_boundary(&text, first_sentence_end.min(200));
+                .unwrap_or_else(|| text.floor_char_boundary(200));
+            let end = text.floor_char_boundary(first_sentence_end.min(200));
             let truncated = &text[..end];
             if truncated.len() < text.len() {
                 Some(format!("{truncated}..."))

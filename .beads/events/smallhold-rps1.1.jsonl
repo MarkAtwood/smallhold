@@ -1,0 +1,3 @@
+{"id":"019fe9e2-8812-723e-a53d-7b920e8399cc","issue_id":"smallhold-rps1.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-10T04:16:05.138147853Z"}
+{"id":"019fe9e2-8815-7461-8e5b-1774c1ff4449","issue_id":"smallhold-rps1.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-10T04:16:05.141287802Z"}
+{"id":"019fe9e4-68d0-7a0c-9171-e3ae43f80c3f","issue_id":"smallhold-rps1.1","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Replaced custom polyfill with str::floor_char_boundary() from stdlib (stable since Rust 1.80, our MSRV)","created_at":"2026-08-10T04:18:08.208659145Z"}

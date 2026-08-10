@@ -1,0 +1,18 @@
+{
+  "id": "smallhold-rps1",
+  "title": "Review round 3: smallhold 2026-08-09",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-10T04:12:53.587270189Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-10T04:18:08.283477941Z",
+  "started_at": "2026-08-10T04:12:58.210325234Z",
+  "closed_at": "2026-08-10T04:18:08.283477941Z",
+  "close_reason": "Converged — 1 finding fixed",
+  "labels": [
+    "review"
+  ]
+}
