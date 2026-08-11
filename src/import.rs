@@ -1055,6 +1055,204 @@ fn lt_collections_to_status(collections: &str) -> Option<&'static str> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// LibraryThing JSON import
+// ---------------------------------------------------------------------------
+
+/// Import books from a LibraryThing JSON export file.
+///
+/// LT JSON exports are a dict keyed by book ID, each value containing
+/// `title`, `primaryauthor`, `authors`, `isbn`, `rating`, `collections`,
+/// `review`, `pages`, `date`, `language`, etc.
+pub async fn import_librarything_json(
+    pool: &fieldwork_db::db::Pool,
+    config: &Config,
+    json_path: &Path,
+) -> Result<LibraryThingStats> {
+    let raw = std::fs::read(json_path)
+        .with_context(|| format!("Failed to read {}", json_path.display()))?;
+    let data: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&raw).context("Failed to parse JSON")?;
+
+    let mut stats = LibraryThingStats {
+        books_imported: 0,
+        books_skipped: 0,
+        shelved: 0,
+        rated: 0,
+        reviews_imported: 0,
+    };
+
+    let user_id = crate::db::DEFAULT_USER_ID;
+    let persona_id = crate::db_extras::get_first_persona(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(id, _)| id)
+        .unwrap_or(user_id);
+    let domain = &config.server.domain;
+
+    for (_book_key, entry) in &data {
+        let title = match entry.get("title").and_then(|v| v.as_str()) {
+            Some(t) if !t.is_empty() => t.to_string(),
+            _ => continue,
+        };
+
+        // Author: prefer authors[0].fl (First Last), fall back to primaryauthor (Last, First)
+        let author = if let Some(fl) = entry
+            .get("authors")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|a| a.get("fl"))
+            .and_then(|v| v.as_str())
+        {
+            fl.to_string()
+        } else if let Some(pa) = entry.get("primaryauthor").and_then(|v| v.as_str()) {
+            match pa.split_once(',') {
+                Some((last, first)) => format!("{} {}", first.trim(), last.trim()),
+                None => pa.to_string(),
+            }
+        } else {
+            String::new()
+        };
+
+        // ISBN: entry.isbn is an object like {"0": "0441478123", "2": "9780441478125"}
+        let isbn_obj = entry.get("isbn").and_then(|v| v.as_object());
+        let isbn = isbn_obj
+            .and_then(|o| o.get("0"))
+            .and_then(|v| v.as_str())
+            .or_else(|| entry.get("originalisbn").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty());
+        let isbn13 = isbn_obj
+            .and_then(|o| o.get("2"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .filter(|s| s.len() == 13);
+
+        // Dedup by ISBN
+        let existing_book_id = if let Some(ref isbn_val) = isbn {
+            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+                .await
+                .ok()
+                .flatten()
+                .map(|b| b.id)
+        } else if let Some(ref isbn13_val) = isbn13 {
+            fieldwork_db::books_db::get_book_by_isbn(pool, isbn13_val)
+                .await
+                .ok()
+                .flatten()
+                .map(|b| b.id)
+        } else {
+            None
+        };
+
+        let now = fieldwork::util::now_secs();
+
+        let book_id = if let Some(id) = existing_book_id {
+            stats.books_skipped += 1;
+            id
+        } else {
+            let id = fieldwork::id::generate_id();
+
+            let pages = entry.get("pages").and_then(|v| v.as_str()).and_then(|s| {
+                s.split(|c: char| c == ';' || c == ',')
+                    .next()
+                    .and_then(|p| p.trim().parse::<i32>().ok())
+            });
+
+            let published_year = entry.get("date").and_then(|v| v.as_str()).and_then(|s| {
+                s.chars()
+                    .filter(|c| c.is_ascii_digit())
+                    .take(4)
+                    .collect::<String>()
+                    .parse::<i32>()
+                    .ok()
+                    .filter(|&y| (1000..=2100).contains(&y))
+            });
+
+            let language = entry
+                .get("language")
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let book = fieldwork_db::books_db::BookRow {
+                id,
+                title,
+                author,
+                isbn,
+                isbn13,
+                openlibrary_id: None,
+                cover_url: None,
+                description: String::new(),
+                pages,
+                published_year,
+                language,
+                created_at: now,
+            };
+            fieldwork_db::books_db::create_book(pool, &book)
+                .await
+                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+            stats.books_imported += 1;
+            id
+        };
+
+        // Shelf: collections is an array of strings
+        if let Some(collections) = entry.get("collections").and_then(|v| v.as_array()) {
+            let combined: String = collections
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if let Some(status) = lt_collections_to_status(&combined) {
+                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                    .await
+                    .ok();
+                stats.shelved += 1;
+            }
+        }
+
+        // Rating: JSON has integer 1-5 directly
+        if let Some(rating) = entry.get("rating").and_then(|v| v.as_i64()) {
+            let rating = rating as i32;
+            if (1..=5).contains(&rating) {
+                fieldwork_db::books_db::rate_book(pool, user_id, book_id, rating, now)
+                    .await
+                    .ok();
+                stats.rated += 1;
+            }
+        }
+
+        // Review
+        if let Some(review_text) = entry.get("review").and_then(|v| v.as_str()) {
+            if !review_text.is_empty() {
+                let id = fieldwork::id::generate_id();
+                let review = fieldwork_db::books_db::ReviewRow {
+                    id,
+                    user_id,
+                    persona_id,
+                    book_id,
+                    content: review_text.to_string(),
+                    content_html: format!("<p>{}</p>", ammonia::clean(review_text)),
+                    rating: None,
+                    spoiler: false,
+                    ap_id: format!("https://{}/reviews/{}", domain, id),
+                    created_at: now,
+                };
+                match fieldwork_db::books_db::create_review(pool, &review).await {
+                    Ok(()) => stats.reviews_imported += 1,
+                    Err(e) => {
+                        eprintln!("  warning: failed to insert review for book {book_id}: {e}")
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1248,5 +1446,72 @@ media_dir = "/tmp/smallhold-test-media"
         assert_eq!(stats.books_imported, 3);
         // Rating 0 rounds to 0, out of 1..=5, so skipped
         assert_eq!(stats.rated, 2);
+    }
+
+    #[tokio::test]
+    async fn import_librarything_json_basic() {
+        let pool = crate::db::test_pool().await;
+        let config = test_config();
+        setup_test_user_and_persona(&pool).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let json_path = dir.path().join("export.json");
+        std::fs::write(
+            &json_path,
+            r#"{
+                "1": {
+                    "books_id": "1",
+                    "title": "Snow Crash",
+                    "primaryauthor": "Stephenson, Neal",
+                    "authors": [{"lf": "Stephenson, Neal", "fl": "Neal Stephenson"}],
+                    "isbn": {"0": "0553380958", "2": "9780553380958"},
+                    "rating": 4,
+                    "collections": ["Your library"],
+                    "review": "Great book",
+                    "pages": "480",
+                    "date": "1992",
+                    "language": ["English"]
+                },
+                "2": {
+                    "books_id": "2",
+                    "title": "Neuromancer",
+                    "primaryauthor": "Gibson, William",
+                    "isbn": {"0": "0441007465"},
+                    "rating": 5,
+                    "collections": ["To read"],
+                    "pages": "271",
+                    "date": "1984"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let stats = import_librarything_json(&pool, &config, &json_path)
+            .await
+            .unwrap();
+
+        assert_eq!(stats.books_imported, 2);
+        assert_eq!(stats.books_skipped, 0);
+        assert_eq!(stats.shelved, 2);
+        assert_eq!(stats.rated, 2);
+        assert_eq!(stats.reviews_imported, 1);
+
+        // Verify author came from authors[0].fl
+        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(book.author, "Neal Stephenson");
+        assert_eq!(book.pages, Some(480));
+        assert_eq!(book.published_year, Some(1992));
+        assert_eq!(book.isbn13, Some("9780553380958".into()));
+
+        // Verify shelf
+        let (status, _, _, _, _) =
+            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book.id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(status, "read");
     }
 }

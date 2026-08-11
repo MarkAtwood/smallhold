@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-2ytt",
+  "title": "LibraryThing JSON import",
+  "description": "Add JSON format support to the LibraryThing import command, alongside existing TSV support",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-11T03:20:11.721373181Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-11T03:22:47.941961443Z",
+  "started_at": "2026-08-11T03:20:16.228113714Z",
+  "closed_at": "2026-08-11T03:22:47.941961443Z",
+  "close_reason": "JSON import implemented and tested with real 1080-book export"
+}

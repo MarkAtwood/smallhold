@@ -220,9 +220,9 @@ pub enum ImportCommands {
         /// Path to the Mastodon archive file
         archive: PathBuf,
     },
-    /// Import a LibraryThing TSV export
+    /// Import a LibraryThing export (.tsv or .json)
     Librarything {
-        /// Path to the LibraryThing export file (.tsv)
+        /// Path to the LibraryThing export file (.tsv or .json)
         file: PathBuf,
     },
 }
@@ -1006,7 +1006,16 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
             }
         }
         ImportCommands::Librarything { file } => {
-            let stats = crate::import::import_librarything(&pool, &config, &file).await?;
+            let is_json = file
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("json"))
+                .unwrap_or(false);
+            let stats = if is_json {
+                crate::import::import_librarything_json(&pool, &config, &file).await?
+            } else {
+                crate::import::import_librarything(&pool, &config, &file).await?
+            };
             eprintln!("LibraryThing import complete:");
             eprintln!(
                 "  Books: {} imported, {} skipped (duplicate ISBN)",
