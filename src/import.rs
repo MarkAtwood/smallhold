@@ -1253,6 +1253,255 @@ pub async fn import_librarything_json(
     Ok(stats)
 }
 
+// ---------------------------------------------------------------------------
+// LibraryThing MARC21 import
+// ---------------------------------------------------------------------------
+
+/// Import books from a LibraryThing MARC21 binary export (.marc/.mrc).
+///
+/// MARC fields used:
+/// - 001: Book ID
+/// - 008: Fixed-length (language at 35-37, date at 7-10)
+/// - 020$a: ISBN
+/// - 100$a: Author (Last, First)
+/// - 245$a/$b: Title / subtitle
+/// - 300$a: Physical description (pages)
+/// - 920$a: Tags (LT custom)
+/// - 923$a: Collections (LT custom)
+pub async fn import_librarything_marc(
+    pool: &fieldwork_db::db::Pool,
+    config: &Config,
+    marc_path: &Path,
+) -> Result<LibraryThingStats> {
+    let file = std::fs::File::open(marc_path)
+        .with_context(|| format!("Failed to open {}", marc_path.display()))?;
+    let records = marc::Records::new(file);
+
+    let mut stats = LibraryThingStats {
+        books_imported: 0,
+        books_skipped: 0,
+        shelved: 0,
+        rated: 0,
+        reviews_imported: 0,
+    };
+
+    let user_id = crate::db::DEFAULT_USER_ID;
+    let persona_id = crate::db_extras::get_first_persona(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(id, _)| id)
+        .unwrap_or(user_id);
+    let domain = &config.server.domain;
+
+    for result in records {
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("  warning: skipping malformed MARC record: {e}");
+                continue;
+            }
+        };
+
+        // Title: 245$a + 245$b, strip MARC trailing punctuation
+        let title = match marc_subfield(&record, b"245", b'a') {
+            Some(t) => {
+                let mut title = marc_strip_punctuation(&t);
+                if let Some(subtitle) = marc_subfield(&record, b"245", b'b') {
+                    let sub = marc_strip_punctuation(&subtitle);
+                    if !sub.is_empty() {
+                        title.push_str(": ");
+                        title.push_str(&sub);
+                    }
+                }
+                title
+            }
+            None => continue,
+        };
+
+        // Author: 100$a (Last, First) → "First Last"
+        let author = marc_subfield(&record, b"100", b'a')
+            .map(|a| {
+                let a = marc_strip_punctuation(&a);
+                match a.split_once(',') {
+                    Some((last, first)) => format!("{} {}", first.trim(), last.trim()),
+                    None => a,
+                }
+            })
+            .unwrap_or_default();
+
+        // ISBN: 020$a
+        let isbn_raw = marc_subfield(&record, b"020", b'a');
+        let isbn = isbn_raw
+            .as_deref()
+            .map(|s| {
+                // ISBN may have qualifiers like "0553380958 (pbk.)"
+                s.split_whitespace()
+                    .next()
+                    .unwrap_or(s)
+                    .trim_matches(|c: char| !c.is_ascii_alphanumeric())
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty());
+
+        let isbn13 = isbn.as_ref().filter(|s| s.len() == 13).cloned();
+        let isbn10 = isbn.as_ref().filter(|s| s.len() == 10).cloned();
+
+        // Dedup by ISBN
+        let dedup_isbn = isbn.as_deref();
+        let existing_book_id = if let Some(isbn_val) = dedup_isbn {
+            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+                .await
+                .ok()
+                .flatten()
+                .map(|b| b.id)
+        } else {
+            None
+        };
+
+        let now = fieldwork::util::now_secs();
+
+        let book_id = if let Some(id) = existing_book_id {
+            stats.books_skipped += 1;
+            id
+        } else {
+            let id = fieldwork::id::generate_id();
+
+            // Pages from 300$a: "xxxii,876p." → extract digits
+            let pages = marc_subfield(&record, b"300", b'a').and_then(|s| {
+                // Find the main page number (largest number before 'p')
+                let mut best: Option<i32> = None;
+                for part in s.split(|c: char| !c.is_ascii_digit()) {
+                    if let Ok(n) = part.parse::<i32>() {
+                        if n > best.unwrap_or(0) {
+                            best = Some(n);
+                        }
+                    }
+                }
+                best
+            });
+
+            // Publication year from 008 positions 7-10
+            let published_year = record.field(b"008").first().and_then(|f| {
+                let data = f.get_data::<str>();
+                if data.len() >= 11 {
+                    data[7..11]
+                        .parse::<i32>()
+                        .ok()
+                        .filter(|&y| (1000..=2100).contains(&y))
+                } else {
+                    None
+                }
+            });
+
+            // Language from 008 positions 35-37
+            let language = record.field(b"008").first().and_then(|f| {
+                let data = f.get_data::<str>();
+                if data.len() >= 38 {
+                    let lang = &data[35..38];
+                    if lang.trim().is_empty() || lang == "|||" {
+                        None
+                    } else {
+                        Some(marc_lang_code_to_name(lang).to_string())
+                    }
+                } else {
+                    None
+                }
+            });
+
+            let book = fieldwork_db::books_db::BookRow {
+                id,
+                title,
+                author,
+                isbn: isbn10,
+                isbn13,
+                openlibrary_id: None,
+                cover_url: None,
+                description: String::new(),
+                pages,
+                published_year,
+                language,
+                created_at: now,
+            };
+            fieldwork_db::books_db::create_book(pool, &book)
+                .await
+                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+            stats.books_imported += 1;
+            id
+        };
+
+        // Collections from 923$a (LT custom field)
+        let collections: Vec<String> = record
+            .field(b"923")
+            .iter()
+            .flat_map(|f| f.subfield(b'a'))
+            .map(|sf| sf.get_data::<str>().to_string())
+            .collect();
+        if !collections.is_empty() {
+            let combined = collections.join(", ");
+            if let Some(status) = lt_collections_to_status(&combined) {
+                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                    .await
+                    .ok();
+                stats.shelved += 1;
+            }
+        }
+
+        // Rating from 008 position 2 (LT stores rating there in custom MARC)
+        // Actually LT doesn't reliably encode rating in MARC — skip rating for MARC imports
+
+        // Reviews are not present in MARC exports
+        let _ = (persona_id, domain); // reserved for future use
+    }
+
+    Ok(stats)
+}
+
+/// Extract the first occurrence of a subfield from a MARC record.
+fn marc_subfield(record: &marc::Record, tag: &[u8; 3], code: u8) -> Option<String> {
+    record.field(tag).first().and_then(|f| {
+        f.subfield(code)
+            .first()
+            .map(|sf| sf.get_data::<str>().to_string())
+    })
+}
+
+/// Strip MARC cataloging punctuation from field values (trailing `.`, `/`, `:`, `,`, `;`, space).
+fn marc_strip_punctuation(s: &str) -> String {
+    s.trim_end_matches(|c: char| matches!(c, '.' | '/' | ':' | ',' | ';' | ' '))
+        .to_string()
+}
+
+/// Map ISO 639-2/B language codes to English names (common ones).
+fn marc_lang_code_to_name(code: &str) -> &str {
+    match code {
+        "eng" => "English",
+        "fre" | "fra" => "French",
+        "ger" | "deu" => "German",
+        "spa" => "Spanish",
+        "ita" => "Italian",
+        "por" => "Portuguese",
+        "rus" => "Russian",
+        "jpn" => "Japanese",
+        "chi" | "zho" => "Chinese",
+        "kor" => "Korean",
+        "ara" => "Arabic",
+        "hin" => "Hindi",
+        "lat" => "Latin",
+        "grc" => "Greek",
+        "heb" => "Hebrew",
+        "swe" => "Swedish",
+        "nor" => "Norwegian",
+        "dan" => "Danish",
+        "dut" | "nld" => "Dutch",
+        "pol" => "Polish",
+        "fin" => "Finnish",
+        "epo" => "Esperanto",
+        "mul" => "Multiple languages",
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1269,6 +1518,27 @@ mod tests {
         assert_eq!(lt_collections_to_status("wishlist"), Some("to-read"));
         assert_eq!(lt_collections_to_status("reading now"), Some("reading"));
         assert_eq!(lt_collections_to_status("Custom Shelf"), Some("read"));
+    }
+
+    #[test]
+    fn test_marc_strip_punctuation() {
+        assert_eq!(marc_strip_punctuation("Snow Crash."), "Snow Crash");
+        assert_eq!(marc_strip_punctuation("Snow Crash /"), "Snow Crash");
+        assert_eq!(marc_strip_punctuation("Snow Crash :"), "Snow Crash");
+        assert_eq!(
+            marc_strip_punctuation("Stephenson, Neal,"),
+            "Stephenson, Neal"
+        );
+        assert_eq!(marc_strip_punctuation("clean"), "clean");
+        assert_eq!(marc_strip_punctuation(""), "");
+    }
+
+    #[test]
+    fn test_marc_lang_code_to_name() {
+        assert_eq!(marc_lang_code_to_name("eng"), "English");
+        assert_eq!(marc_lang_code_to_name("fre"), "French");
+        assert_eq!(marc_lang_code_to_name("epo"), "Esperanto");
+        assert_eq!(marc_lang_code_to_name("xyz"), "xyz");
     }
 
     fn test_config() -> Config {

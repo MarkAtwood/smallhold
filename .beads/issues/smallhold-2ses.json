@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-2ses",
+  "title": "LibraryThing MARC import",
+  "description": "Add MARC21 binary format support to LibraryThing import, alongside TSV and JSON",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-11T03:28:55.643640486Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-11T03:35:27.992760015Z",
+  "started_at": "2026-08-11T03:28:59.406488001Z",
+  "closed_at": "2026-08-11T03:35:27.992760015Z",
+  "close_reason": "MARC21 import implemented, tested with real 1080-record export"
+}

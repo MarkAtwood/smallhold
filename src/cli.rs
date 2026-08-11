@@ -220,9 +220,9 @@ pub enum ImportCommands {
         /// Path to the Mastodon archive file
         archive: PathBuf,
     },
-    /// Import a LibraryThing export (.tsv or .json)
+    /// Import a LibraryThing export (.tsv, .json, or .marc)
     Librarything {
-        /// Path to the LibraryThing export file (.tsv or .json)
+        /// Path to the LibraryThing export file (.tsv, .json, or .marc)
         file: PathBuf,
     },
 }
@@ -1006,15 +1006,17 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
             }
         }
         ImportCommands::Librarything { file } => {
-            let is_json = file
+            let ext = file
                 .extension()
                 .and_then(|e| e.to_str())
-                .map(|e| e.eq_ignore_ascii_case("json"))
-                .unwrap_or(false);
-            let stats = if is_json {
-                crate::import::import_librarything_json(&pool, &config, &file).await?
-            } else {
-                crate::import::import_librarything(&pool, &config, &file).await?
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let stats = match ext.as_str() {
+                "json" => crate::import::import_librarything_json(&pool, &config, &file).await?,
+                "marc" | "mrc" => {
+                    crate::import::import_librarything_marc(&pool, &config, &file).await?
+                }
+                _ => crate::import::import_librarything(&pool, &config, &file).await?,
             };
             eprintln!("LibraryThing import complete:");
             eprintln!(
