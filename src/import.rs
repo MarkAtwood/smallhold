@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::path::Path;
 
 use crate::config::Config;
@@ -54,7 +54,12 @@ pub async fn import_mastodon_archive(
     let actor_path = extract_root.join("actor.json");
     if actor_path.exists() {
         apply_actor_profile(
-            &mut tx, account_id, &actor_path, &extract_root, media_dir, &mut stats,
+            &mut tx,
+            account_id,
+            &actor_path,
+            &extract_root,
+            media_dir,
+            &mut stats,
         )
         .await?;
     }
@@ -220,7 +225,12 @@ async fn apply_actor_profile(
     };
 
     crate::db_extras::import_update_persona_profile(
-        tx, account_id, &display_name, &bio, &bio_html, &fields_json,
+        tx,
+        account_id,
+        &display_name,
+        &bio,
+        &bio_html,
+        &fields_json,
     )
     .await?;
     stats.profile_updated = true;
@@ -228,16 +238,28 @@ async fn apply_actor_profile(
     let now_ms = chrono::Utc::now().timestamp_millis();
 
     // Import avatar (icon)
-    if let Some(icon_url) = actor.get("icon").and_then(|v| v.get("url")).and_then(|v| v.as_str()) {
-        if let Some(media_id) = copy_profile_image(tx, account_id, icon_url, extract_root, media_dir, now_ms).await? {
+    if let Some(icon_url) = actor
+        .get("icon")
+        .and_then(|v| v.get("url"))
+        .and_then(|v| v.as_str())
+    {
+        if let Some(media_id) =
+            copy_profile_image(tx, account_id, icon_url, extract_root, media_dir, now_ms).await?
+        {
             crate::db_extras::import_set_persona_avatar(tx, account_id, media_id).await?;
             stats.avatar_imported = true;
         }
     }
 
     // Import header (image)
-    if let Some(image_url) = actor.get("image").and_then(|v| v.get("url")).and_then(|v| v.as_str()) {
-        if let Some(media_id) = copy_profile_image(tx, account_id, image_url, extract_root, media_dir, now_ms).await? {
+    if let Some(image_url) = actor
+        .get("image")
+        .and_then(|v| v.get("url"))
+        .and_then(|v| v.as_str())
+    {
+        if let Some(media_id) =
+            copy_profile_image(tx, account_id, image_url, extract_root, media_dir, now_ms).await?
+        {
             crate::db_extras::import_set_persona_header(tx, account_id, media_id).await?;
             stats.header_imported = true;
         }
@@ -266,8 +288,12 @@ async fn copy_profile_image(
     let id_hex = format!("{media_id:x}");
     let prefix = &id_hex[..2.min(id_hex.len())];
     let prefix_dir = media_dir.join(prefix);
-    std::fs::create_dir_all(&prefix_dir)
-        .with_context(|| format!("Failed to create media prefix dir: {}", prefix_dir.display()))?;
+    std::fs::create_dir_all(&prefix_dir).with_context(|| {
+        format!(
+            "Failed to create media prefix dir: {}",
+            prefix_dir.display()
+        )
+    })?;
 
     let dest_filename = format!("{media_id}.{ext}");
     let dest_path = prefix_dir.join(&dest_filename);
@@ -282,8 +308,15 @@ async fn copy_profile_image(
     let rel_path = format!("media/{prefix}/{media_id}.{ext}");
 
     crate::db_extras::import_insert_media_no_post(
-        tx, media_id, crate::db::DEFAULT_USER_ID, account_id,
-        &rel_path, mime_type, file_size, "", now_ms,
+        tx,
+        media_id,
+        crate::db::DEFAULT_USER_ID,
+        account_id,
+        &rel_path,
+        mime_type,
+        file_size,
+        "",
+        now_ms,
     )
     .await?;
 
@@ -427,10 +460,22 @@ async fn import_outbox(
 
         // Insert the post
         let result = crate::db_extras::import_insert_post(
-            tx, id, crate::db::DEFAULT_USER_ID, account_id, &ap_id,
-            in_reply_to_uri.as_deref(), &context_url, &content_clean, &content_html,
-            &spoiler_text, &visibility, sensitive, language.as_deref(), published_ms,
-        ).await;
+            tx,
+            id,
+            crate::db::DEFAULT_USER_ID,
+            account_id,
+            &ap_id,
+            in_reply_to_uri.as_deref(),
+            &context_url,
+            &content_clean,
+            &content_html,
+            &spoiler_text,
+            &visibility,
+            sensitive,
+            language.as_deref(),
+            published_ms,
+        )
+        .await;
 
         if let Err(e) = result {
             tracing::warn!("Skipping post {published_str}: {e}");
@@ -465,7 +510,8 @@ async fn import_outbox(
                             .unwrap_or(None);
 
                         if let Some(remote_id) = remote {
-                            let _ = crate::db_extras::import_insert_mention(tx, id, remote_id).await;
+                            let _ =
+                                crate::db_extras::import_insert_mention(tx, id, remote_id).await;
                         }
                     }
                 }
@@ -498,7 +544,10 @@ async fn import_outbox(
                         let prefix = &id_hex[..2.min(id_hex.len())];
                         let prefix_dir = media_dir.join(prefix);
                         if let Err(e) = std::fs::create_dir_all(&prefix_dir) {
-                            tracing::warn!("Failed to create media prefix dir {}: {e}", prefix_dir.display());
+                            tracing::warn!(
+                                "Failed to create media prefix dir {}: {e}",
+                                prefix_dir.display()
+                            );
                             continue;
                         }
                         let dest_filename = format!("{media_id}.{ext}");
@@ -514,12 +563,13 @@ async fn import_outbox(
                             .unwrap_or(0);
 
                         // Write sidecar .meta file for recovery/debugging
-                        let sidecar_path = dest_path.with_extension(
-                            format!(
-                                "{}.meta",
-                                dest_path.extension().and_then(|e| e.to_str()).unwrap_or("bin")
-                            ),
-                        );
+                        let sidecar_path = dest_path.with_extension(format!(
+                            "{}.meta",
+                            dest_path
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("bin")
+                        ));
                         let sidecar_json = serde_json::json!({
                             "id": media_id,
                             "mime_type": media_type,
@@ -539,9 +589,18 @@ async fn import_outbox(
 
                         let rel_path = format!("media/{prefix}/{media_id}.{ext}");
                         let _ = crate::db_extras::import_insert_media(
-                            tx, media_id, crate::db::DEFAULT_USER_ID, account_id, id,
-                            &rel_path, media_type, file_size, description, published_ms,
-                        ).await;
+                            tx,
+                            media_id,
+                            crate::db::DEFAULT_USER_ID,
+                            account_id,
+                            id,
+                            &rel_path,
+                            media_type,
+                            file_size,
+                            description,
+                            published_ms,
+                        )
+                        .await;
 
                         stats.media_imported += 1;
                     }
@@ -601,7 +660,12 @@ async fn import_blocked_accounts(
         if let Some(domain) = acct.split('@').nth(1) {
             if blocked_domains.insert(domain.to_string()) {
                 crate::db_extras::import_add_domain_block(
-                    tx, domain, "suspend", false, "imported from Mastodon archive", now,
+                    tx,
+                    domain,
+                    "suspend",
+                    false,
+                    "imported from Mastodon archive",
+                    now,
                 )
                 .await?;
             }
@@ -708,4 +772,448 @@ fn find_file_recursive(dir: &Path, filename: &str) -> Option<std::path::PathBuf>
         }
     }
     None
+}
+
+// ---------------------------------------------------------------------------
+// LibraryThing TSV import
+// ---------------------------------------------------------------------------
+
+pub struct LibraryThingStats {
+    pub books_imported: usize,
+    pub books_skipped: usize,
+    pub shelved: usize,
+    pub rated: usize,
+    pub reviews_imported: usize,
+}
+
+/// Import books from a LibraryThing TSV export file.
+///
+/// LibraryThing exports tab-separated files with columns including:
+/// `Book Id`, `Title`, `Author (First, Last)`, `ISBN`, `ISBN13`,
+/// `Rating`, `Date Read`, `Date Added`, `Collections`, `Review`,
+/// `Number of Pages`, `Publication`, `Language 1`, etc.
+///
+/// Deduplicates by ISBN — if a book with the same ISBN already exists
+/// in the database, it is skipped but shelf/rating/review are still applied.
+pub async fn import_librarything(
+    pool: &fieldwork_db::db::Pool,
+    config: &Config,
+    tsv_path: &Path,
+) -> Result<LibraryThingStats> {
+    let _ = config; // reserved for future use (e.g. cover downloads)
+
+    let mut stats = LibraryThingStats {
+        books_imported: 0,
+        books_skipped: 0,
+        shelved: 0,
+        rated: 0,
+        reviews_imported: 0,
+    };
+
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(b'\t')
+        .flexible(true)
+        .from_path(tsv_path)
+        .with_context(|| format!("Failed to open {}", tsv_path.display()))?;
+
+    let headers = rdr.headers().context("Failed to read TSV headers")?.clone();
+    let col = |name: &str| -> Option<usize> {
+        headers
+            .iter()
+            .position(|h| h.trim_start_matches('\u{feff}') == name)
+    };
+
+    let i_title = col("Title")
+        .or_else(|| col("'TITLE'"))
+        .context("Missing 'Title' column")?;
+    let i_author = col("Author (First, Last)")
+        .or_else(|| col("'AUTHOR (First, Last)'"))
+        .or_else(|| col("Primary Author"));
+    let i_author_lf = col("Author (Last, First)").or_else(|| col("'AUTHOR (Last, First)'"));
+    let i_isbn = col("ISBN").or_else(|| col("'ISBN'"));
+    let i_isbn13 = col("ISBNs")
+        .or_else(|| col("'ISBNs'"))
+        .or_else(|| col("ISBN13"));
+    let i_rating = col("Rating").or_else(|| col("'RATING'"));
+    let i_collections = col("Collections").or_else(|| col("'COLLECTIONS'"));
+    let i_review = col("Review").or_else(|| col("'REVIEW'"));
+    let i_pages = col("Number of Pages")
+        .or_else(|| col("'NUMBER OF PAGES'"))
+        .or_else(|| col("Pages"));
+    let i_date = col("Date")
+        .or_else(|| col("'DATE'"))
+        .or_else(|| col("Publication"));
+    let i_language = col("Language 1")
+        .or_else(|| col("'LANGUAGE 1'"))
+        .or_else(|| col("Primary Language"));
+
+    if i_author.is_none() && i_author_lf.is_none() {
+        bail!("No author column found (expected 'Author (First, Last)' or 'Author (Last, First)')");
+    }
+
+    let user_id = crate::db::DEFAULT_USER_ID;
+    let domain = &config.server.domain;
+
+    for result in rdr.records() {
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("  warning: skipping malformed row: {e}");
+                continue;
+            }
+        };
+
+        let get = |idx: Option<usize>| -> Option<&str> {
+            idx.and_then(|i| record.get(i))
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+        };
+
+        let title = match get(Some(i_title)) {
+            Some(t) => t.to_string(),
+            None => continue,
+        };
+
+        // Author: prefer "First, Last" format, fall back to "Last, First" flipped
+        let author = if let Some(a) = get(i_author) {
+            a.to_string()
+        } else if let Some(a) = get(i_author_lf) {
+            // "Stephenson, Neal" -> "Neal Stephenson"
+            match a.split_once(',') {
+                Some((last, first)) => format!("{} {}", first.trim(), last.trim()),
+                None => a.to_string(),
+            }
+        } else {
+            String::new()
+        };
+
+        // ISBN: LT wraps in brackets like [0441478123]
+        let isbn = get(i_isbn)
+            .map(|s| {
+                s.trim_matches(|c: char| c == '[' || c == ']' || c.is_whitespace())
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty());
+
+        // ISBN13: LT "ISBNs" field may contain multiple, take the first 13-digit one
+        let isbn13 = get(i_isbn13).and_then(|s| {
+            s.split(|c: char| c == ',' || c == ';' || c == '[' || c == ']' || c.is_whitespace())
+                .map(|t| t.trim())
+                .find(|t| t.len() == 13 && t.chars().all(|c| c.is_ascii_digit()))
+                .map(|t| t.to_string())
+        });
+
+        // Dedup: check if a book with this ISBN already exists
+        let existing_book_id = if let Some(ref isbn_val) = isbn {
+            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+                .await
+                .ok()
+                .flatten()
+                .map(|b| b.id)
+        } else if let Some(ref isbn13_val) = isbn13 {
+            fieldwork_db::books_db::get_book_by_isbn(pool, isbn13_val)
+                .await
+                .ok()
+                .flatten()
+                .map(|b| b.id)
+        } else {
+            None
+        };
+
+        let now = fieldwork::util::now_secs();
+
+        let book_id = if let Some(id) = existing_book_id {
+            stats.books_skipped += 1;
+            id
+        } else {
+            let id = fieldwork::id::generate_id();
+            let pages = get(i_pages).and_then(|s| s.parse::<i32>().ok());
+            let published_year = get(i_date).and_then(|s| {
+                // LT dates can be "2004", "2004-06", "June 2004", etc.
+                s.chars()
+                    .filter(|c| c.is_ascii_digit())
+                    .take(4)
+                    .collect::<String>()
+                    .parse::<i32>()
+                    .ok()
+                    .filter(|&y| (1000..=2100).contains(&y))
+            });
+            let language = get(i_language).map(|s| s.to_string());
+
+            let book = fieldwork_db::books_db::BookRow {
+                id,
+                title,
+                author,
+                isbn,
+                isbn13,
+                openlibrary_id: None,
+                cover_url: None,
+                description: String::new(),
+                pages,
+                published_year,
+                language,
+                created_at: now,
+            };
+            fieldwork_db::books_db::create_book(pool, &book)
+                .await
+                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+            stats.books_imported += 1;
+            id
+        };
+
+        // Shelf: map LT "Collections" to reading status
+        if let Some(collections) = get(i_collections) {
+            let status = lt_collections_to_status(collections);
+            if let Some(status) = status {
+                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                    .await
+                    .ok();
+                stats.shelved += 1;
+            }
+        }
+
+        // Rating: LT uses 0-10 half-star scale, we use 1-5
+        if let Some(rating_str) = get(i_rating) {
+            if let Ok(lt_rating) = rating_str.parse::<f32>() {
+                // LT 0-10 → our 1-5: divide by 2, round, clamp
+                let rating = (lt_rating / 2.0).round() as i32;
+                if (1..=5).contains(&rating) {
+                    fieldwork_db::books_db::rate_book(pool, user_id, book_id, rating, now)
+                        .await
+                        .ok();
+                    stats.rated += 1;
+                }
+            }
+        }
+
+        // Review
+        if let Some(review_text) = get(i_review) {
+            let id = fieldwork::id::generate_id();
+            let review = fieldwork_db::books_db::ReviewRow {
+                id,
+                user_id,
+                persona_id: user_id,
+                book_id,
+                content: review_text.to_string(),
+                content_html: format!("<p>{}</p>", ammonia::clean(review_text)),
+                rating: None,
+                spoiler: false,
+                ap_id: format!("https://{}/reviews/{}", domain, id),
+                created_at: now,
+            };
+            fieldwork_db::books_db::create_review(pool, &review)
+                .await
+                .ok();
+            stats.reviews_imported += 1;
+        }
+    }
+
+    Ok(stats)
+}
+
+/// Map LibraryThing collection names to reading shelf status.
+///
+/// LT collections are free-form but common ones are "Your library",
+/// "To Read", "Currently Reading", "Read but unowned", etc.
+fn lt_collections_to_status(collections: &str) -> Option<&'static str> {
+    let lower = collections.to_ascii_lowercase();
+    if lower.contains("currently reading") || lower.contains("reading now") {
+        Some("reading")
+    } else if lower.contains("to read") || lower.contains("to-read") || lower.contains("wishlist") {
+        Some("to-read")
+    } else if lower.contains("read") || lower.contains("your library") {
+        // "Read but unowned", "Read", or default "Your library" → read
+        Some("read")
+    } else {
+        // Unknown collection — default to "read" since it's in their library
+        Some("read")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lt_collections_to_status() {
+        assert_eq!(lt_collections_to_status("Your library"), Some("read"));
+        assert_eq!(lt_collections_to_status("To Read"), Some("to-read"));
+        assert_eq!(
+            lt_collections_to_status("Currently Reading"),
+            Some("reading")
+        );
+        assert_eq!(lt_collections_to_status("Read but unowned"), Some("read"));
+        assert_eq!(lt_collections_to_status("wishlist"), Some("to-read"));
+        assert_eq!(lt_collections_to_status("reading now"), Some("reading"));
+        assert_eq!(lt_collections_to_status("Custom Shelf"), Some("read"));
+    }
+
+    fn test_config() -> Config {
+        toml::from_str(
+            r#"
+[server]
+listen = "127.0.0.1:3000"
+domain = "test.example"
+secret_key = "test-secret-key-not-real"
+[storage]
+database_path = ":memory:"
+media_dir = "/tmp/smallhold-test-media"
+[federation]
+[limits]
+[defaults]
+"#,
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn import_librarything_basic() {
+        let pool = crate::db::test_pool().await;
+        let config = test_config();
+
+        // Write a test TSV file
+        let dir = tempfile::tempdir().unwrap();
+        let tsv_path = dir.path().join("export.tsv");
+        std::fs::write(
+            &tsv_path,
+            "Title\tAuthor (First, Last)\tISBN\tRating\tCollections\tReview\tNumber of Pages\n\
+             Snow Crash\tNeal Stephenson\t[0553380958]\t8\tYour library\tGreat book\t480\n\
+             Neuromancer\tWilliam Gibson\t[0441007465]\t9\tTo Read\t\t271\n",
+        )
+        .unwrap();
+
+        let stats = import_librarything(&pool, &config, &tsv_path)
+            .await
+            .unwrap();
+
+        assert_eq!(stats.books_imported, 2);
+        assert_eq!(stats.books_skipped, 0);
+        assert_eq!(stats.shelved, 2);
+        assert_eq!(stats.rated, 2);
+        assert_eq!(stats.reviews_imported, 1);
+
+        // Verify book was inserted correctly
+        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(book.title, "Snow Crash");
+        assert_eq!(book.author, "Neal Stephenson");
+        assert_eq!(book.pages, Some(480));
+
+        // Verify shelf status
+        let (status, _, _, _, _) =
+            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book.id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(status, "read");
+
+        // Verify "To Read" book
+        let book2 = fieldwork_db::books_db::get_book_by_isbn(&pool, "0441007465")
+            .await
+            .unwrap()
+            .unwrap();
+        let (status2, _, _, _, _) =
+            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book2.id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(status2, "to-read");
+    }
+
+    #[tokio::test]
+    async fn import_librarything_dedup_by_isbn() {
+        let pool = crate::db::test_pool().await;
+        let config = test_config();
+
+        // Pre-insert a book with the same ISBN
+        let existing = fieldwork_db::books_db::BookRow {
+            id: 42,
+            title: "Snow Crash".into(),
+            author: "Neal Stephenson".into(),
+            isbn: Some("0553380958".into()),
+            isbn13: None,
+            openlibrary_id: None,
+            cover_url: None,
+            description: String::new(),
+            pages: None,
+            published_year: None,
+            language: None,
+            created_at: 0,
+        };
+        fieldwork_db::books_db::create_book(&pool, &existing)
+            .await
+            .unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let tsv_path = dir.path().join("export.tsv");
+        std::fs::write(
+            &tsv_path,
+            "Title\tAuthor (First, Last)\tISBN\tRating\tCollections\n\
+             Snow Crash\tNeal Stephenson\t[0553380958]\t8\tYour library\n",
+        )
+        .unwrap();
+
+        let stats = import_librarything(&pool, &config, &tsv_path)
+            .await
+            .unwrap();
+
+        assert_eq!(stats.books_imported, 0);
+        assert_eq!(stats.books_skipped, 1);
+        // Rating and shelf should still be applied to existing book
+        assert_eq!(stats.rated, 1);
+        assert_eq!(stats.shelved, 1);
+    }
+
+    #[tokio::test]
+    async fn import_librarything_last_first_author() {
+        let pool = crate::db::test_pool().await;
+        let config = test_config();
+
+        let dir = tempfile::tempdir().unwrap();
+        let tsv_path = dir.path().join("export.tsv");
+        std::fs::write(
+            &tsv_path,
+            "Title\tAuthor (Last, First)\tISBN\n\
+             Dune\tHerbert, Frank\t[0441172717]\n",
+        )
+        .unwrap();
+
+        let stats = import_librarything(&pool, &config, &tsv_path)
+            .await
+            .unwrap();
+        assert_eq!(stats.books_imported, 1);
+
+        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0441172717")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(book.author, "Frank Herbert");
+    }
+
+    #[tokio::test]
+    async fn import_librarything_rating_conversion() {
+        let pool = crate::db::test_pool().await;
+        let config = test_config();
+
+        let dir = tempfile::tempdir().unwrap();
+        let tsv_path = dir.path().join("export.tsv");
+        // LT rating 10 → 5, rating 1 → 1, rating 0 → skipped (rounds to 0)
+        std::fs::write(
+            &tsv_path,
+            "Title\tAuthor (First, Last)\tISBN\tRating\n\
+             Book A\tAuthor A\t[1111111111]\t10\n\
+             Book B\tAuthor B\t[2222222222]\t1\n\
+             Book C\tAuthor C\t[3333333333]\t0\n",
+        )
+        .unwrap();
+
+        let stats = import_librarything(&pool, &config, &tsv_path)
+            .await
+            .unwrap();
+        assert_eq!(stats.books_imported, 3);
+        // Rating 0 → 0 after divide, out of 1..=5, so skipped
+        assert_eq!(stats.rated, 2);
+    }
 }

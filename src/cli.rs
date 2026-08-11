@@ -220,6 +220,11 @@ pub enum ImportCommands {
         /// Path to the Mastodon archive file
         archive: PathBuf,
     },
+    /// Import a LibraryThing TSV export
+    Librarything {
+        /// Path to the LibraryThing export file (.tsv)
+        file: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -525,8 +530,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
             use rsa::RsaPrivateKey;
 
-            let private_key =
-                RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048).context("Failed to generate RSA keypair")?;
+            let private_key = RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048)
+                .context("Failed to generate RSA keypair")?;
             let private_key_pem = private_key
                 .to_pkcs8_pem(LineEnding::LF)
                 .context("Failed to encode private key")?;
@@ -550,15 +555,32 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             // Ensure the single-owner user exists for FK reference
             crate::db::ensure_default_user(&pool).await?;
 
-            
-
-            crate::db_extras::create_persona(&pool, id, crate::db::DEFAULT_USER_ID, &username, &display_name, private_key_pem.as_str(), &public_key_pem, locked, bot, now)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create persona (username may already exist): {e}"))?;
+            crate::db_extras::create_persona(
+                &pool,
+                id,
+                crate::db::DEFAULT_USER_ID,
+                &username,
+                &display_name,
+                private_key_pem.as_str(),
+                &public_key_pem,
+                locked,
+                bot,
+                now,
+            )
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to create persona (username may already exist): {e}")
+            })?;
 
             // Store DID keys on the users table (canonical schema)
-            
-            crate::db_extras::update_user_did(&pool, crate::db::DEFAULT_USER_ID, &did_key, &recovery_pubkey_hex).await?;
+
+            crate::db_extras::update_user_did(
+                &pool,
+                crate::db::DEFAULT_USER_ID,
+                &did_key,
+                &recovery_pubkey_hex,
+            )
+            .await?;
 
             eprintln!("Created persona: @{username} (id: {id})");
             eprintln!("  DID: {did_key}");
@@ -567,7 +589,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             eprintln!("{recovery_phrase}");
         }
         PersonaCommands::List => {
-            let rows: Vec<(String, String, String, i64)> = crate::db_extras::list_personas_cli(&pool).await?;
+            let rows: Vec<(String, String, String, i64)> =
+                crate::db_extras::list_personas_cli(&pool).await?;
 
             if rows.is_empty() {
                 eprintln!("No personas.");
@@ -582,10 +605,9 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
             display_name,
             bio,
         } => {
-            let persona = fieldwork_db::persona_db::get_persona_by_username(
-                &pool, &username,
-            ).await?
-            .ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
+            let persona = fieldwork_db::persona_db::get_persona_by_username(&pool, &username)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
 
             let bio_html = bio.as_ref().map(|b| render_bio(b));
             fieldwork_db::persona_db::update_persona_profile(
@@ -594,7 +616,8 @@ async fn cmd_persona(cmd: PersonaCommands, config_path: &Path) -> Result<()> {
                 display_name.as_deref(),
                 bio.as_deref(),
                 bio_html.as_deref(),
-            ).await?;
+            )
+            .await?;
             eprintln!("Updated @{username}");
         }
         PersonaCommands::Delete { username } => {
@@ -628,8 +651,6 @@ async fn cmd_admin(cmd: AdminCommands, config_path: &Path) -> Result<()> {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as i64;
-
-            
 
             crate::db_extras::cli_set_admin_password(&pool, &hash, now).await?;
 
@@ -676,12 +697,10 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
     match cmd {
         TokenCommands::Mint { username, scopes } => {
-            let account: Option<(i64,)> =
-                
-                {
-                    let p = fieldwork_db::persona_db::get_persona_by_username(&pool, &username).await?;
-                    p.map(|p| (p.id,))
-                };
+            let account: Option<(i64,)> = {
+                let p = fieldwork_db::persona_db::get_persona_by_username(&pool, &username).await?;
+                p.map(|p| (p.id,))
+            };
 
             let (account_id,) =
                 account.ok_or_else(|| anyhow::anyhow!("Persona @{username} not found"))?;
@@ -707,8 +726,15 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
 
             fieldwork_db::oauth_db::create_token(
                 &pool,
-                id, &token_hash, app_id, crate::db::DEFAULT_USER_ID, account_id, &scopes, now,
-            ).await?;
+                id,
+                &token_hash,
+                app_id,
+                crate::db::DEFAULT_USER_ID,
+                account_id,
+                &scopes,
+                now,
+            )
+            .await?;
 
             eprintln!("Token minted for @{username} (scopes: {scopes}):");
             eprintln!("{token}");
@@ -716,7 +742,8 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("This token will not be shown again.");
         }
         TokenCommands::List => {
-            let rows: Vec<(String, String, String, i64, Option<i64>, String)> = crate::db_extras::list_tokens_cli(&pool).await?;
+            let rows: Vec<(String, String, String, i64, Option<i64>, String)> =
+                crate::db_extras::list_tokens_cli(&pool).await?;
 
             if rows.is_empty() {
                 eprintln!("No active tokens.");
@@ -739,7 +766,12 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .unwrap()
                 .as_millis() as i64;
 
-            let result = crate::db_extras::revoke_token_cli(&pool, token_id.parse::<i64>().context("Invalid token ID")?, now).await?;
+            let result = crate::db_extras::revoke_token_cli(
+                &pool,
+                token_id.parse::<i64>().context("Invalid token ID")?,
+                now,
+            )
+            .await?;
 
             if result == 0 {
                 eprintln!("Token not found or already revoked.");
@@ -754,13 +786,12 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
                 .as_millis() as i64;
 
             let result = if let Some(ref uname) = username {
-                let account: Option<(i64,)> = crate::db_extras::get_persona_id_by_username(&pool, uname)
-                    .await?
-                    .map(|id| (id,));
+                let account: Option<(i64,)> =
+                    crate::db_extras::get_persona_id_by_username(&pool, uname)
+                        .await?
+                        .map(|id| (id,));
                 let (account_id,) =
                     account.ok_or_else(|| anyhow::anyhow!("Persona @{uname} not found"))?;
-
-                
 
                 fieldwork_db::oauth_db::revoke_all_for_persona(&pool, account_id, now).await?
             } else {
@@ -774,17 +805,19 @@ async fn cmd_token(cmd: TokenCommands, config_path: &Path) -> Result<()> {
             eprintln!("Revoked {result} token(s){scope}.");
         }
         TokenCommands::Sessions => {
-            let accounts: Vec<(i64, String)> =
-                
-                {
-                    let personas = fieldwork_db::persona_db::list_personas(&pool).await?;
-                    personas.iter().map(|p| (p.id, p.username.clone())).collect::<Vec<_>>()
-                };
+            let accounts: Vec<(i64, String)> = {
+                let personas = fieldwork_db::persona_db::list_personas(&pool).await?;
+                personas
+                    .iter()
+                    .map(|p| (p.id, p.username.clone()))
+                    .collect::<Vec<_>>()
+            };
 
             for (account_id, username) in &accounts {
                 eprintln!("Sessions for @{username}:");
 
-                let rows: Vec<(String, String, String, Option<i64>)> = crate::db_extras::list_sessions_cli(&pool, *account_id).await?;
+                let rows: Vec<(String, String, String, Option<i64>)> =
+                    crate::db_extras::list_sessions_cli(&pool, *account_id).await?;
 
                 if rows.is_empty() {
                     eprintln!("  (none)");
@@ -819,8 +852,6 @@ async fn get_or_create_cli_app(pool: &fieldwork_db::db::Pool) -> Result<i64> {
         .unwrap()
         .as_millis() as i64;
 
-    
-
     crate::db_extras::create_cli_app(pool, id, now).await?;
 
     Ok(id)
@@ -846,21 +877,25 @@ async fn cmd_domain_block(cmd: DomainBlockCommands, config_path: &Path) -> Resul
                 .unwrap()
                 .as_millis() as i64;
 
-            
-
-            crate::db_extras::add_domain_block(&pool, &domain, &severity, reject_media, reason.as_deref().unwrap_or(""), now).await?;
+            crate::db_extras::add_domain_block(
+                &pool,
+                &domain,
+                &severity,
+                reject_media,
+                reason.as_deref().unwrap_or(""),
+                now,
+            )
+            .await?;
 
             eprintln!("Blocked domain: {domain} ({severity})");
         }
         DomainBlockCommands::Remove { domain } => {
-            
-            fieldwork_db::domain_blocks_db::unblock_domain(
-                &pool, &domain,
-            ).await?;
+            fieldwork_db::domain_blocks_db::unblock_domain(&pool, &domain).await?;
             eprintln!("Unblocked domain: {domain}");
         }
         DomainBlockCommands::List => {
-            let rows: Vec<(String, String, String)> = crate::db_extras::list_domain_blocks(&pool).await?;
+            let rows: Vec<(String, String, String)> =
+                crate::db_extras::list_domain_blocks(&pool).await?;
 
             if rows.is_empty() {
                 eprintln!("No domain blocks.");
@@ -970,6 +1005,23 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
                 }
             }
         }
+        ImportCommands::Librarything { file } => {
+            let stats = crate::import::import_librarything(&pool, &config, &file).await?;
+            eprintln!("LibraryThing import complete:");
+            eprintln!(
+                "  Books: {} imported, {} skipped (duplicate ISBN)",
+                stats.books_imported, stats.books_skipped
+            );
+            if stats.shelved > 0 {
+                eprintln!("  Shelved: {}", stats.shelved);
+            }
+            if stats.rated > 0 {
+                eprintln!("  Rated: {}", stats.rated);
+            }
+            if stats.reviews_imported > 0 {
+                eprintln!("  Reviews: {}", stats.reviews_imported);
+            }
+        }
     }
     Ok(())
 }
@@ -984,17 +1036,22 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let mnemonic = {
                 use std::io::BufRead;
                 let stdin = std::io::stdin();
-                stdin.lock().lines().next()
+                stdin
+                    .lock()
+                    .lines()
+                    .next()
                     .ok_or_else(|| anyhow::anyhow!("No input"))?
                     .context("Failed to read recovery phrase")?
-                    .trim().to_string()
+                    .trim()
+                    .to_string()
             };
             let priv_key = crate::did::mnemonic_to_private_key(&mnemonic)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             let pub_key = crate::did::ed25519_public_from_private(&priv_key);
             let did_key = crate::did::ed25519_to_did_key(&pub_key);
 
-            let account: Option<(i64, String, String)> = crate::db_extras::find_account_by_did(&pool, &did_key).await?;
+            let account: Option<(i64, String, String)> =
+                crate::db_extras::find_account_by_did(&pool, &did_key).await?;
 
             match account {
                 Some((id, username, display_name)) => {
@@ -1020,7 +1077,8 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
                 return Ok(());
             }
 
-            let personas: Vec<(i64, String)> = crate::db_extras::list_personas_for_backfill(&pool).await?;
+            let personas: Vec<(i64, String)> =
+                crate::db_extras::list_personas_for_backfill(&pool).await?;
 
             eprintln!("Backfilling DID keys...");
             eprintln!();
@@ -1030,14 +1088,16 @@ async fn cmd_did(cmd: DidCommands, config_path: &Path) -> Result<()> {
             let recovery_pubkey_hex = crate::api::hex_encode(&recovery_pub);
             let recovery_phrase = crate::did::private_key_to_mnemonic(&recovery_priv);
 
-            
-
-            crate::db_extras::update_user_did(&pool, crate::db::DEFAULT_USER_ID, &did_key, &recovery_pubkey_hex)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to update user DID keys: {e}"))?;
+            crate::db_extras::update_user_did(
+                &pool,
+                crate::db::DEFAULT_USER_ID,
+                &did_key,
+                &recovery_pubkey_hex,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to update user DID keys: {e}"))?;
 
             for (_id, username) in &personas {
-
                 eprintln!("@{username}:");
                 eprintln!("  DID: {did_key}");
                 eprintln!("  RECOVERY PHRASE (save this — it will NOT be shown again):");
@@ -1058,7 +1118,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
     match cmd {
         RelayCommands::Add { url } => {
             // Fetch the relay's actor document to get its inbox URL.
-            let first_account: Option<(i64, String, String)> = crate::db_extras::get_first_persona_with_key(&pool).await?;
+            let first_account: Option<(i64, String, String)> =
+                crate::db_extras::get_first_persona_with_key(&pool).await?;
 
             let (account_id, username, private_key_pem) = first_account
                 .ok_or_else(|| anyhow::anyhow!("No local persona exists. Create one first."))?;
@@ -1087,7 +1148,7 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let follow_uri = format!("https://{domain}/activities/follow-{follow_id}");
 
             let relay_id = generate_id();
-            
+
             crate::db_extras::insert_relay(&pool, relay_id, inbox_url, &url, &follow_uri, now)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to insert relay: {e}"))?;
@@ -1115,7 +1176,8 @@ async fn cmd_relay(cmd: RelayCommands, config_path: &Path) -> Result<()> {
             let stored_follow_id = relay.follow_id.clone();
 
             // Get the first local account to send the Undo.
-            let first_account: Option<(i64, String)> = crate::db_extras::get_first_persona(&pool).await?;
+            let first_account: Option<(i64, String)> =
+                crate::db_extras::get_first_persona(&pool).await?;
 
             let (account_id, username) =
                 first_account.ok_or_else(|| anyhow::anyhow!("No local persona exists."))?;
@@ -1253,7 +1315,9 @@ async fn cmd_rebuild_media_index(config_path: &Path) -> Result<()> {
             }
         };
 
-        let mime_type = parsed["mime_type"].as_str().unwrap_or("application/octet-stream");
+        let mime_type = parsed["mime_type"]
+            .as_str()
+            .unwrap_or("application/octet-stream");
         let file_size = parsed["file_size"].as_i64().unwrap_or(0);
         let width = parsed["width"].as_i64().map(|v| v as i32);
         let height = parsed["height"].as_i64().map(|v| v as i32);
@@ -1268,10 +1332,7 @@ async fn cmd_rebuild_media_index(config_path: &Path) -> Result<()> {
         let rel_path = match media_file.strip_prefix(media_dir) {
             Ok(r) => format!("media/{}", r.display()),
             Err(_) => {
-                tracing::warn!(
-                    "Cannot compute relative path for {}",
-                    meta_path.display()
-                );
+                tracing::warn!("Cannot compute relative path for {}", meta_path.display());
                 errors += 1;
                 continue;
             }
@@ -1314,13 +1375,16 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
     let media_dir = &config.storage.media_dir;
 
     // Step 1: Backfill media sidecars
-    let media_rows = crate::db_extras::all_media_for_sidecar(&pool).await
+    let media_rows = crate::db_extras::all_media_for_sidecar(&pool)
+        .await
         .context("Failed to query media table")?;
 
     let mut backfilled = 0usize;
     let mut already_existed = 0usize;
 
-    for (id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) in &media_rows {
+    for (id, file_path, mime_type, file_size, width, height, blurhash, description, created_at) in
+        &media_rows
+    {
         // file_path is like "media/ab/12345.jpg"; strip "media/" prefix to get relative-to-media_dir
         let rel = match file_path.strip_prefix("media/") {
             Some(r) => r,
@@ -1332,7 +1396,10 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
         let abs_path = std::path::Path::new(media_dir).join(rel);
 
         // Compute sidecar path the same way write_media_sidecar does: {path}.meta
-        let ext = abs_path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+        let ext = abs_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("bin");
         let meta_path = abs_path.with_extension(format!("{ext}.meta"));
 
         if meta_path.exists() {
@@ -1340,7 +1407,11 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
             continue;
         }
 
-        let desc = if description.is_empty() { None } else { Some(description.as_str()) };
+        let desc = if description.is_empty() {
+            None
+        } else {
+            Some(description.as_str())
+        };
         let meta = serde_json::json!({
             "id": id,
             "mime_type": mime_type,
@@ -1357,8 +1428,8 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
-        let json_str = serde_json::to_string_pretty(&meta)
-            .context("Failed to serialize media sidecar")?;
+        let json_str =
+            serde_json::to_string_pretty(&meta).context("Failed to serialize media sidecar")?;
         std::fs::write(&meta_path, json_str.as_bytes())
             .with_context(|| format!("Failed to write sidecar: {}", meta_path.display()))?;
 
@@ -1368,17 +1439,20 @@ async fn cmd_migrate_storage(config_path: &Path) -> Result<()> {
     eprintln!("Backfilled {backfilled} media sidecars ({already_existed} already existed)");
 
     // Step 2: Externalize long post content
-    let long_posts = crate::db_extras::posts_needing_externalization(&pool).await
+    let long_posts = crate::db_extras::posts_needing_externalization(&pool)
+        .await
         .context("Failed to query posts for externalization")?;
 
     let mut externalized = 0usize;
 
     for (id, content, content_html) in &long_posts {
-        let content_path = crate::posting::write_content_files(media_dir, *id, content, content_html)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to write content files for post {id}: {e}"))?;
+        let content_path =
+            crate::posting::write_content_files(media_dir, *id, content, content_html)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to write content files for post {id}: {e}"))?;
 
-        crate::db_extras::set_post_content_path(&pool, *id, &content_path).await
+        crate::db_extras::set_post_content_path(&pool, *id, &content_path)
+            .await
             .with_context(|| format!("Failed to update content_path for post {id}"))?;
 
         externalized += 1;

@@ -22,6 +22,7 @@ futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+csv = "1"
 flate2 = "1"
 clap = { version = "4", features = ["derive"] }
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
