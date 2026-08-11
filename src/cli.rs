@@ -83,6 +83,9 @@ pub enum Commands {
     #[command(subcommand)]
     Webhook(WebhookCommands),
 
+    /// Hydrate book metadata from Open Library for books missing titles
+    HydrateBooks,
+
     /// Rebuild media DB index from sidecar .meta files
     RebuildMediaIndex,
 
@@ -225,6 +228,11 @@ pub enum ImportCommands {
         /// Path to the LibraryThing export file (.tsv, .json, or .marc)
         file: PathBuf,
     },
+    /// Import a list of ISBNs (one per line, .txt or .csv)
+    Isbn {
+        /// Path to the ISBN list file
+        file: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -275,6 +283,7 @@ impl Cli {
             Commands::Relay(cmd) => cmd_relay(cmd, &self.config).await,
             Commands::Did(cmd) => cmd_did(cmd, &self.config).await,
             Commands::Webhook(cmd) => cmd_webhook(cmd, &self.config).await,
+            Commands::HydrateBooks => cmd_hydrate_books(&self.config).await,
             Commands::RebuildMediaIndex => cmd_rebuild_media_index(&self.config).await,
             Commands::MigrateStorage => cmd_migrate_storage(&self.config).await,
         }
@@ -1033,7 +1042,30 @@ async fn cmd_import(cmd: ImportCommands, config_path: &Path) -> Result<()> {
                 eprintln!("  Reviews: {}", stats.reviews_imported);
             }
         }
+        ImportCommands::Isbn { file } => {
+            let stats = crate::import::import_isbn_list(&pool, &file).await?;
+            eprintln!("ISBN import complete:");
+            eprintln!(
+                "  Books: {} imported, {} skipped (already in DB)",
+                stats.books_imported, stats.books_skipped
+            );
+            if stats.books_imported > 0 {
+                eprintln!("  Run `smallhold hydrate-books` to fetch metadata from Open Library.");
+            }
+        }
     }
+    Ok(())
+}
+
+async fn cmd_hydrate_books(config_path: &Path) -> Result<()> {
+    let config = Config::load(config_path)?;
+    let pool = db::create_pool(&config.storage.database_path).await?;
+    let stats = crate::import::hydrate_books_from_openlibrary(&pool).await?;
+    eprintln!("Hydration complete:");
+    eprintln!(
+        "  Updated: {}, failed: {}, already complete: {}",
+        stats.hydrated, stats.failed, stats.skipped
+    );
     Ok(())
 }
 

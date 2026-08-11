@@ -1,0 +1,16 @@
+{
+  "id": "smallhold-q0kv",
+  "title": "ISBN list import with Open Library hydration",
+  "description": "Import a flat list of ISBNs (one per line), hydrate title/author/pages/year/cover from Open Library API. Dedup against existing books. Works offline for ISBNs already in DB.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-11T03:39:34.813190119Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-11T03:43:45.220499691Z",
+  "started_at": "2026-08-11T03:39:38.702248743Z",
+  "closed_at": "2026-08-11T03:43:45.220499691Z",
+  "close_reason": "ISBN list import and Open Library hydration implemented with tests"
+}

@@ -1502,6 +1502,236 @@ fn marc_lang_code_to_name(code: &str) -> &str {
     }
 }
 
+// ---------------------------------------------------------------------------
+// ISBN list import + Open Library hydration
+// ---------------------------------------------------------------------------
+
+pub struct IsbnImportStats {
+    pub books_imported: usize,
+    pub books_skipped: usize,
+}
+
+pub struct HydrateStats {
+    pub hydrated: usize,
+    pub failed: usize,
+    pub skipped: usize,
+}
+
+/// Import a flat list of ISBNs (one per line). Supports ISBN-10, ISBN-13,
+/// LCCN, OCLC numbers. Creates skeleton book records (ISBN only, no metadata).
+/// Run `hydrate-books` afterwards to fetch metadata from Open Library.
+pub async fn import_isbn_list(
+    pool: &fieldwork_db::db::Pool,
+    path: &Path,
+) -> Result<IsbnImportStats> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+
+    let mut stats = IsbnImportStats {
+        books_imported: 0,
+        books_skipped: 0,
+    };
+
+    let now = fieldwork::util::now_secs();
+
+    for line in content.lines() {
+        // Strip comments, whitespace, CSV headers
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty()
+            || line.eq_ignore_ascii_case("isbn")
+            || line.eq_ignore_ascii_case("isbn13")
+            || line.eq_ignore_ascii_case("isbn10")
+        {
+            continue;
+        }
+
+        // Extract ISBN-like value: strip hyphens, quotes, surrounding whitespace
+        // Support CSV: take first comma-separated field
+        let raw = line.split(',').next().unwrap_or(line).trim();
+        let isbn = raw
+            .trim_matches(|c: char| c == '"' || c == '\'' || c == ' ')
+            .replace('-', "");
+
+        if isbn.is_empty() {
+            continue;
+        }
+
+        // Validate: ISBN-10, ISBN-13, or other identifier
+        let is_isbn = isbn.len() == 10 || isbn.len() == 13;
+        if !is_isbn && isbn.chars().any(|c| !c.is_ascii_alphanumeric()) {
+            continue;
+        }
+
+        // Dedup
+        if let Ok(Some(_)) = fieldwork_db::books_db::get_book_by_isbn(pool, &isbn).await {
+            stats.books_skipped += 1;
+            continue;
+        }
+
+        let id = fieldwork::id::generate_id();
+        let (isbn10, isbn13) = if isbn.len() == 13 {
+            (None, Some(isbn.clone()))
+        } else {
+            (Some(isbn.clone()), None)
+        };
+
+        let book = fieldwork_db::books_db::BookRow {
+            id,
+            title: String::new(), // hydrated later
+            author: String::new(),
+            isbn: isbn10,
+            isbn13,
+            openlibrary_id: None,
+            cover_url: None,
+            description: String::new(),
+            pages: None,
+            published_year: None,
+            language: None,
+            created_at: now,
+        };
+        fieldwork_db::books_db::create_book(pool, &book)
+            .await
+            .with_context(|| format!("Failed to insert ISBN {isbn}"))?;
+        stats.books_imported += 1;
+    }
+
+    Ok(stats)
+}
+
+/// Hydrate book metadata from Open Library for any book with an empty title.
+/// Uses the Open Library Books API (`jscmd=data`) which returns author names inline.
+/// Rate-limited to 1 request per second to be polite.
+pub async fn hydrate_books_from_openlibrary(pool: &fieldwork_db::db::Pool) -> Result<HydrateStats> {
+    let mut stats = HydrateStats {
+        hydrated: 0,
+        failed: 0,
+        skipped: 0,
+    };
+
+    // Find all books with empty titles (need hydration)
+    let books = fieldwork_db::books_db::search_books(pool, "", 10000)
+        .await
+        .unwrap_or_default();
+
+    let needs_hydration: Vec<_> = books.iter().filter(|b| b.title.is_empty()).collect();
+
+    if needs_hydration.is_empty() {
+        eprintln!("  No books need hydration.");
+        return Ok(stats);
+    }
+
+    eprintln!("  {} books need hydration...", needs_hydration.len());
+
+    let client = reqwest::Client::builder()
+        .user_agent("smallhold/0.5 (book hydration; https://github.com/MarkAtwood/smallhold)")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    for book in &needs_hydration {
+        let isbn = book
+            .isbn
+            .as_deref()
+            .or(book.isbn13.as_deref())
+            .unwrap_or("");
+        if isbn.is_empty() {
+            stats.skipped += 1;
+            continue;
+        }
+
+        let url =
+            format!("https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data");
+
+        match client.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.json::<serde_json::Value>().await {
+                    Ok(data) => {
+                        let key = format!("ISBN:{isbn}");
+                        if let Some(entry) = data.get(&key) {
+                            let title = entry
+                                .get("title")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            let author = entry
+                                .get("authors")
+                                .and_then(|v| v.as_array())
+                                .and_then(|a| a.first())
+                                .and_then(|a| a.get("name"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            let pages = entry
+                                .get("number_of_pages")
+                                .and_then(|v| v.as_i64())
+                                .map(|n| n as i32);
+
+                            let published_year = entry
+                                .get("publish_date")
+                                .and_then(|v| v.as_str())
+                                .and_then(|s| {
+                                    s.chars()
+                                        .filter(|c| c.is_ascii_digit())
+                                        .collect::<String>()
+                                        .get(..4)
+                                        .and_then(|y| y.parse::<i32>().ok())
+                                        .filter(|&y| (1000..=2100).contains(&y))
+                                });
+
+                            let cover_url = entry
+                                .get("cover")
+                                .and_then(|v| v.get("large"))
+                                .or_else(|| entry.get("cover").and_then(|v| v.get("medium")))
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+
+                            let openlibrary_id = entry
+                                .get("key")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+
+                            if !title.is_empty() {
+                                fieldwork_db::books_db::update_book_metadata(
+                                    pool,
+                                    book.id,
+                                    &title,
+                                    &author,
+                                    pages,
+                                    published_year,
+                                    cover_url.as_deref(),
+                                    openlibrary_id.as_deref(),
+                                )
+                                .await
+                                .ok();
+                                stats.hydrated += 1;
+                                eprint!(".");
+                            } else {
+                                stats.failed += 1;
+                            }
+                        } else {
+                            stats.failed += 1;
+                        }
+                    }
+                    Err(_) => stats.failed += 1,
+                }
+            }
+            Ok(_) => stats.failed += 1,
+            Err(_) => stats.failed += 1,
+        }
+
+        // Rate limit: 1 req/sec
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    if stats.hydrated > 0 {
+        eprintln!(); // newline after dots
+    }
+
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1539,6 +1769,51 @@ mod tests {
         assert_eq!(marc_lang_code_to_name("fre"), "French");
         assert_eq!(marc_lang_code_to_name("epo"), "Esperanto");
         assert_eq!(marc_lang_code_to_name("xyz"), "xyz");
+    }
+
+    #[tokio::test]
+    async fn import_isbn_list_basic() {
+        let pool = crate::db::test_pool().await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("isbns.txt");
+        std::fs::write(
+            &path,
+            "isbn\n0553380958\n9780441007462\n# comment\n\n0553380958\n",
+        )
+        .unwrap();
+
+        let stats = import_isbn_list(&pool, &path).await.unwrap();
+        assert_eq!(stats.books_imported, 2);
+        // Third ISBN is a duplicate of first
+        assert_eq!(stats.books_skipped, 1);
+
+        // Books exist but have empty titles (need hydration)
+        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(book.title.is_empty());
+        assert_eq!(book.isbn, Some("0553380958".into()));
+    }
+
+    #[tokio::test]
+    async fn import_isbn_list_csv_format() {
+        let pool = crate::db::test_pool().await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("isbns.csv");
+        std::fs::write(&path, "\"978-0-553-38095-8\"\n\"0-441-00746-5\"\n").unwrap();
+
+        let stats = import_isbn_list(&pool, &path).await.unwrap();
+        assert_eq!(stats.books_imported, 2);
+
+        // Hyphens stripped
+        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "9780553380958")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(book.isbn13, Some("9780553380958".into()));
     }
 
     fn test_config() -> Config {
