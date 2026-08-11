@@ -816,9 +816,16 @@ pub async fn import_librarything(
         .from_path(tsv_path)
         .with_context(|| format!("Failed to open {}", tsv_path.display()))?;
 
-    let headers = rdr.headers().context("Failed to read TSV headers")?.clone();
+    let byte_headers = rdr
+        .byte_headers()
+        .context("Failed to read TSV headers")?
+        .clone();
+    let header_strings: Vec<String> = byte_headers
+        .iter()
+        .map(|h| String::from_utf8_lossy(h).into_owned())
+        .collect();
     let col = |name: &str| -> Option<usize> {
-        headers
+        header_strings
             .iter()
             .position(|h| h.trim_start_matches('\u{feff}') == name)
     };
@@ -826,10 +833,10 @@ pub async fn import_librarything(
     let i_title = col("Title")
         .or_else(|| col("'TITLE'"))
         .context("Missing 'Title' column")?;
-    let i_author = col("Author (First, Last)")
-        .or_else(|| col("'AUTHOR (First, Last)'"))
+    let i_author = col("Author (First, Last)").or_else(|| col("'AUTHOR (First, Last)'"));
+    let i_author_lf = col("Author (Last, First)")
+        .or_else(|| col("'AUTHOR (Last, First)'"))
         .or_else(|| col("Primary Author"));
-    let i_author_lf = col("Author (Last, First)").or_else(|| col("'AUTHOR (Last, First)'"));
     let i_isbn = col("ISBN").or_else(|| col("'ISBN'"));
     let i_isbn13 = col("ISBNs")
         .or_else(|| col("'ISBNs'"))
@@ -839,23 +846,31 @@ pub async fn import_librarything(
     let i_review = col("Review").or_else(|| col("'REVIEW'"));
     let i_pages = col("Number of Pages")
         .or_else(|| col("'NUMBER OF PAGES'"))
-        .or_else(|| col("Pages"));
+        .or_else(|| col("Pages"))
+        .or_else(|| col("Page Count"));
     let i_date = col("Date")
         .or_else(|| col("'DATE'"))
         .or_else(|| col("Publication"));
     let i_language = col("Language 1")
         .or_else(|| col("'LANGUAGE 1'"))
-        .or_else(|| col("Primary Language"));
+        .or_else(|| col("Primary Language"))
+        .or_else(|| col("Languages"));
 
     if i_author.is_none() && i_author_lf.is_none() {
         bail!("No author column found (expected 'Author (First, Last)' or 'Author (Last, First)')");
     }
 
     let user_id = crate::db::DEFAULT_USER_ID;
+    let persona_id = crate::db_extras::get_first_persona(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(id, _)| id)
+        .unwrap_or(user_id);
     let domain = &config.server.domain;
 
-    for result in rdr.records() {
-        let record = match result {
+    for result in rdr.byte_records() {
+        let byte_record = match result {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("  warning: skipping malformed row: {e}");
@@ -863,8 +878,14 @@ pub async fn import_librarything(
             }
         };
 
+        // Convert fields to lossy UTF-8 strings
+        let fields: Vec<String> = byte_record
+            .iter()
+            .map(|f| String::from_utf8_lossy(f).into_owned())
+            .collect();
+
         let get = |idx: Option<usize>| -> Option<&str> {
-            idx.and_then(|i| record.get(i))
+            idx.and_then(|i| fields.get(i))
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
         };
@@ -927,7 +948,12 @@ pub async fn import_librarything(
             id
         } else {
             let id = fieldwork::id::generate_id();
-            let pages = get(i_pages).and_then(|s| s.parse::<i32>().ok());
+            // Page count: LT may have "876 " or "10; 150" (multi-volume). Take first number.
+            let pages = get(i_pages).and_then(|s| {
+                s.split(|c: char| c == ';' || c == ',')
+                    .next()
+                    .and_then(|p| p.trim().parse::<i32>().ok())
+            });
             let published_year = get(i_date).and_then(|s| {
                 // LT dates can be "2004", "2004-06", "June 2004", etc.
                 s.chars()
@@ -972,11 +998,10 @@ pub async fn import_librarything(
             }
         }
 
-        // Rating: LT uses 0-10 half-star scale, we use 1-5
+        // Rating: LT uses 1-5 with optional half-stars (e.g. 3.5), round to integer
         if let Some(rating_str) = get(i_rating) {
             if let Ok(lt_rating) = rating_str.parse::<f32>() {
-                // LT 0-10 → our 1-5: divide by 2, round, clamp
-                let rating = (lt_rating / 2.0).round() as i32;
+                let rating = lt_rating.round() as i32;
                 if (1..=5).contains(&rating) {
                     fieldwork_db::books_db::rate_book(pool, user_id, book_id, rating, now)
                         .await
@@ -992,7 +1017,7 @@ pub async fn import_librarything(
             let review = fieldwork_db::books_db::ReviewRow {
                 id,
                 user_id,
-                persona_id: user_id,
+                persona_id,
                 book_id,
                 content: review_text.to_string(),
                 content_html: format!("<p>{}</p>", ammonia::clean(review_text)),
@@ -1001,10 +1026,10 @@ pub async fn import_librarything(
                 ap_id: format!("https://{}/reviews/{}", domain, id),
                 created_at: now,
             };
-            fieldwork_db::books_db::create_review(pool, &review)
-                .await
-                .ok();
-            stats.reviews_imported += 1;
+            match fieldwork_db::books_db::create_review(pool, &review).await {
+                Ok(()) => stats.reviews_imported += 1,
+                Err(e) => eprintln!("  warning: failed to insert review for book {book_id}: {e}"),
+            }
         }
     }
 
@@ -1066,10 +1091,18 @@ media_dir = "/tmp/smallhold-test-media"
         .unwrap()
     }
 
+    async fn setup_test_user_and_persona(pool: &fieldwork_db::db::Pool) {
+        crate::db_extras::test_insert_user(pool).await.unwrap();
+        crate::db_extras::test_insert_persona(pool, crate::db::DEFAULT_USER_ID)
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn import_librarything_basic() {
         let pool = crate::db::test_pool().await;
         let config = test_config();
+        setup_test_user_and_persona(&pool).await;
 
         // Write a test TSV file
         let dir = tempfile::tempdir().unwrap();
@@ -1077,8 +1110,8 @@ media_dir = "/tmp/smallhold-test-media"
         std::fs::write(
             &tsv_path,
             "Title\tAuthor (First, Last)\tISBN\tRating\tCollections\tReview\tNumber of Pages\n\
-             Snow Crash\tNeal Stephenson\t[0553380958]\t8\tYour library\tGreat book\t480\n\
-             Neuromancer\tWilliam Gibson\t[0441007465]\t9\tTo Read\t\t271\n",
+             Snow Crash\tNeal Stephenson\t[0553380958]\t4\tYour library\tGreat book\t480\n\
+             Neuromancer\tWilliam Gibson\t[0441007465]\t5\tTo Read\t\t271\n",
         )
         .unwrap();
 
@@ -1151,7 +1184,7 @@ media_dir = "/tmp/smallhold-test-media"
         std::fs::write(
             &tsv_path,
             "Title\tAuthor (First, Last)\tISBN\tRating\tCollections\n\
-             Snow Crash\tNeal Stephenson\t[0553380958]\t8\tYour library\n",
+             Snow Crash\tNeal Stephenson\t[0553380958]\t4\tYour library\n",
         )
         .unwrap();
 
@@ -1199,12 +1232,12 @@ media_dir = "/tmp/smallhold-test-media"
 
         let dir = tempfile::tempdir().unwrap();
         let tsv_path = dir.path().join("export.tsv");
-        // LT rating 10 → 5, rating 1 → 1, rating 0 → skipped (rounds to 0)
+        // LT uses 1-5 with half-stars: 3.5 → 4, 1 → 1, 0 → skipped
         std::fs::write(
             &tsv_path,
             "Title\tAuthor (First, Last)\tISBN\tRating\n\
-             Book A\tAuthor A\t[1111111111]\t10\n\
-             Book B\tAuthor B\t[2222222222]\t1\n\
+             Book A\tAuthor A\t[1111111111]\t5\n\
+             Book B\tAuthor B\t[2222222222]\t3.5\n\
              Book C\tAuthor C\t[3333333333]\t0\n",
         )
         .unwrap();
@@ -1213,7 +1246,7 @@ media_dir = "/tmp/smallhold-test-media"
             .await
             .unwrap();
         assert_eq!(stats.books_imported, 3);
-        // Rating 0 → 0 after divide, out of 1..=5, so skipped
+        // Rating 0 rounds to 0, out of 1..=5, so skipped
         assert_eq!(stats.rated, 2);
     }
 }
