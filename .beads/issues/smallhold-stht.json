@@ -1,0 +1,14 @@
+{
+  "id": "smallhold-stht",
+  "title": "Design federated collection protocol (CollectionItem)",
+  "description": "A generic ActivityPub extension for curated personal collections of any type — books, records, rocks, stamps, fountain pens, pigeons, anything. Items reference Wikidata for type taxonomy and property schemas. Shelves are named groupings. Reviews/ratings attach to items. Acquisition metadata tracks provenance. Federation lets you follow someone's collection and see new additions in your feed.",
+  "design": "Core types: CollectionItem (name, category wikidata URI, image, free-form properties, acquired date), Shelf (named grouping), Review/Rating (opinion on item), Acquisition (provenance: bought/found/gifted/traded, date, source). Federation: items are AP objects, adding to a shelf is a Create activity, reviews are Note objects with inReplyTo pointing at the item. Wikidata category URI is the interop key — clients can render any item generically (name+image+rating) or with type-specific UI when they recognize the category.",
+  "notes": "The media review protocol (smallhold-enxt) is a subset of this. That issue covers books/albums/movies; this covers the general case where the item type is arbitrary and the schema comes from Wikidata rather than hardcoded fields. Key insight: don't build an ontology, reference Wikidata (wd:Q46335 = fountain pen, wd:Q7946 = mineral, etc.). Properties are free-form per item, category URI tells clients how to render. A birding client and a pen client show different property editors but share the same wire protocol.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-11T05:12:32.066631671Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-11T05:12:32.066631671Z"
+}

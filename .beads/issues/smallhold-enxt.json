@@ -1,0 +1,23 @@
+{
+  "id": "smallhold-enxt",
+  "title": "Design a generic fediverse media review protocol",
+  "description": "BookWyrm's ActivityPub extensions are book-specific (schema:Book, ReadThrough, Quotation). Design a generic media review protocol that federate ratings, reviews, shelving, and catalog entries for any media type (books, albums, movies, TV, games, comics, etc.). Should extend ActivityPub with minimal new vocabulary. Research existing FEPs and schema.org types (CreativeWork, MusicAlbum, Movie, etc.). Goal: a spec that smallhold can implement and that other servers could adopt.",
+  "notes": "BookWyrm proves the pattern works for books. The gap: no server federates reviews/ratings for non-book media. schema.org already has the type hierarchy (CreativeWork → Book, Movie, MusicAlbum, etc.) and Review/Rating types. A generic protocol would use these instead of inventing new AP vocabulary.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-11T05:10:57.318402161Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-11T05:10:57.318402161Z",
+  "dependencies": [
+    {
+      "issue_id": "smallhold-enxt",
+      "depends_on_id": "smallhold-stht",
+      "type": "blocks",
+      "created_at": "2026-08-11T05:12:36.199778622Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
