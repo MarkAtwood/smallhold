@@ -926,16 +926,28 @@ pub async fn import_librarything(
 
         // Dedup: check if a book with this ISBN already exists
         let existing_book_id = if let Some(ref isbn_val) = isbn {
-            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+            fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", isbn_val)
                 .await
                 .ok()
                 .flatten()
+                .or(
+                    fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", isbn_val)
+                        .await
+                        .ok()
+                        .flatten(),
+                )
                 .map(|b| b.id)
         } else if let Some(ref isbn13_val) = isbn13 {
-            fieldwork_db::books_db::get_book_by_isbn(pool, isbn13_val)
+            fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", isbn13_val)
                 .await
                 .ok()
                 .flatten()
+                .or(
+                    fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", isbn13_val)
+                        .await
+                        .ok()
+                        .flatten(),
+                )
                 .map(|b| b.id)
         } else {
             None
@@ -966,23 +978,41 @@ pub async fn import_librarything(
             });
             let language = get(i_language).map(|s| s.to_string());
 
-            let book = fieldwork_db::books_db::BookRow {
+            let item = fieldwork_db::catalog_db::MediaItem {
                 id,
+                media_type: "book".into(),
+                format: None,
                 title,
-                author,
-                isbn,
-                isbn13,
-                openlibrary_id: None,
-                cover_url: None,
+                creator: author,
                 description: String::new(),
-                pages,
-                published_year,
+                cover_url: None,
                 language,
+                pages,
+                runtime_min: None,
+                issue: None,
+                season: None,
+                episode: None,
+                tracks: None,
+                publisher: None,
+                label: None,
+                published_year,
+                release_date: None,
+                source: Some("librarything".into()),
                 created_at: now,
             };
-            fieldwork_db::books_db::create_book(pool, &book)
+            fieldwork_db::catalog_db::create_media(pool, &item)
                 .await
-                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+                .with_context(|| format!("Failed to insert book: {}", &item.title))?;
+            if let Some(ref isbn_val) = isbn {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn", isbn_val)
+                    .await
+                    .ok();
+            }
+            if let Some(ref isbn13_val) = isbn13 {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn13", isbn13_val)
+                    .await
+                    .ok();
+            }
             stats.books_imported += 1;
             id
         };
@@ -991,7 +1021,7 @@ pub async fn import_librarything(
         if let Some(collections) = get(i_collections) {
             let status = lt_collections_to_status(collections);
             if let Some(status) = status {
-                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                fieldwork_db::catalog_db::set_shelf_status(pool, user_id, book_id, status, now)
                     .await
                     .ok();
                 stats.shelved += 1;
@@ -1003,7 +1033,7 @@ pub async fn import_librarything(
             if let Ok(lt_rating) = rating_str.parse::<f32>() {
                 let rating = lt_rating.round() as i32;
                 if (1..=5).contains(&rating) {
-                    fieldwork_db::books_db::rate_book(pool, user_id, book_id, rating, now)
+                    fieldwork_db::catalog_db::rate_media(pool, user_id, book_id, rating, now)
                         .await
                         .ok();
                     stats.rated += 1;
@@ -1014,11 +1044,11 @@ pub async fn import_librarything(
         // Review
         if let Some(review_text) = get(i_review) {
             let id = fieldwork::id::generate_id();
-            let review = fieldwork_db::books_db::ReviewRow {
+            let review = fieldwork_db::catalog_db::MediaReview {
                 id,
                 user_id,
                 persona_id,
-                book_id,
+                media_id: book_id,
                 content: review_text.to_string(),
                 content_html: format!("<p>{}</p>", ammonia::clean(review_text)),
                 rating: None,
@@ -1026,7 +1056,7 @@ pub async fn import_librarything(
                 ap_id: format!("https://{}/reviews/{}", domain, id),
                 created_at: now,
             };
-            match fieldwork_db::books_db::create_review(pool, &review).await {
+            match fieldwork_db::catalog_db::create_review(pool, &review).await {
                 Ok(()) => stats.reviews_imported += 1,
                 Err(e) => eprintln!("  warning: failed to insert review for book {book_id}: {e}"),
             }
@@ -1131,16 +1161,28 @@ pub async fn import_librarything_json(
 
         // Dedup by ISBN
         let existing_book_id = if let Some(ref isbn_val) = isbn {
-            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+            fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", isbn_val)
                 .await
                 .ok()
                 .flatten()
+                .or(
+                    fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", isbn_val)
+                        .await
+                        .ok()
+                        .flatten(),
+                )
                 .map(|b| b.id)
         } else if let Some(ref isbn13_val) = isbn13 {
-            fieldwork_db::books_db::get_book_by_isbn(pool, isbn13_val)
+            fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", isbn13_val)
                 .await
                 .ok()
                 .flatten()
+                .or(
+                    fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", isbn13_val)
+                        .await
+                        .ok()
+                        .flatten(),
+                )
                 .map(|b| b.id)
         } else {
             None
@@ -1177,23 +1219,41 @@ pub async fn import_librarything_json(
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let book = fieldwork_db::books_db::BookRow {
+            let item = fieldwork_db::catalog_db::MediaItem {
                 id,
+                media_type: "book".into(),
+                format: None,
                 title,
-                author,
-                isbn,
-                isbn13,
-                openlibrary_id: None,
-                cover_url: None,
+                creator: author,
                 description: String::new(),
-                pages,
-                published_year,
+                cover_url: None,
                 language,
+                pages,
+                runtime_min: None,
+                issue: None,
+                season: None,
+                episode: None,
+                tracks: None,
+                publisher: None,
+                label: None,
+                published_year,
+                release_date: None,
+                source: Some("librarything".into()),
                 created_at: now,
             };
-            fieldwork_db::books_db::create_book(pool, &book)
+            fieldwork_db::catalog_db::create_media(pool, &item)
                 .await
-                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+                .with_context(|| format!("Failed to insert book: {}", &item.title))?;
+            if let Some(ref isbn_val) = isbn {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn", isbn_val)
+                    .await
+                    .ok();
+            }
+            if let Some(ref isbn13_val) = isbn13 {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn13", isbn13_val)
+                    .await
+                    .ok();
+            }
             stats.books_imported += 1;
             id
         };
@@ -1206,7 +1266,7 @@ pub async fn import_librarything_json(
                 .collect::<Vec<_>>()
                 .join(", ");
             if let Some(status) = lt_collections_to_status(&combined) {
-                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                fieldwork_db::catalog_db::set_shelf_status(pool, user_id, book_id, status, now)
                     .await
                     .ok();
                 stats.shelved += 1;
@@ -1217,7 +1277,7 @@ pub async fn import_librarything_json(
         if let Some(rating) = entry.get("rating").and_then(|v| v.as_i64()) {
             let rating = rating as i32;
             if (1..=5).contains(&rating) {
-                fieldwork_db::books_db::rate_book(pool, user_id, book_id, rating, now)
+                fieldwork_db::catalog_db::rate_media(pool, user_id, book_id, rating, now)
                     .await
                     .ok();
                 stats.rated += 1;
@@ -1228,11 +1288,11 @@ pub async fn import_librarything_json(
         if let Some(review_text) = entry.get("review").and_then(|v| v.as_str()) {
             if !review_text.is_empty() {
                 let id = fieldwork::id::generate_id();
-                let review = fieldwork_db::books_db::ReviewRow {
+                let review = fieldwork_db::catalog_db::MediaReview {
                     id,
                     user_id,
                     persona_id,
-                    book_id,
+                    media_id: book_id,
                     content: review_text.to_string(),
                     content_html: format!("<p>{}</p>", ammonia::clean(review_text)),
                     rating: None,
@@ -1240,7 +1300,7 @@ pub async fn import_librarything_json(
                     ap_id: format!("https://{}/reviews/{}", domain, id),
                     created_at: now,
                 };
-                match fieldwork_db::books_db::create_review(pool, &review).await {
+                match fieldwork_db::catalog_db::create_review(pool, &review).await {
                     Ok(()) => stats.reviews_imported += 1,
                     Err(e) => {
                         eprintln!("  warning: failed to insert review for book {book_id}: {e}")
@@ -1350,10 +1410,16 @@ pub async fn import_librarything_marc(
         // Dedup by ISBN
         let dedup_isbn = isbn.as_deref();
         let existing_book_id = if let Some(isbn_val) = dedup_isbn {
-            fieldwork_db::books_db::get_book_by_isbn(pool, isbn_val)
+            fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", isbn_val)
                 .await
                 .ok()
                 .flatten()
+                .or(
+                    fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", isbn_val)
+                        .await
+                        .ok()
+                        .flatten(),
+                )
                 .map(|b| b.id)
         } else {
             None
@@ -1409,23 +1475,41 @@ pub async fn import_librarything_marc(
                 }
             });
 
-            let book = fieldwork_db::books_db::BookRow {
+            let item = fieldwork_db::catalog_db::MediaItem {
                 id,
+                media_type: "book".into(),
+                format: None,
                 title,
-                author,
-                isbn: isbn10,
-                isbn13,
-                openlibrary_id: None,
-                cover_url: None,
+                creator: author,
                 description: String::new(),
-                pages,
-                published_year,
+                cover_url: None,
                 language,
+                pages,
+                runtime_min: None,
+                issue: None,
+                season: None,
+                episode: None,
+                tracks: None,
+                publisher: None,
+                label: None,
+                published_year,
+                release_date: None,
+                source: Some("librarything".into()),
                 created_at: now,
             };
-            fieldwork_db::books_db::create_book(pool, &book)
+            fieldwork_db::catalog_db::create_media(pool, &item)
                 .await
-                .with_context(|| format!("Failed to insert book: {}", &book.title))?;
+                .with_context(|| format!("Failed to insert book: {}", &item.title))?;
+            if let Some(ref isbn10_val) = isbn10 {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn", isbn10_val)
+                    .await
+                    .ok();
+            }
+            if let Some(ref isbn13_val) = isbn13 {
+                fieldwork_db::catalog_db::add_identifier(pool, id, "isbn13", isbn13_val)
+                    .await
+                    .ok();
+            }
             stats.books_imported += 1;
             id
         };
@@ -1440,7 +1524,7 @@ pub async fn import_librarything_marc(
         if !collections.is_empty() {
             let combined = collections.join(", ");
             if let Some(status) = lt_collections_to_status(&combined) {
-                fieldwork_db::books_db::set_reading_status(pool, user_id, book_id, status, now)
+                fieldwork_db::catalog_db::set_shelf_status(pool, user_id, book_id, status, now)
                     .await
                     .ok();
                 stats.shelved += 1;
@@ -1563,7 +1647,17 @@ pub async fn import_isbn_list(
         }
 
         // Dedup
-        if let Ok(Some(_)) = fieldwork_db::books_db::get_book_by_isbn(pool, &isbn).await {
+        let existing = fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn", &isbn)
+            .await
+            .ok()
+            .flatten()
+            .or(
+                fieldwork_db::catalog_db::get_media_by_identifier(pool, "isbn13", &isbn)
+                    .await
+                    .ok()
+                    .flatten(),
+            );
+        if existing.is_some() {
             stats.books_skipped += 1;
             continue;
         }
@@ -1575,23 +1669,41 @@ pub async fn import_isbn_list(
             (Some(isbn.clone()), None)
         };
 
-        let book = fieldwork_db::books_db::BookRow {
+        let item = fieldwork_db::catalog_db::MediaItem {
             id,
+            media_type: "book".into(),
+            format: None,
             title: String::new(), // hydrated later
-            author: String::new(),
-            isbn: isbn10,
-            isbn13,
-            openlibrary_id: None,
-            cover_url: None,
+            creator: String::new(),
             description: String::new(),
-            pages: None,
-            published_year: None,
+            cover_url: None,
             language: None,
+            pages: None,
+            runtime_min: None,
+            issue: None,
+            season: None,
+            episode: None,
+            tracks: None,
+            publisher: None,
+            label: None,
+            published_year: None,
+            release_date: None,
+            source: Some("isbn".into()),
             created_at: now,
         };
-        fieldwork_db::books_db::create_book(pool, &book)
+        fieldwork_db::catalog_db::create_media(pool, &item)
             .await
             .with_context(|| format!("Failed to insert ISBN {isbn}"))?;
+        if let Some(ref isbn10_val) = isbn10 {
+            fieldwork_db::catalog_db::add_identifier(pool, id, "isbn", isbn10_val)
+                .await
+                .ok();
+        }
+        if let Some(ref isbn13_val) = isbn13 {
+            fieldwork_db::catalog_db::add_identifier(pool, id, "isbn13", isbn13_val)
+                .await
+                .ok();
+        }
         stats.books_imported += 1;
     }
 
@@ -1608,12 +1720,12 @@ pub async fn hydrate_books_from_openlibrary(pool: &fieldwork_db::db::Pool) -> Re
         skipped: 0,
     };
 
-    // Find all books with empty titles (need hydration)
-    let books = fieldwork_db::books_db::search_books(pool, "", 10000)
+    // Find all media items with empty titles (need hydration)
+    let items = fieldwork_db::catalog_db::search_media(pool, "", None, 10000)
         .await
         .unwrap_or_default();
 
-    let needs_hydration: Vec<_> = books.iter().filter(|b| b.title.is_empty()).collect();
+    let needs_hydration: Vec<_> = items.iter().filter(|b| b.title.is_empty()).collect();
 
     if needs_hydration.is_empty() {
         eprintln!("  No books need hydration.");
@@ -1628,11 +1740,16 @@ pub async fn hydrate_books_from_openlibrary(pool: &fieldwork_db::db::Pool) -> Re
         .build()
         .context("Failed to create HTTP client")?;
 
-    for book in &needs_hydration {
-        let isbn = book
-            .isbn
-            .as_deref()
-            .or(book.isbn13.as_deref())
+    for item in &needs_hydration {
+        // Look up ISBN identifiers for this media item
+        let identifiers = fieldwork_db::catalog_db::get_identifiers(pool, item.id)
+            .await
+            .unwrap_or_default();
+        let isbn = identifiers
+            .iter()
+            .find(|(t, _)| t == "isbn")
+            .or_else(|| identifiers.iter().find(|(t, _)| t == "isbn13"))
+            .map(|(_, v)| v.as_str())
             .unwrap_or("");
         if isbn.is_empty() {
             stats.skipped += 1;
@@ -1654,7 +1771,7 @@ pub async fn hydrate_books_from_openlibrary(pool: &fieldwork_db::db::Pool) -> Re
                                 .unwrap_or("")
                                 .to_string();
 
-                            let author = entry
+                            let creator = entry
                                 .get("authors")
                                 .and_then(|v| v.as_array())
                                 .and_then(|a| a.first())
@@ -1693,11 +1810,11 @@ pub async fn hydrate_books_from_openlibrary(pool: &fieldwork_db::db::Pool) -> Re
                                 .map(|s| s.to_string());
 
                             if !title.is_empty() {
-                                fieldwork_db::books_db::update_book_metadata(
+                                fieldwork_db::catalog_db::update_media_metadata(
                                     pool,
-                                    book.id,
+                                    item.id,
                                     &title,
-                                    &author,
+                                    &creator,
                                     pages,
                                     published_year,
                                     cover_url.as_deref(),
@@ -1789,12 +1906,11 @@ mod tests {
         assert_eq!(stats.books_skipped, 1);
 
         // Books exist but have empty titles (need hydration)
-        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+        let item = fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn", "0553380958")
             .await
             .unwrap()
             .unwrap();
-        assert!(book.title.is_empty());
-        assert_eq!(book.isbn, Some("0553380958".into()));
+        assert!(item.title.is_empty());
     }
 
     #[tokio::test]
@@ -1809,11 +1925,12 @@ mod tests {
         assert_eq!(stats.books_imported, 2);
 
         // Hyphens stripped
-        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "9780553380958")
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(book.isbn13, Some("9780553380958".into()));
+        let item =
+            fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn13", "9780553380958")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(item.media_type, "book");
     }
 
     fn test_config() -> Config {
@@ -1869,29 +1986,29 @@ media_dir = "/tmp/smallhold-test-media"
         assert_eq!(stats.reviews_imported, 1);
 
         // Verify book was inserted correctly
-        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+        let item = fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn", "0553380958")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(book.title, "Snow Crash");
-        assert_eq!(book.author, "Neal Stephenson");
-        assert_eq!(book.pages, Some(480));
+        assert_eq!(item.title, "Snow Crash");
+        assert_eq!(item.creator, "Neal Stephenson");
+        assert_eq!(item.pages, Some(480));
 
         // Verify shelf status
         let (status, _, _, _, _) =
-            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book.id)
+            fieldwork_db::catalog_db::get_shelf_status(&pool, crate::db::DEFAULT_USER_ID, item.id)
                 .await
                 .unwrap()
                 .unwrap();
         assert_eq!(status, "read");
 
         // Verify "To Read" book
-        let book2 = fieldwork_db::books_db::get_book_by_isbn(&pool, "0441007465")
+        let item2 = fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn", "0441007465")
             .await
             .unwrap()
             .unwrap();
         let (status2, _, _, _, _) =
-            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book2.id)
+            fieldwork_db::catalog_db::get_shelf_status(&pool, crate::db::DEFAULT_USER_ID, item2.id)
                 .await
                 .unwrap()
                 .unwrap();
@@ -1903,22 +2020,33 @@ media_dir = "/tmp/smallhold-test-media"
         let pool = crate::db::test_pool().await;
         let config = test_config();
 
-        // Pre-insert a book with the same ISBN
-        let existing = fieldwork_db::books_db::BookRow {
+        // Pre-insert a media item with the same ISBN
+        let existing = fieldwork_db::catalog_db::MediaItem {
             id: 42,
+            media_type: "book".into(),
+            format: None,
             title: "Snow Crash".into(),
-            author: "Neal Stephenson".into(),
-            isbn: Some("0553380958".into()),
-            isbn13: None,
-            openlibrary_id: None,
-            cover_url: None,
+            creator: "Neal Stephenson".into(),
             description: String::new(),
-            pages: None,
-            published_year: None,
+            cover_url: None,
             language: None,
+            pages: None,
+            runtime_min: None,
+            issue: None,
+            season: None,
+            episode: None,
+            tracks: None,
+            publisher: None,
+            label: None,
+            published_year: None,
+            release_date: None,
+            source: None,
             created_at: 0,
         };
-        fieldwork_db::books_db::create_book(&pool, &existing)
+        fieldwork_db::catalog_db::create_media(&pool, &existing)
+            .await
+            .unwrap();
+        fieldwork_db::catalog_db::add_identifier(&pool, 42, "isbn", "0553380958")
             .await
             .unwrap();
 
@@ -1961,11 +2089,11 @@ media_dir = "/tmp/smallhold-test-media"
             .unwrap();
         assert_eq!(stats.books_imported, 1);
 
-        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0441172717")
+        let item = fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn", "0441172717")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(book.author, "Frank Herbert");
+        assert_eq!(item.creator, "Frank Herbert");
     }
 
     #[tokio::test]
@@ -2041,19 +2169,25 @@ media_dir = "/tmp/smallhold-test-media"
         assert_eq!(stats.rated, 2);
         assert_eq!(stats.reviews_imported, 1);
 
-        // Verify author came from authors[0].fl
-        let book = fieldwork_db::books_db::get_book_by_isbn(&pool, "0553380958")
+        // Verify creator came from authors[0].fl
+        let item = fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn", "0553380958")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(book.author, "Neal Stephenson");
-        assert_eq!(book.pages, Some(480));
-        assert_eq!(book.published_year, Some(1992));
-        assert_eq!(book.isbn13, Some("9780553380958".into()));
+        assert_eq!(item.creator, "Neal Stephenson");
+        assert_eq!(item.pages, Some(480));
+        assert_eq!(item.published_year, Some(1992));
+        // Verify isbn13 was stored as identifier
+        let item13 =
+            fieldwork_db::catalog_db::get_media_by_identifier(&pool, "isbn13", "9780553380958")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(item13.id, item.id);
 
         // Verify shelf
         let (status, _, _, _, _) =
-            fieldwork_db::books_db::get_reading_status(&pool, crate::db::DEFAULT_USER_ID, book.id)
+            fieldwork_db::catalog_db::get_shelf_status(&pool, crate::db::DEFAULT_USER_ID, item.id)
                 .await
                 .unwrap()
                 .unwrap();
